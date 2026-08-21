@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>主办方工作台｜minicamp 2026</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="admin-body">
+  <div class="admin-shell">
+    <aside class="admin-sidebar">
+      <a class="admin-brand" href="index.html"><span class="brand-mark">m</span><span>minicamp <b>2026</b></span><i class="admin-badge">ADMIN</i></a>
+      <nav class="admin-nav" aria-label="后台导航">
+        <button class="active" type="button" data-panel="overview"><span>01</span><b>总览</b></button>
+        <button type="button" data-panel="applicants"><span>02</span><b>报名管理</b></button>
+        <button type="button" data-panel="teams"><span>03</span><b>分队情况</b></button>
+        <button type="button" data-panel="voting"><span>04</span><b>投票统计</b></button>
+        <button type="button" data-panel="notices"><span>05</span><b>公告通知</b></button>
+      </nav>
+      <div class="admin-sidebar-footer">
+        <a href="index.html">← 返回官网</a>
+        <div class="admin-user"><span class="admin-avatar">主</span><div><strong>主办方团队</strong><small>Organizer view</small></div></div>
+      </div>
+    </aside>
+
+    <main class="admin-main">
+      <div class="admin-topbar">
+        <div><h1 id="admin-title">活动总览</h1><p id="admin-subtitle">把报名、组队和现场结果放在一个工作台里。</p></div>
+        <span class="prototype-pill">LOCAL PROTOTYPE · 数据保存在本机</span>
+      </div>
+
+      <section class="admin-panel active" id="panel-overview">
+        <div class="metrics-grid" id="metrics-grid"></div>
+        <div class="dashboard-grid">
+          <div class="admin-card"><div class="admin-card-head"><h2>报名状态</h2><button data-switch="applicants">查看全部 →</button></div><div class="status-bars" id="status-bars"></div></div>
+          <div class="admin-card"><div class="admin-card-head"><h2>最近动态</h2><span>实时</span></div><div class="activity-list" id="activity-list"></div></div>
+        </div>
+        <div class="dashboard-grid">
+          <div class="admin-card"><div class="admin-card-head"><h2>能力结构</h2><span>报名者自选标签</span></div><div class="status-bars" id="skill-bars"></div></div>
+          <div class="admin-card"><div class="admin-card-head"><h2>活动提醒</h2><span>待处理</span></div><div class="activity-list"><div class="activity-item"><span class="activity-dot">!</span><p><strong>报名时间尚未确定</strong><br><time>在官网保留“即将开放”状态</time></p></div><div class="activity-item"><span class="activity-dot">!</span><p><strong>录取通知日期尚未确定</strong><br><time>确定后同步给报名者</time></p></div><div class="activity-item"><span class="activity-dot">@</span><p><strong>官方联络邮箱待公布</strong><br><time>页脚已预留占位</time></p></div></div></div>
+        </div>
+      </section>
+
+      <section class="admin-panel" id="panel-applicants">
+        <div class="panel-toolbar"><div class="toolbar-left"><input class="admin-search" id="applicant-search" placeholder="搜索姓名、学院、申请编号"><select class="admin-select" id="applicant-status"><option value="全部">全部状态</option><option value="待审核">待审核</option><option value="已录取">已录取</option><option value="候补">候补</option></select></div><div class="toolbar-right"><button class="outline-button" id="export-csv">导出 CSV</button><button class="outline-button primary" id="refresh-data">刷新数据</button></div></div>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>申请人</th><th>申请编号</th><th>报名方式</th><th>能力标签</th><th>Team Code</th><th>状态</th><th>操作</th></tr></thead><tbody id="applicants-table"></tbody></table></div>
+      </section>
+
+      <section class="admin-panel" id="panel-teams">
+        <div class="panel-toolbar"><div class="toolbar-left"><p class="panel-note">按 Team Code 和主办方确认结果查看队伍；未组队成员会单独列出。</p></div><div class="toolbar-right"><button class="outline-button" id="create-team">+ 新建队伍</button><button class="outline-button primary" id="auto-team">按能力快速分组</button></div></div>
+        <div class="team-board" id="team-board"></div>
+      </section>
+
+      <section class="admin-panel" id="panel-voting">
+        <div class="panel-toolbar"><div class="toolbar-left"><p class="panel-note">Demo Fair 投票数据看板；People's Choice 仅由参与者投票。</p></div><div class="toolbar-right"><button class="outline-button" id="reset-votes">清空演示票数</button></div></div>
+        <div class="vote-summary"><div class="vote-leader" id="vote-leader"></div><div class="vote-list" id="vote-list"></div></div>
+      </section>
+
+      <section class="admin-panel" id="panel-notices">
+        <div class="notice-admin-layout">
+          <form class="admin-card notice-compose" id="notice-form">
+            <div class="admin-card-head"><h2>发布新通知</h2><span>即时写入原型收件箱</span></div>
+            <label>通知类型<select name="type"><option>活动公告</option><option>报名进度</option><option>现场提醒</option><option>资料复核</option></select></label>
+            <label>发送对象<select name="target" id="notice-target"><option value="ALL">所有报名者</option></select></label>
+            <label>标题<input name="title" required placeholder="例如：AI Coding Starter Pack 已上线"></label>
+            <label>内容<textarea name="body" required rows="6" placeholder="写下报名者需要知道的事情"></textarea></label>
+            <button class="button button-dark" type="submit">发布通知 <span>↗</span></button>
+          </form>
+          <div class="admin-card"><div class="admin-card-head"><h2>已发布通知</h2><span id="notice-total">0 条</span></div><div class="admin-notice-list" id="admin-notice-list"></div></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div class="toast" id="admin-toast" role="status"></div>
+  <script src="admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>现场投票｜minicamp 2026</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="voting-body">
+  <header class="site-header">
+    <a class="brand" href="index.html"><span class="brand-mark">m</span><span>minicamp <b>2026</b></span></a>
+    <nav class="site-nav profile-nav"><a href="index.html#awards">奖项说明</a><a href="profile.html">个人主页</a><a href="index.html">返回官网</a></nav>
+  </header>
+  <main class="voting-shell shell">
+    <section class="voting-login" id="voting-login">
+      <div><p class="section-kicker">DEMO FAIR / VOTING</p><h1>把你喜欢的<br>作品投出来。</h1><p>每位参与者可以为各奖项选择第一、第二、第三选择。第一选择 3 票，第二选择 2 票，第三选择 1 票。People's Choice 另选一个最喜欢的项目。</p><div class="vote-rules"><div><strong>3</strong><span>第一选择</span></div><div><strong>2</strong><span>第二选择</span></div><div><strong>1</strong><span>第三选择</span></div></div></div>
+      <form class="profile-login-card" id="voting-login-form" novalidate><div class="profile-card-top"><span class="status-dot"></span>参与者身份确认</div><h2>进入投票</h2><p>使用报名编号和报名时填写的联系方式。</p><label>申请编号<input id="voter-id" required placeholder="例如 MC26-1001"></label><label>手机号或邮箱<input id="voter-contact" required placeholder="报名时填写的联系方式"></label><p class="profile-error" id="voter-error" role="alert"></p><button class="button button-dark" type="submit">开始投票 <span>↗</span></button><div class="profile-demo-hint">演示账号：<strong>MC26-1001</strong> · <strong>zhixing@example.com</strong></div></form>
+    </section>
+
+    <section class="voting-workspace" id="voting-workspace" hidden>
+      <div class="voting-top"><div><p class="section-kicker">PEOPLE'S VOTE / 2026</p><h1>选择你愿意支持的作品。</h1><p>你好，<strong id="voter-name">参与者</strong>。不能投给自己的队伍，每个奖项提交一次。</p></div><button class="outline-button" id="voting-logout" type="button">退出投票</button></div>
+      <div class="vote-notice"><span>!</span><p><strong>投票提示</strong> 每个奖项的第一、第二、第三选择必须是三个不同项目。点击作品卡片会按第一→第二→第三顺序填入下方空位；修改下拉框后，卡片和其他名次会自动联动。</p></div>
+      <form id="voting-form">
+        <div class="formal-votes" id="formal-votes"></div>
+        <section class="people-choice-block"><div class="vote-section-title"><div><p class="section-kicker">SPECIAL AWARD</p><h2>现场人气奖</h2></div><span>PEOPLE'S CHOICE · 单选</span></div><div class="candidate-grid" id="people-candidates"></div></section>
+        <div class="voting-submit-bar"><p id="voting-error" role="alert"></p><button class="button button-primary" type="submit">提交全部投票 <span>↗</span></button></div>
+      </form>
+    </section>
+    <section class="vote-success" id="vote-success" hidden><span class="success-mark">✓</span><p class="section-kicker">VOTE RECEIVED</p><h1>你的选择已记录。</h1><p>感谢你认真体验每一个作品。投票结果会在颁奖环节公布。</p><a class="button button-dark" href="index.html">返回活动官网</a></section>
+  </main>
+  <script src="voting.js"></script>
+</body>
+</html>
