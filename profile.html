@@ -5,14 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="minicamp 2026 个人主页：修改报名资料，查看活动通知和录取状态。">
   <title>个人主页｜minicamp 2026</title>
+  <link rel="icon" type="image/png" href="assets/brand/minicamp-logo-seal.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="profile-body">
   <header class="site-header">
-    <a class="brand" href="index.html" aria-label="返回 minicamp 2026 首页"><span class="brand-mark">m</span><span>minicamp <b>2026</b></span></a>
+    <a class="brand" href="index.html" aria-label="返回 minicamp 2026 首页"><img class="brand-lockup" src="assets/brand/minicamp-logo-lockup-partners-horizontal.png" alt="minicamp 2026" width="2203" height="614"></a>
     <nav class="site-nav profile-nav" aria-label="个人主页导航">
-      <a href="index.html#schedule">活动时间表</a>
-      <a href="voting.html">现场投票</a>
+      <a href="index.html#schedule">活动时间表</a><a href="team.html">组队工作区</a><a href="gallery.html">项目 Gallery</a>
+      <a href="voting.html">现场投票</a><a href="gallery.html">项目 Gallery</a><a href="team.html">组队工作区</a>
       <a href="index.html#faq">常见问题</a>
       <a href="index.html">返回官网</a>
     </nav>
@@ -40,39 +41,8 @@
       </form>
     </section>
 
-    <section class="profile-dashboard" id="profile-dashboard" hidden>
-      <div class="profile-header">
-        <div><p class="section-kicker">MY MINICAMP / 2026</p><h1>你好，<span id="profile-name">参与者</span>。</h1><p>这里是你的活动资料、审核状态和主办方通知。</p></div>
-        <button class="outline-button" id="profile-logout" type="button">退出个人主页</button>
-      </div>
-      <div class="profile-status" id="profile-status"></div>
-      <div class="profile-content-grid">
-        <aside class="profile-side-nav" aria-label="个人主页栏目">
-          <button class="active" type="button" data-profile-panel="profile-details"><span>01</span>我的资料</button>
-          <button type="button" data-profile-panel="profile-notices"><span>02</span>通知中心 <b id="notice-count">0</b></button>
-          <div class="profile-side-tip"><strong>Bonjour Profile</strong><p>录取后，你可以继续完善能力标签、作品集和想探索的方向，方便在现场认识合适的人。</p></div>
-        </aside>
-        <div class="profile-panel-wrap">
-          <section class="profile-panel active" id="profile-details">
-            <div class="profile-panel-heading"><div><p class="section-kicker">PROFILE / EDIT</p><h2>我的报名资料</h2></div><span id="last-updated">尚未修改</span></div>
-            <p class="profile-panel-lead">资料修改后会进入主办方复核队列。联系方式更新后，请确保它仍然可以接收活动通知。</p>
-            <form id="profile-edit-form" novalidate>
-              <div class="profile-form-block"><h3>基本信息</h3><div class="field-grid"><label>姓名<input name="name" required></label><label>学号<input name="studentId" required></label><label>学院<input name="college" required></label><label>专业与年级<input name="major" required></label><label>手机号<input name="phone" required></label><label>邮箱<input name="email" type="email" required></label></div></div>
-              <div class="profile-form-block"><h3>参加方式</h3><div class="profile-entry-options"><label><input type="radio" name="entryType" value="个人报名"><span>个人报名</span></label><label><input type="radio" name="entryType" value="结伴报名"><span>2–3 人结伴</span></label><label><input type="radio" name="entryType" value="完整预组队"><span>4–5 人完整预组队</span></label></div><label class="profile-team-code">Team Code <small>如果已有队伍邀请码，可以在这里补充</small><input name="teamCode" placeholder="例如 MC26-A7K2"></label></div>
-              <div class="profile-form-block"><h3>能力与经历</h3><fieldset><legend>能力标签 <small>最多选择 2 项</small></legend><div class="skill-grid profile-skills"><label><input type="checkbox" name="skills" value="DEV"><span>DEV</span></label><label><input type="checkbox" name="skills" value="PRODUCT"><span>PRODUCT</span></label><label><input type="checkbox" name="skills" value="DESIGN"><span>DESIGN</span></label><label><input type="checkbox" name="skills" value="AI/DATA"><span>AI / DATA</span></label><label><input type="checkbox" name="skills" value="HARDWARE"><span>HARDWARE</span></label><label><input type="checkbox" name="skills" value="BUSINESS"><span>BUSINESS</span></label><label><input type="checkbox" name="skills" value="CREATIVE"><span>CREATIVE</span></label><label><input type="checkbox" name="skills" value="RESEARCH"><span>RESEARCH</span></label></div></fieldset><label>参与动机<textarea name="motivation" required rows="4"></textarea></label><label>做过的项目或相关经历<textarea name="experience" rows="3"></textarea></label><label>GitHub / 作品集 / 个人主页<input name="portfolio" type="url" placeholder="https://（选填）"></label></div>
-              <p class="profile-error" id="edit-error" role="alert"></p><div class="profile-edit-actions"><span id="edit-save-state">修改后点击提交，主办方会收到最新版本。</span><button class="button button-primary" type="submit">保存并重新提交 <span>↗</span></button></div>
-            </form>
-          </section>
-          <section class="profile-panel" id="profile-notices">
-            <div class="profile-panel-heading"><div><p class="section-kicker">INBOX / NOTICES</p><h2>通知中心</h2></div><button class="text-link dark-link" type="button" id="mark-read">全部标为已读</button></div>
-            <p class="profile-panel-lead">这里会显示主办方公告、录取状态、资料复核和队伍相关通知。</p>
-            <div class="notice-list" id="notice-list"></div>
-          </section>
-        </div>
-      </div>
-    </section>
   </main>
   <div class="toast" id="profile-toast" role="status"></div>
-  <script src="profile.js"></script>
+  <script src="api.js"></script><script src="profile.js"></script>
 </body>
 </html>
