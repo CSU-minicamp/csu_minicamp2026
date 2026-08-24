@@ -4,12 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>主办方工作台｜minicamp 2026</title>
+  <link rel="icon" type="image/png" href="assets/brand/minicamp-logo-seal.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="admin-body">
   <div class="admin-shell">
     <aside class="admin-sidebar">
-      <a class="admin-brand" href="index.html"><span class="brand-mark">m</span><span>minicamp <b>2026</b></span><i class="admin-badge">ADMIN</i></a>
+      <a class="admin-brand" href="index.html" aria-label="返回 minicamp 2026 首页"><span class="admin-brand-mark"><img src="assets/brand/minicamp-logo-seal.png" alt="" width="1254" height="1254"></span><span>minicamp <b>2026</b></span><i class="admin-badge">ADMIN</i></a>
       <nav class="admin-nav" aria-label="后台导航">
         <button class="active" type="button" data-panel="overview"><span>01</span><b>总览</b></button>
         <button type="button" data-panel="applicants"><span>02</span><b>报名管理</b></button>
@@ -43,7 +44,7 @@
 
       <section class="admin-panel" id="panel-applicants">
         <div class="panel-toolbar"><div class="toolbar-left"><input class="admin-search" id="applicant-search" placeholder="搜索姓名、学院、申请编号"><select class="admin-select" id="applicant-status"><option value="全部">全部状态</option><option value="待审核">待审核</option><option value="已录取">已录取</option><option value="候补">候补</option></select></div><div class="toolbar-right"><button class="outline-button" id="export-csv">导出 CSV</button><button class="outline-button primary" id="refresh-data">刷新数据</button></div></div>
-        <div class="table-wrap"><table class="data-table"><thead><tr><th>申请人</th><th>申请编号</th><th>报名方式</th><th>能力标签</th><th>Team Code</th><th>状态</th><th>操作</th></tr></thead><tbody id="applicants-table"></tbody></table></div>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>申请人</th><th>申请编号</th><th>报名方式</th><th>意向组队人员</th><th>能力标签</th><th>Team Code</th><th>状态</th><th>操作</th></tr></thead><tbody id="applicants-table"></tbody></table></div>
       </section>
 
       <section class="admin-panel" id="panel-teams">
@@ -72,6 +73,6 @@
     </main>
   </div>
   <div class="toast" id="admin-toast" role="status"></div>
-  <script src="admin.js"></script>
+  <script src="api.js"></script><script src="admin.js"></script>
 </body>
 </html>
