@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="minicamp 2026 校园黑客松：相遇、创造，一起做点东西。">
   <title>minicamp 2026｜校园黑客松</title>
+  <link rel="icon" type="image/png" href="assets/brand/minicamp-logo-seal.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="site-header">
+  <header class="site-header home-header">
     <a class="brand" href="#top" aria-label="minicamp 2026 首页">
-      <span class="brand-mark">m</span>
-      <span>minicamp <b>2026</b></span>
+      <img class="brand-lockup" src="assets/brand/minicamp-logo-lockup-partners-horizontal.png" alt="minicamp 2026" width="2203" height="614">
     </a>
     <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" title="打开导航">
       <span></span><span></span>
@@ -21,7 +21,7 @@
       <a href="#format">活动形式</a>
       <a href="#schedule">时间表</a>
       <a href="#faq">常见问题</a>
-      <a href="voting.html">现场投票</a>
+      <a href="voting.html" data-voting-entry>现场投票</a><a href="gallery.html">项目 Gallery</a><a href="team.html">组队工作区</a>
       <a href="profile.html">个人主页</a>
       <a class="nav-admin" href="admin.html">主办方后台</a>
       <a class="button button-small button-dark" href="#apply">立即报名</a>
@@ -34,7 +34,6 @@
         <div class="scene-grid"></div>
         <span class="scene-label scene-label-one">BUILD / 01</span>
         <span class="scene-label scene-label-two">SHIP / 02</span>
-        <span class="scene-label scene-label-three">MEET / 03</span>
         <div class="scene-window window-code">
           <div class="window-bar"><i></i><i></i><i></i></div>
           <p><span>01</span> describe the idea</p>
@@ -83,7 +82,7 @@
         <div class="intro-copy">
           <p>minicamp 是一场面向中南大学学生的跨学科校园黑客松。这里不只需要程序员，也需要理解用户的人、会做设计的人、能讲清想法的人，以及愿意动手试一试的人。</p>
           <p>你不需要提前准备成熟创意，也不必拥有完整团队。主题会在现场揭晓，人与想法在现场相遇，然后一起把它做出来。</p>
-          <a class="text-link dark-link" href="#apply">一个人也可以报名 <span>→</span></a>
+          <a class="text-link dark-link" href="#apply">立即报名 <span>→</span></a>
         </div>
       </div>
     </section>
@@ -182,7 +181,7 @@
       <div class="shell">
         <div class="section-heading">
           <div><p class="section-kicker">AWARDS</p><h2>值得被看见的六种作品</h2></div>
-          <div class="award-heading-side"><p>Demo 比 PPT 更重要。正式奖项由参与者与 Jury 综合投票产生。</p><a class="button button-dark" href="voting.html">进入投票入口 <span>↗</span></a></div>
+          <div class="award-heading-side"><p>Demo 比 PPT 更重要。正式奖项由参与者与 Jury 综合投票产生。</p><a class="button button-dark" href="voting.html" data-voting-entry>进入投票入口 <span>↗</span></a></div>
         </div>
         <div class="award-list">
           <div><span>01</span><strong>全场最佳</strong><small>BEST OVERALL</small></div>
@@ -190,7 +189,7 @@
           <div><span>03</span><strong>最佳设计与体验</strong><small>BEST DESIGN & EXPERIENCE</small></div>
           <div><span>04</span><strong>最佳技术 Hack</strong><small>BEST TECHNICAL HACK</small></div>
           <div><span>05</span><strong>最出乎意料奖</strong><small>MOST UNEXPECTED</small></div>
-          <a href="voting.html"><span>06</span><strong>现场人气奖</strong><small>PEOPLE'S CHOICE · 点击投票 ↗</small></a>
+          <a href="voting.html" data-voting-entry><span>06</span><strong>现场人气奖</strong><small>PEOPLE'S CHOICE · 点击投票 ↗</small></a>
         </div>
       </div>
     </section>
@@ -216,27 +215,11 @@
           </div>
           <div class="form-account-link">已经提交过报名？<a href="profile.html">进入个人主页修改资料、查看通知 →</a></div>
           <form id="application-form" novalidate>
-            <div class="form-step active" data-step="1">
-              <h3>你准备怎样参加？</h3>
-              <p class="form-caption">预组队成员仍需分别提交报名。</p>
-              <div class="choice-grid">
-                <label class="choice-card">
-                  <input type="radio" name="entryType" value="个人报名" checked>
-                  <span><b>01</b><strong>个人报名</strong><small>现场寻找队友</small></span>
-                </label>
-                <label class="choice-card">
-                  <input type="radio" name="entryType" value="结伴报名">
-                  <span><b>02</b><strong>2–3 人结伴</strong><small>使用 Team Code 关联</small></span>
-                </label>
-                <label class="choice-card">
-                  <input type="radio" name="entryType" value="完整预组队">
-                  <span><b>03</b><strong>4–5 人完整队伍</strong><small>团队优先，个人兜底</small></span>
-                </label>
-              </div>
-              <div class="team-code-field hidden" id="team-code-field">
-                <label for="teamCode">Team Code <small>已有邀请码请填写，没有可暂留空</small></label>
-                <div class="input-action"><input id="teamCode" name="teamCode" maxlength="10" placeholder="例如 MC26-A7K2"><button id="generate-code" type="button">生成</button></div>
-              </div>
+            <div class="form-step active application-start-step" data-step="1">
+              <p class="section-kicker">APPLICATION / START</p>
+              <h3>开始报名</h3>
+              <p class="form-caption">先填写基本资料，再告诉我们你的兴趣、经历和期待。现场会根据兴趣和能力帮助大家组队。</p>
+              <div class="application-start-note"><span>01</span><div><strong>准备好了吗？</strong><p>报名资料大约需要几分钟完成，提交后可以在个人主页查看和修改。</p></div></div>
             </div>
 
             <div class="form-step" data-step="2" hidden>
@@ -250,6 +233,14 @@
                 <label>手机号<input name="phone" autocomplete="tel" required placeholder="用于活动通知"></label>
                 <label>邮箱<input name="email" type="email" autocomplete="email" required placeholder="name@example.com"></label>
               </div>
+              <fieldset class="team-intent-fieldset">
+                <legend>是否有意向组队的人员？<small>有的话请填写对方姓名</small></legend>
+                <div class="profile-entry-options">
+                  <label><input type="radio" name="hasTeamIntent" value="否" checked><span>暂无</span></label>
+                  <label><input type="radio" name="hasTeamIntent" value="是"><span>有</span></label>
+                </div>
+                <label class="team-intent-name hidden" id="team-intent-name-field" for="teamIntentName">意向组队人员姓名<input id="teamIntentName" name="teamIntentName" maxlength="30" placeholder="填写对方姓名"></label>
+              </fieldset>
               <fieldset>
                 <legend>希望别人首先因为什么能力认识你？<small>最多选择 2 项</small></legend>
                 <div class="skill-grid">
@@ -270,7 +261,7 @@
               <p class="form-caption">我们看重创造欲、合作意愿和不同视角，而不是履历长度。</p>
               <label>为什么想参加 minicamp？<textarea name="motivation" required rows="4" placeholder="可以说说你想做什么、想学习什么，或想认识怎样的人。"></textarea></label>
               <label>做过的项目或相关经历<textarea name="experience" rows="3" placeholder="课程项目、社团活动、个人作品都可以；没有也没关系。"></textarea></label>
-              <label>GitHub / 作品集 / 个人主页<input name="portfolio" type="url" placeholder="https://（选填）"></label>
+              <label>GitHub / 作品集 / 个人主页<input name="portfolio" type="url" placeholder="https://（选填）"></label><label>可以来找我聊什么？<input name="askMeAbout" placeholder="例如：校园产品、硬件、视觉"></label><label>我可以帮助别人做什么？<input name="canHelpWith" placeholder="例如：快速做出 Demo"></label><label>我想探索什么？<input name="explore" placeholder="例如：和产品同学合作"></label>
               <label class="consent"><input type="checkbox" name="consent" required><span>我确认信息真实，并同意主办方仅将报名资料用于本次活动组织与联系。</span></label>
             </div>
 
@@ -297,24 +288,77 @@
 
     <section id="faq" class="section faq-section">
       <div class="shell faq-layout">
-        <div><p class="section-kicker">FAQ</p><h2>报名前，<br>你可能还想知道。</h2></div>
+        <div>
+          <p class="section-kicker">FAQ / BEFORE YOU APPLY</p>
+          <h2>报名前，<br>先把这件事了解清楚。</h2>
+          <p class="faq-intro">这里整理了参与者最需要确认的规则、准备事项和现场流程。如果你的问题没有被覆盖，可以通过报名页面提交给主办方。</p>
+        </div>
         <div class="faq-list">
-          <details><summary>不会编程可以参加吗？<span>+</span></summary><p>可以。活动需要产品、设计、研究、商业、内容等多种能力。现场还有 AI Coding Quickstart 和 Help Desk。</p></details>
-          <details><summary>可以提前准备项目吗？<span>+</span></summary><p>不可以提前开发参赛项目。三个主题在 Day 1 现场公布，Idea 也应在现场产生和碰撞。</p></details>
-          <details><summary>一个人报名会怎样组队？<span>+</span></summary><p>你会参加 Idea Collision、Lightning Pitch 和 Team Market。仍未完成组队的参与者会由主办方协助连接。</p></details>
-          <details><summary>必须做 AI 产品吗？<span>+</span></summary><p>不需要。AI Coding 是开发方式，不是赛题。作品可以完全不包含 AI 功能。</p></details>
-          <details><summary>报名什么时候截止？<span>+</span></summary><p>报名开放时间、截止时间和录取通知日期暂未确定，后续将在官网更新。</p></details>
+          <details>
+            <summary>不会编程，或者没有黑客松经验，可以参加吗？<span>+</span></summary>
+            <p><strong>可以，而且我们明确欢迎非技术背景的参与者。</strong> minicamp 不是只比较代码量或技术难度的编程竞赛。产品、设计、用户研究、商业、内容、硬件和其他跨学科能力，同样会直接影响一个项目能否真正完成。你可以负责发现问题、梳理需求、设计交互、验证用户反馈、组织展示，也可以在现场借助 AI Coding 学习并完成实现。活动会安排 AI Coding Quickstart 和持续开放的 Help Desk，帮助第一次使用相关工具的人从一个可运行的 Demo 开始。</p>
+          </details>
+          <details>
+            <summary>大一新生可以参加吗？<span>+</span></summary>
+            <p>欢迎大一新生了解 minicamp、参加现场路演和项目展示，但按照本届活动安排，<strong>大一新生不参与两天的项目开发环节</strong>。其他年级不限制学院、专业或具体技术方向。我们更看重你的创造欲、参与动机、合作意愿和学习潜力，而不是年级或简历上的项目数量。</p>
+          </details>
+          <details>
+            <summary>可以提前准备项目，或者带着成熟 Idea 来吗？<span>+</span></summary>
+            <p>可以提前了解活动、准备工具和思考自己想解决的问题，但<strong>不可以提前开发本届参赛项目</strong>。Day 1 现场会公布三个灵感主题，Idea 需要在现场产生、讨论和收敛。你可以带着一个模糊的问题或兴趣来到现场，也可以在 Idea Collision 中放弃原来的想法、加入别人的问题，或者和其他人共同形成一个全新的方向。</p>
+          </details>
+          <details>
+            <summary>报名后，现场如何组队？最终队伍有几个人？<span>+</span></summary>
+            <p>报名资料提交后，现场会经历 Idea Spark、Idea Collision、Lightning Pitch 和 Team Market，帮助大家找到合适的合作伙伴。最终队伍标准为 <strong>3–5 人</strong>；Team Lock-in 时仍未完成组队的参与者，会由主办方根据兴趣和能力方向协助连接。</p>
+          </details>
+          <details>
+            <summary>必须做 AI 产品吗？AI Coding 具体有什么要求？<span>+</span></summary>
+            <p><strong>作品不要求包含 AI 功能，但所有团队需要在开发过程中使用 AI Coding。</strong>你可以使用 Codex、Claude Code、Cursor、GitHub Copilot、Gemini CLI 或其他 AI 编程工具。AI Coding 是开发方式，不是赛题；项目可以是网站、App、小程序、游戏、硬件、数据产品、创意交互，也可以完全不包含人工智能功能。主办方不会检查 Prompt、聊天记录或 AI 生成代码比例，只需要在项目提交时简单填写使用过的工具。</p>
+          </details>
+          <details>
+            <summary>报名后应该提前准备什么？需要完成赛前作业吗？<span>+</span></summary>
+            <p>不设置赛前作业，也不要求提前完成练习。录取后会收到 AI Coding Starter Pack，内容包括推荐工具、安装和登录说明、基础环境准备、需求描述方法和常见报错处理。建议提前确认自己的电脑、网络、Node.js / Python / Git 等基础环境可以正常运行，并至少准备好一个计划使用的 AI Coding 工具账号。GitHub 或个人作品集是选填项，没有作品集不会影响正常报名。</p>
+          </details>
+          <details>
+            <summary>报名如何录取？意向组队人员会不会影响个人录取？<span>+</span></summary>
+            <p>采用<strong>轻筛选 + 能力结构软控制</strong>，不会单纯按照竞赛奖项、简历长度或技术能力排名。主要关注创造欲、参与动机、合作意愿、能力或学习潜力，以及不同背景之间的多样性。每位报名者都会独立审核，填写的意向组队人员姓名仅用于现场连接参考，不影响个人录取判断。</p>
+          </details>
+          <details>
+            <summary>两天活动具体会做什么？需要通宵吗？<span>+</span></summary>
+            <p>Day 1 约为 09:00–21:30，完成主题揭晓、创意碰撞、组队和主要开发；Day 2 约为 09:00–18:00，完成最后开发、项目提交、舞台 Demo、项目展览、投票和颁奖。活动安排不以通宵为前提，第一天会在 21:30 进行收尾。第二天 13:00 起停止新增核心功能，团队转入 Demo、部署和展示准备，重点是把作品稳定地交付出来。</p>
+          </details>
+          <details>
+            <summary>项目可以做什么？最终需要提交哪些内容？<span>+</span></summary>
+            <p>项目方向不设单一技术赛道，可以围绕校园体验、真实用户需求或意料之外的创意进行尝试。最终提交包括 Team ID、项目名称、灵感主题、一句话介绍、成员及分工、Problem / Solution、Demo URL、项目截图或封面等；GitHub 链接可以自愿公开。Day 2 下午会进行约 3 分钟的 Stage Demo，展示重点是<strong>真实可运行的产品和核心体验，而不是长篇 PPT</strong>。</p>
+          </details>
+          <details>
+            <summary>项目如何评审和投票？奖项可以重复获得吗？<span>+</span></summary>
+            <p>Best Overall、Best Product、Best Design &amp; Experience、Best Technical Hack 和 Most Unexpected 等正式奖项通过参与者与 Jury 的投票综合产生，每位投票者对前三选择分别使用 3、2、1 票。People's Choice 只由参与者投票产生，且不能投给自己的团队。正式评审类奖项原则上一支团队最多获得一个；如果同一团队同时获得多个正式奖项，其他奖项会顺延给下一支符合条件的团队。People's Choice 可以与其他奖项叠加。</p>
+          </details>
+          <details>
+            <summary>活动中遇到产品或技术问题，可以找谁？<span>+</span></summary>
+            <p>主办团队成员会在现场担任 Mentor / Connector，并通过队伍群聊和巡队提供支持。你可以咨询产品范围、用户问题、技术路线、AI Coding 工具、报错处理、Demo 风险、展示方式和测试用户等问题。Mentor 会帮助团队挑战假设、缩小范围和连接资源，但不会替团队决定方向，也不会替团队完成核心开发。</p>
+          </details>
+          <details>
+            <summary>报名什么时候截止？录取结果什么时候通知？<span>+</span></summary>
+            <p>报名开放时间、截止时间和录取通知日期会根据筹备进度由主办方统一配置，并在官网状态、报名页面和通知渠道同步更新。提交报名后请确保联系方式准确，并留意后续通知。正式录取后，主办方会进一步发送队伍确认、AI Coding Starter Pack 和活动须知。</p>
+          </details>
+          <nav class="faq-pagination" aria-label="FAQ 分页">
+            <button class="faq-page-button" type="button" data-faq-direction="prev" aria-label="上一页问题">← <span>上一页</span></button>
+            <span class="faq-page-status" aria-live="polite">第 1 / 3 页</span>
+            <button class="faq-page-button" type="button" data-faq-direction="next" aria-label="下一页问题"><span>下一页</span> →</button>
+          </nav>
         </div>
       </div>
     </section>
+
 
     <section class="organizer-band">
       <div class="shell organizer-layout">
         <div><p class="section-kicker">PRESENTED TOGETHER</p><h2>三个学生社团，<br>一起把创造者聚到这里。</h2></div>
         <div class="organizer-list">
-          <div><span>01</span><strong>innoseed</strong><small>校园创新社群</small></div>
-          <div><span>02</span><strong>HUAWEI</strong><small>华为学生社团</small></div>
-          <div><span>03</span><strong>XIAOMI</strong><small>小米学生社团</small></div>
+          <div><span>01</span><strong>InnoSeed Lab</strong><small>校园创新社群</small></div>
+          <div><span>02</span><strong>Huawei Smart Base</strong><small>华为智能基座社团</small></div>
+          <div><span>03</span><strong>Xiaomi Lab</strong><small>小米实验室</small></div>
         </div>
       </div>
     </section>
@@ -322,7 +366,7 @@
 
   <footer class="site-footer">
     <div class="shell footer-grid">
-      <div><span class="footer-brand">minicamp 2026</span><p>Meet. Build. Make Something Together.</p></div>
+      <div class="footer-brand-block"><img class="footer-wordmark" src="assets/brand/minicamp-wordmark.png" alt="minicamp" width="2203" height="614"><span>2026</span><p>Meet. Build. Make Something Together.</p></div>
       <div><span>活动日期</span><p>2026年9月12日–13日</p></div>
       <div><span>活动地点</span><p>中南大学潇湘校区信息楼508</p></div>
       <div><span>联系我们</span><p>邮箱待公布</p></div>
@@ -330,7 +374,8 @@
     <div class="shell footer-bottom"><span>© 2026 minicamp</span><a href="admin.html">主办方入口</a></div>
   </footer>
 
+
   <div class="toast" id="toast" role="status"></div>
-  <script src="app.js"></script>
+  <script src="api.js"></script><script src="app.js"></script>
 </body>
 </html>
