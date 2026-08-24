@@ -4,7 +4,7 @@
 
 ## 本地预览
 
-项目不依赖第三方包。请确保已安装 Node.js，然后在项目目录执行：
+请确保已安装 Node.js，然后在项目目录执行：
 
     node server.mjs
 
@@ -15,7 +15,7 @@
     $env:MINICAMP_ADMIN_PASSWORD = "your-password"
     node server.mjs
 
-运行时数据保存到 data/minicamp.json，该文件不提交到 Git。
+默认优先使用 MySQL 持久化；如果本地 MySQL 不可用，服务会自动回退到 `data/minicamp.json`，该文件不提交到 Git。可通过 `.env.example` 配置数据库连接。
 
 ## 页面入口
 
@@ -31,7 +31,7 @@
 
 ## 当前实现
 
-- Node.js 原生 HTTP 服务与 JSON 持久化数据层。
+- Node.js 原生 HTTP 服务与 MySQL/JSON 持久化数据层。
 - 参与者和主办方 token 登录。
 - 报名去重、Team Code、队伍加入与 3–5 人锁定。
 - 个人资料、Bonjour Profile 字段、通知中心。
@@ -39,9 +39,8 @@
 - 参与者投票、Jury 投票、参与者/Jury 权重统计。
 - 活动日期、报名状态、投票权重和 Starter Pack 可在后台配置。
 
-正式部署前仍应将 JSON 存储替换为数据库，接入 HTTPS、统一身份认证、限流、CSRF 防护、审计日志和备份机制。
+正式部署前仍应配置生产 MySQL，接入 HTTPS、统一身份认证、限流、CSRF 防护、审计日志和备份机制。
 
 ## 技术栈
 
 HTML、CSS、原生 JavaScript、Node.js。
-
