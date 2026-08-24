@@ -1,1 +1,17 @@
-(() => { const grid=document.getElementById("gallery-grid"); MinicampAPI.request("/api/projects").then(({projects})=>{grid.innerHTML=projects.map(p=>"<article class='project-card'><div class='project-cover'>"+(p.coverUrl?"<img src='"+p.coverUrl+"' alt=''>":"<span>"+p.teamId+"</span>")+"</div><p class='section-kicker'>"+p.theme+"</p><h2>"+p.projectName+"</h2><p class='project-tagline'>"+(p.tagline||"")+"</p><dl><dt>Problem</dt><dd>"+(p.problem||"")+"</dd><dt>Solution</dt><dd>"+(p.solution||"")+"</dd></dl><div class='project-members'>"+(p.members||[]).map(m=>"<span>"+m.name+" · "+m.role+"</span>").join("")+"</div><div class='project-actions'>"+(p.demoUrl?"<a class='button button-dark' target='_blank' href='"+p.demoUrl+"'>打开 Demo</a>":"")+(p.githubUrl?"<a class='outline-button' target='_blank' href='"+p.githubUrl+"'>GitHub</a>":"")+"</div></article>").join("")||"<p>还没有已发布项目。</p>"}).catch(e=>{grid.innerHTML="<p>"+e.message+"</p>"}); })();
+(() => {
+  const grid = document.getElementById("gallery-grid");
+  if (!grid) return;
+  const fallbackNode = document.getElementById("gallery-fallback");
+  let fallback = [];
+  try { fallback = JSON.parse(fallbackNode?.textContent || "[]"); } catch { fallback = []; }
+  const escape = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+  const render = projects => {
+    grid.innerHTML = projects.map(p => "<article class='project-card'><div class='project-cover'>" + (p.coverUrl ? "<img src='" + escape(p.coverUrl) + "' alt=''>" : "<span>" + escape(p.teamId) + "</span>") + "</div><p class='section-kicker'>" + escape(p.theme) + "</p><h2>" + escape(p.projectName) + "</h2><p class='project-tagline'>" + escape(p.tagline) + "</p><dl><dt>Problem</dt><dd>" + escape(p.problem) + "</dd><dt>Solution</dt><dd>" + escape(p.solution) + "</dd></dl><div class='project-members'>" + (p.members || []).map(m => "<span>" + escape(m.name) + " · " + escape(m.role) + "</span>").join("") + "</div><div class='project-actions'>" + (p.demoUrl ? "<a class='button button-dark' target='_blank' rel='noreferrer' href='" + escape(p.demoUrl) + "'>打开 Demo</a>" : "") + (p.githubUrl ? "<a class='outline-button' target='_blank' rel='noreferrer' href='" + escape(p.githubUrl) + "'>GitHub</a>" : "") + "</div></article>").join("") || "<p>还没有已发布项目。</p>";
+  };
+  const request = window.MinicampAPI?.request;
+  if (typeof request !== "function") {
+    render(fallback);
+    return;
+  }
+  request("/api/projects").then(({ projects }) => render(Array.isArray(projects) ? projects : fallback)).catch(() => render(fallback));
+})();

@@ -6,10 +6,22 @@ window.MinicampAPI = (() => {
     const headers = {"Content-Type":"application/json", ...(options.headers || {})};
     const token = getToken();
     if (token) headers.Authorization = "Bearer " + token;
-    const response = await fetch(path, {...options, headers});
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || "请求失败");
-    return data;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(path, {...options, headers, signal: controller.signal});
+      const raw = await response.text();
+      let data = {};
+      const contentType = response.headers.get("content-type") || "";
+      try { data = raw && contentType.includes("json") ? JSON.parse(raw) : {}; } catch { data = {}; }
+      if (!contentType.includes("json") && !response.ok) throw new Error("API 路由未配置（HTTP " + response.status + "），请确认域名已反向代理到 Node 服务。");
+      if (!response.ok) throw new Error(data.error || "请求失败（HTTP " + response.status + "）");
+      return data;
+    } catch (error) {
+      if (error.name === "AbortError") throw new Error("请求超时，请检查服务是否正在运行。");
+      if (error instanceof TypeError) throw new Error("无法连接服务器，请确认使用 http://localhost:4173 打开网站。");
+      throw error;
+    } finally { clearTimeout(timeout); }
   }
   return {request, getToken, setToken, participantLogin: async (id, contact) => { const data = await request("/api/auth/participant",{method:"POST",body:JSON.stringify({id,contact})}); setToken(data.token); return data; }, logout: () => setToken("")};
 })();
