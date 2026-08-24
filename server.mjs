@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import mysql from "mysql2/promise";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
+const publicRoot = path.join(root, "public");
 const port = Number(process.env.MINICAMP_PORT || 4173);
 const dbPath = path.join(root, "data", "minicamp.json");
 const adminPassword = process.env.MINICAMP_ADMIN_PASSWORD || "minicamp-admin";
@@ -113,7 +114,7 @@ async function api(req,res,url){
   if(url.pathname==="/api/admin/results"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{results:calcResults(),awards:resolvedAwards(),votes:db.votes});}
   return fail(res,404,"API not found");
 }
-async function serve(req,res){const url=new URL(req.url,"http://"+(req.headers.host||"localhost"));if(url.pathname.startsWith("/api/")){try{await api(req,res,url);}catch(e){console.error(e);fail(res,500,e.message||"server error");}return;}const requested=url.pathname==="/"?"/index.html":url.pathname;const file=path.resolve(root,"."+path.posix.normalize(requested));if(!file.startsWith(root)){res.writeHead(403);res.end("Forbidden");return;}try{const data=await fs.readFile(file);res.writeHead(200,{"Content-Type":mime[path.extname(file)]||"application/octet-stream","Cache-Control":"no-store"});res.end(data);}catch{res.writeHead(404);res.end("Not found");}}
+async function serve(req,res){const url=new URL(req.url,"http://"+(req.headers.host||"localhost"));if(url.pathname.startsWith("/api/")){try{await api(req,res,url);}catch(e){console.error(e);fail(res,500,e.message||"server error");}return;}const requested=url.pathname==="/"?"/index.html":url.pathname;const file=path.resolve(publicRoot,"."+path.posix.normalize(requested));if(file!==publicRoot&&!file.startsWith(publicRoot+path.sep)){res.writeHead(403);res.end("Forbidden");return;}try{const data=await fs.readFile(file);res.writeHead(200,{"Content-Type":mime[path.extname(file)]||"application/octet-stream","Cache-Control":"no-store"});res.end(data);}catch{res.writeHead(404);res.end("Not found");}}
 await loadDb();
 http.createServer(serve).listen(port,"127.0.0.1",()=>console.log("minicamp preview: http://localhost:"+port));
 

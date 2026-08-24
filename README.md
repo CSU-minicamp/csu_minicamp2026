@@ -32,6 +32,7 @@
 ## 当前实现
 
 - Node.js 原生 HTTP 服务与 MySQL/JSON 持久化数据层。
+- 静态页面、浏览器脚本、样式和图片资源统一位于 `public/`。
 - 参与者和主办方 token 登录。
 - 报名去重、Team Code、队伍加入与 3–5 人锁定。
 - 个人资料、Bonjour Profile 字段、通知中心。
