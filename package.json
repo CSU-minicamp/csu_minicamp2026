@@ -1,0 +1,12 @@
+{
+  "name": "minicamp-2026",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check server.mjs"
+  },
+  "dependencies": {
+    "mysql2": "^3.14.4"
+  }
+}
