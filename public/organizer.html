@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>主办方信息｜minicamp 2026</title>
+  <link rel="icon" type="image/png" href="assets/brand/minicamp-logo-seal.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="organizer-public-body">
+  <header class="site-header organizer-public-header">
+    <a class="brand" href="index.html" aria-label="返回 minicamp 2026 官网"><img class="brand-lockup" src="assets/brand/minicamp-logo-lockup-partners-horizontal.png" alt="minicamp 2026" width="2203" height="614"></a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="organizer-site-nav" title="打开导航"><span></span><span></span></button>
+    <nav id="organizer-site-nav" class="site-nav" aria-label="主导航">
+      <a href="index.html#about">关于活动</a>
+      <a href="index.html#format">活动形式</a>
+      <a href="index.html#schedule">时间表</a>
+      <a href="index.html#faq">常见问题</a>
+      <a href="voting.html" data-voting-entry>现场投票</a>
+      <a href="gallery.html">项目 Gallery</a>
+      <a href="team.html">组队工作区</a>
+      <a href="profile.html">个人主页</a>
+      <a class="button button-small button-dark" href="index.html#apply">立即报名</a>
+    </nav>
+  </header>
+  <main class="organizer-public-main">
+    <section class="organizer-public-hero shell">
+      <p class="section-kicker">ORGANIZER VIEW · PUBLIC</p>
+      <h1>主办方信息页</h1>
+      <p>活动进度、队伍和已发布项目在这里公开查看，无需登录。</p>
+    </section>
+    <section class="section shell">
+      <div class="metrics-grid" id="organizer-metrics"><p>正在加载...</p></div>
+      <div class="organizer-public-grid">
+        <section class="admin-card"><div class="admin-card-head"><h2>活动信息</h2></div><dl class="organizer-public-details" id="organizer-config"></dl></section>
+        <section class="admin-card"><div class="admin-card-head"><h2>最新公告</h2></div><div class="admin-notice-list" id="organizer-notices"></div></section>
+      </div>
+    </section>
+    <section class="section organizer-public-projects"><div class="shell"><div class="section-heading"><div><p class="section-kicker">TEAMS & PROJECTS</p><h2>队伍与已发布项目</h2></div></div><div class="organizer-public-list" id="organizer-projects"></div></div></section>
+  </main>
+  <script src="api.js"></script><script src="organizer.js"></script>
+</body>
+</html>
+
+
