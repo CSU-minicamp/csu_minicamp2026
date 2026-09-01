@@ -17,6 +17,46 @@
 
 默认优先使用 MySQL 持久化；如果本地 MySQL 不可用，服务会自动回退到 `data/minicamp.json`，该文件不提交到 Git。可通过 `.env.example` 配置数据库连接。
 
+## 测试数据
+
+先停止正在运行的本地服务，再生成数据，随后重新启动服务：
+
+    npm run test-data
+
+测试数据带有内部标记，覆盖报名状态、个人资料、锁定与草稿队伍、公开与草稿项目、创意、全局与定向通知、参与者投票、Jury 评审结果，以及已开放的投票配置。
+
+常用测试账号：
+
+- `TEST-APP-01` / `test-01@minicamp.local`：已锁定队伍成员，可测试个人资料、项目与投票。
+- `TEST-APP-22` / `test-create-team@minicamp.local`：已录取且未组队，可测试创建队伍。
+- `TEST-APP-23` / `test-join-team@minicamp.local`：已录取且未组队，可加入 `TEST-TEAM-06` 并测试锁定队伍。
+
+需要清除时运行：
+
+    npm run clear-test-data
+
+清除命令只删除带测试标记的数据，并恢复生成前的活动配置；不会删除原有报名、队伍、项目、通知或投票记录。
+
+## 部署与反向代理
+
+前端通过相对路径请求 `/api/*`。Node 服务（`server.mjs`）同时负责**静态页面**和 **`/api` 接口**，并绑定在本机 `127.0.0.1:4173`。因此上线时只需把域名反向代理到这个 Node 服务即可。
+
+- 如果页面请求 `/api/...` 返回 `404`，说明前端是由域名/其他静态服务器提供的，但 `/api` 没有转发到 Node 服务——按下面配置即可解决。
+- Nginx（含宝塔面板）：见 `deploy/nginx.conf`
+- Caddy：见 `deploy/Caddyfile`
+
+最简做法（推荐）：把整个站点反代到 Node 服务，例如 Nginx：
+
+    location / { proxy_pass http://127.0.0.1:4173; }
+
+或 Caddy：
+
+    your-domain.com { reverse_proxy 127.0.0.1:4173 }
+
+正式运行时请用 pm2 / systemd / nssm 让 Node 常驻，并启用 HTTPS。
+
+> 本地开发若用 VS Code Live Server（5500 端口），静态可打开但 `/api` 会 404。直接用 `http://localhost:4173/` 访问 Node 服务即可，无需反代；或在 Live Server 设置中把 `/api` 代理到 `http://127.0.0.1:4173`。
+
 ## 页面入口
 
 - 官网首页：/

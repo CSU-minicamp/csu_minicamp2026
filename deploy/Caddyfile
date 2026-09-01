@@ -1,0 +1,20 @@
+# minicamp 2026 报名页面 · Caddy 反向代理配置
+# 用法： caddy run --config ./Caddyfile   （或放进系统 Caddyfile 后 reload）
+# Caddy 会自动申请并续期 HTTPS 证书，最省事。
+#
+# 把 your-domain.com 改成你的域名；确保 Node 服务已在本机 4173 运行。
+
+your-domain.com {
+    encode zstd gzip
+    # 全部转发给 Node 服务（它同时负责静态页面和 /api 接口）
+    reverse_proxy 127.0.0.1:4173
+}
+
+# 若只想反代 /api、静态文件交给 Caddy 直接托管，可改成：
+# your-domain.com {
+#     root * /var/www/csu_minicamp2026/public
+#     route {
+#         reverse_proxy /api/* 127.0.0.1:4173
+#         file_server
+#     }
+# }
