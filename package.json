@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check server.mjs"
+    "check": "node --check server.mjs",
+    "test-data": "node scripts/test-data.mjs seed",
+    "clear-test-data": "node scripts/test-data.mjs clear"
   },
   "dependencies": {
     "mysql2": "^3.14.4"
