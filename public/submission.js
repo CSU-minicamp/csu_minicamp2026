@@ -1,1 +1,49 @@
-(() => { const api=MinicampAPI, form=document.getElementById("project-form"), members=document.getElementById("member-fields"); api.request("/api/me").then(({team})=>{if(!team)throw new Error("请先加入队伍");members.innerHTML="<h3>团队分工</h3>"+team.members.map((m,i)=>"<div class='field-grid'><label>"+m.name+" 的角色<input name='memberRole"+i+"' placeholder='产品 / 设计 / 技术'></label><input type='hidden' name='memberName"+i+"' value='"+m.name+"'></div>").join("")}).catch(e=>document.getElementById("project-error").textContent=e.message);form.addEventListener("submit",async e=>{e.preventDefault();const d=new FormData(form),membersOut=[];document.querySelectorAll('[name^="memberName"]').forEach((input,i)=>membersOut.push({name:input.value,role:d.get("memberRole"+i)||""}));const payload=Object.fromEntries(d.entries());payload.aiTools=String(payload.aiTools||"").split(",").map(x=>x.trim()).filter(Boolean);payload.members=membersOut;delete payload.memberRole0;try{await api.request("/api/projects",{method:"POST",body:JSON.stringify(payload)});form.innerHTML="<div class='form-success'><h3>项目已提交。</h3><p>主办方审核发布后，会出现在 Project Gallery。</p><a class='button button-dark' href='gallery.html'>查看 Gallery</a></div>"}catch(err){document.getElementById("project-error").textContent=err.message}}); })();
+(() => {
+  const api = window.MinicampAPI;
+  const form = document.getElementById("project-form");
+  const fields = document.getElementById("member-fields");
+  const error = document.getElementById("project-error");
+  const escapeHtml = value => String(value).replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+
+  async function init() {
+    try {
+      const { participant, team } = await api.request("/api/me");
+      if (!team) {
+        error.textContent = "请先在组队工作区创建或加入队伍。";
+        form.querySelector("button[type='submit']").disabled = true;
+        return;
+      }
+      fields.innerHTML = "<fieldset><legend>成员分工</legend>" + team.members.map(member =>
+        "<label>" + escapeHtml(member.name) + "<input data-member-role data-member-name='" + escapeHtml(member.name) + "' placeholder='例如：产品 / 开发'></label>"
+      ).join("") + "</fieldset>";
+      form.dataset.teamId = team.id;
+      form.dataset.participantId = participant.id;
+    } catch {
+      location.href = "profile.html";
+    }
+  }
+
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const members = [...form.querySelectorAll("[data-member-role]")].map(input => ({
+      name: input.dataset.memberName,
+      role: input.value.trim()
+    }));
+    const payload = Object.fromEntries(data.entries());
+    payload.members = members;
+    payload.aiTools = String(data.get("aiTools") || "").split(",").map(item => item.trim()).filter(Boolean);
+    error.textContent = "";
+    const submit = form.querySelector("button[type='submit']");
+    submit.disabled = true;
+    try {
+      await api.request("/api/projects", { method: "POST", body: JSON.stringify(payload) });
+      form.innerHTML = "<div class='form-success'><span class='success-mark'>✓</span><p class='section-kicker'>PROJECT SAVED</p><h3>项目草稿已提交。</h3><p>主办方审核并发布后，项目会显示在 Gallery 中。</p><a class='button button-dark' href='gallery.html'>查看 Project Gallery</a></div>";
+    } catch (err) {
+      error.textContent = err.message;
+      submit.disabled = false;
+    }
+  });
+
+  init();
+})();

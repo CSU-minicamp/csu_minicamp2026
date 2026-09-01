@@ -8,21 +8,8 @@
   <link rel="icon" type="image/png" href="assets/brand/minicamp-logo-seal.png">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body class="profile-body">
-  <header class="site-header">
-    <a class="brand" href="index.html" aria-label="返回 minicamp 2026 首页"><img class="brand-lockup" src="assets/brand/minicamp-logo-lockup-partners-horizontal.png" alt="minicamp 2026" width="2203" height="614"></a>
-    <nav class="site-nav profile-nav" aria-label="主导航">
-      <a href="index.html#about">关于活动</a>
-      <a href="index.html#format">活动形式</a>
-      <a href="index.html#schedule">时间表</a>
-      <a href="index.html#faq">常见问题</a>
-      <a href="voting.html" data-voting-entry>现场投票</a>
-      <a href="gallery.html">项目 Gallery</a>
-      <a href="team.html">组队工作区</a>
-      <a href="profile.html">个人主页</a>
-      <a class="button button-small button-dark" href="index.html#apply">立即报名</a>
-    </nav>
-  </header>
+<body class="profile-body" data-page="profile">
+  <header id="site-header" class="site-header"></header>
 
   <main class="profile-shell shell">
     <section class="profile-login" id="profile-login">
@@ -36,18 +23,17 @@
       <form class="profile-login-card" id="profile-login-form" novalidate>
         <div class="profile-card-top"><span class="status-dot"></span>参与者登录</div>
         <h2>进入个人主页</h2>
-        <p>原型版使用本地数据验证。</p>
+        <p>使用报名时的申请编号和联系方式登录。</p>
         <label>申请编号<input id="login-id" required placeholder="例如 MC26-1005" autocomplete="username"><small class="field-help">在报名提交成功页可以看到，不是手机号。</small></label>
         <label>手机号或邮箱<input id="login-contact" required placeholder="报名时填写的联系方式" autocomplete="email"></label>
         <p class="profile-error" id="login-error" role="alert"></p>
         <button class="button button-dark" type="submit">继续进入 <span>↗</span></button>
-        <div class="profile-demo-hint">演示账号：<strong>MC26-1001</strong> · <strong>zhixing@example.com</strong></div>
         <small>还没有报名？<a href="index.html#apply">返回报名表</a></small>
       </form>
     </section>
 
   </main>
   <div class="toast" id="profile-toast" role="status"></div>
-  <script src="api.js"></script><script src="profile.js"></script>
+  <script src="api.js"></script><script src="nav.js"></script><script src="profile.js"></script>
 </body>
 </html>
