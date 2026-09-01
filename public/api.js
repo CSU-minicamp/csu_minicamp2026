@@ -1,10 +1,13 @@
 window.MinicampAPI = (() => {
   const key = "minicamp2026_token";
+  const adminKey = "minicamp2026_admin_token";
   const getToken = () => localStorage.getItem(key) || "";
   const setToken = value => value ? localStorage.setItem(key, value) : localStorage.removeItem(key);
+  const getAdminToken = () => localStorage.getItem(adminKey) || "";
+  const setAdminToken = value => value ? localStorage.setItem(adminKey, value) : localStorage.removeItem(adminKey);
   async function request(path, options = {}) {
     const headers = {"Content-Type":"application/json", ...(options.headers || {})};
-    const token = getToken();
+    const token = options.authRole === "admin" ? getAdminToken() : getToken();
     if (token) headers.Authorization = "Bearer " + token;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
@@ -23,5 +26,6 @@ window.MinicampAPI = (() => {
       throw error;
     } finally { clearTimeout(timeout); }
   }
-  return {request, getToken, setToken, participantLogin: async (id, contact) => { const data = await request("/api/auth/participant",{method:"POST",body:JSON.stringify({id,contact})}); setToken(data.token); return data; }, logout: () => setToken("")};
+  const adminRequest = (path, options = {}) => request(path, {...options, authRole: "admin"});
+  return {request, adminRequest, getToken, setToken, getAdminToken, setAdminToken, participantLogin: async (id, contact) => { const data = await request("/api/auth/participant",{method:"POST",body:JSON.stringify({id,contact})}); setToken(data.token); return data; }, logout: () => setToken(""), adminLogout: () => setAdminToken("")};
 })();
