@@ -9,7 +9,7 @@
 </head>
 <body class="voting-body" data-page="vote">
   <header id="site-header" class="site-header"></header>
-  <main class="voting-shell shell">
+  <main class="voting-shell shell" hidden>
     <section class="voting-workspace" id="voting-workspace" hidden>
       <div class="voting-top"><div><p class="section-kicker">PEOPLE'S VOTE / 2026</p><h1>选择你愿意支持的作品。</h1><p>你好，<strong id="voter-name">参与者</strong>。不能投给自己的队伍，每个奖项提交一次。</p></div><button class="outline-button" id="voting-logout" type="button">退出投票</button></div>
       <section class="project-browser" aria-labelledby="project-browser-title">
@@ -21,8 +21,7 @@
         <div class="vote-entry-heading"><div><p class="section-kicker">CAST YOUR VOTE</p><h2 id="vote-entry-title">现在，投出你的选择。</h2></div><span>每个奖项仅可提交一次</span></div>
         <div class="vote-notice"><span>!</span><p><strong>投票提示</strong> 每个正式奖项的第一、第二、第三选择必须是三个不同项目；你不能投给自己的队伍。</p></div>
         <form id="voting-form">
-          <div class="formal-votes" id="formal-votes"></div>
-          <section class="people-choice-block"><div class="vote-section-title"><div><p class="section-kicker">SPECIAL AWARD</p><h2>现场人气奖</h2></div><span>PEOPLE'S CHOICE · 单选</span></div><div class="candidate-grid" id="people-candidates"></div></section>
+          <div class="vote-draft-summary" id="vote-draft-summary"></div><p class="vote-draft-feedback" id="vote-draft-feedback" role="status" aria-live="polite"></p>
           <div class="voting-submit-bar"><p id="voting-error" role="alert"></p><button class="button button-primary" type="submit">提交全部投票 <span>↗</span></button></div>
         </form>
       </section>

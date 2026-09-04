@@ -1,11 +1,15 @@
 (() => {
   const api = window.MinicampAPI, login = document.getElementById("profile-login"), dashboard = document.getElementById("profile-dashboard");
   let current;
+  const params = new URLSearchParams(location.search);
+  const returnTo = params.get("returnTo") || "";
+  const profileRequired = params.get("profileRequired") === "1";
+  const activatePanel = id => { document.querySelectorAll("[data-profile-panel]").forEach(item => item.classList.toggle("active", item.dataset.profilePanel === id)); document.querySelectorAll(".profile-panel").forEach(panel => panel.classList.toggle("active", panel.id === id)); };
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
   const show = async () => {
     try {
       const data = await api.request("/api/me"); current = data.participant; if (login) login.hidden = true; if (dashboard) dashboard.hidden = false;
-      document.getElementById("profile-name").textContent = current.name; document.getElementById("profile-status").innerHTML = "<strong>" + current.status + "</strong><span>" + (data.team ? data.team.id + " · " + data.team.members.length + " 人" : "尚未确认队伍") + "</span>";
+      document.getElementById("profile-name").textContent = current.name; document.getElementById("profile-status").innerHTML = "<strong>" + current.status + "</strong><span>" + (data.team ? data.team.id + " · " + data.team.members.length + " 人" : "尚未确认队伍") + "</span>"; if (profileRequired && !api.isProfileComplete(current)) { activatePanel("profile-details"); document.getElementById("edit-save-state").textContent = "请先完善所有必填个人信息，再继续。"; }
       const form = document.getElementById("profile-edit-form"); for (const [name,value] of Object.entries(current)) { const field = form.elements[name]; if (field && field.type !== "checkbox" && field.type !== "radio") field.value = value || ""; }
       form.querySelectorAll('input[name="skills"]').forEach(input => input.checked = (current.skills || []).includes(input.value));
       document.getElementById("last-updated").textContent = current.updatedAt ? new Date(current.updatedAt).toLocaleString("zh-CN") : "已提交";
@@ -32,11 +36,29 @@
       ).join("") + "</ol></section>"
     ).join("") + "</div>";
   }
-  document.getElementById("profile-login-form")?.addEventListener("submit", async event => { event.preventDefault(); const id = document.getElementById("login-id").value.trim(), contact = document.getElementById("login-contact").value.trim(); try { await api.participantLogin(id,contact); location.assign("profile-dashboard.html"); } catch (err) { document.getElementById("login-error").textContent = err.message; } });
-  document.getElementById("profile-edit-form")?.addEventListener("submit", async event => { event.preventDefault(); const form = event.currentTarget, data = new FormData(form), payload = Object.fromEntries(data.entries()); payload.skills = data.getAll("skills"); delete payload.consent; try { await api.request("/api/me",{method:"PATCH",body:JSON.stringify(payload)}); document.getElementById("edit-save-state").textContent = "已保存，等待主办方复核。"; await show(); } catch (err) { document.getElementById("edit-error").textContent = err.message; } });
+  document.getElementById("profile-login-form")?.addEventListener("submit", async event => { event.preventDefault(); const id = document.getElementById("login-id").value.trim(), contact = document.getElementById("login-contact").value.trim(); try { await api.participantLogin(id,contact); location.assign(returnTo || "profile-dashboard.html"); } catch (err) { document.getElementById("login-error").textContent = err.message; } });
+document.getElementById("profile-edit-form")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget, data = new FormData(form), payload = Object.fromEntries(data.entries());
+    payload.skills = data.getAll("skills");
+    delete payload.consent;
+    const saveState = document.getElementById("edit-save-state");
+    const editError = document.getElementById("edit-error");
+    editError.textContent = "";
+    if (!api.isProfileComplete(payload)) {
+      editError.textContent = "请先填写姓名、学号、学院、专业与年级、手机号、邮箱和参与动机。";
+      return;
+    }
+    try {
+      await api.request("/api/me", {method:"PATCH", body:JSON.stringify(payload)});
+      if (returnTo) { location.assign(returnTo); return; }
+      saveState.textContent = "已保存，等待主办方复核。";
+      await show();
+    } catch (err) { editError.textContent = err.message; }
+  });
   document.querySelectorAll("[data-profile-panel]").forEach(button => button.addEventListener("click", () => { document.querySelectorAll("[data-profile-panel]").forEach(item => item.classList.toggle("active", item === button)); document.querySelectorAll(".profile-panel").forEach(panel => panel.classList.toggle("active", panel.id === button.dataset.profilePanel)); }));
   document.getElementById("mark-read")?.addEventListener("click", async () => { await api.request("/api/me/notices/read",{method:"POST"}); await renderNotices(); });
   document.getElementById("profile-logout")?.addEventListener("click", () => { api.logout(); location.reload(); });
   if (dashboard) show();
-  else if (api.getToken()) api.request("/api/me").then(() => location.replace("profile-dashboard.html")).catch(() => api.logout());
+  else if (api.getToken()) api.request("/api/me").then(() => { const destination = returnTo ? "profile-dashboard.html?returnTo=" + encodeURIComponent(returnTo) + "&profileRequired=1" : "profile-dashboard.html"; location.replace(destination); }).catch(() => api.logout());
 })();

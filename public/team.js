@@ -70,14 +70,13 @@
 
   async function render() {
     try {
-      const mine = await api.request("/api/me");
+      const mine = await api.requireProfile("team.html");
+      if (!mine) return;
       me = mine.participant;
-      const [teamData, ideaData] = await Promise.all([api.request("/api/teams"), api.request("/api/ideas")]);
+      document.querySelector("main")?.removeAttribute("hidden");
+      const teamData = await api.request("/api/teams");
       renderMyTeam(mine.team);
       renderTeams(teamData.teams, mine.team);
-      document.getElementById("idea-list").innerHTML = ideaData.ideas.map(idea =>
-        "<article class='idea-card'><span>" + escapeHtml(idea.theme) + "</span><h3>" + escapeHtml(idea.title) + "</h3><p>" + escapeHtml(idea.summary) + "</p><small>\u5bfb\u627e\uff1a" + escapeHtml((idea.needs || []).join(" / ")) + "</small></article>"
-      ).join("") || "<p class='team-list-empty'>\u8fd8\u6ca1\u6709\u516c\u5f00\u7684 Idea\u3002</p>";
       bindTeamActions(mine.team);
     } catch {
       location.assign("profile.html");
@@ -120,17 +119,6 @@
       }
     }));
   }
-
-  document.getElementById("idea-form").addEventListener("submit", async event => {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    try {
-      await api.request("/api/ideas", { method: "POST", body: JSON.stringify({ title: data.get("title"), summary: data.get("summary"), theme: data.get("theme"), needs: String(data.get("needs") || "").split(",").map(item => item.trim()).filter(Boolean) }) });
-      event.currentTarget.reset();
-      setFeedback("Idea \u5df2\u53d1\u5e03\uff0c\u5176\u4ed6\u540c\u5b66\u73b0\u5728\u53ef\u4ee5\u770b\u5230\u5b83\u3002", "success");
-      await render();
-    } catch (error) { setFeedback(readableError(error), "error"); }
-  });
 
   document.getElementById("create-team-form").addEventListener("submit", async event => {
     event.preventDefault();

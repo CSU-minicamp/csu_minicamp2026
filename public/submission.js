@@ -7,7 +7,10 @@
 
   async function init() {
     try {
-      const { participant, team } = await api.request("/api/me");
+      const profile = await api.requireProfile("submission.html");
+      if (!profile) return;
+      const { participant, team } = profile;
+      document.querySelector("main")?.removeAttribute("hidden");
       if (!team) {
         error.textContent = "请先在组队工作区创建或加入队伍。";
         form.querySelector("button[type='submit']").disabled = true;

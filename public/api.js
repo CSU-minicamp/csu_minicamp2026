@@ -5,6 +5,26 @@ window.MinicampAPI = (() => {
   const setToken = value => value ? localStorage.setItem(key, value) : localStorage.removeItem(key);
   const getAdminToken = () => localStorage.getItem(adminKey) || "";
   const setAdminToken = value => value ? localStorage.setItem(adminKey, value) : localStorage.removeItem(adminKey);
+  const profileFields = ["name", "studentId", "college", "major", "phone", "email", "motivation"];
+  const isProfileComplete = participant => Boolean(participant && profileFields.every(field => String(participant[field] || "").trim()));
+  const profileReturnUrl = () => location.pathname.split("/").pop() + location.search + location.hash;
+  const redirectToProfile = (returnTo = profileReturnUrl()) => {
+    const query = new URLSearchParams({ returnTo, profileRequired: "1" });
+    location.replace("profile.html?" + query.toString());
+  };
+  async function requireProfile(returnTo = profileReturnUrl()) {
+    try {
+      const data = await request("/api/me");
+      if (!isProfileComplete(data.participant)) {
+        redirectToProfile(returnTo);
+        return null;
+      }
+      return data;
+    } catch {
+      redirectToProfile(returnTo);
+      return null;
+    }
+  }
   async function request(path, options = {}) {
     const headers = {"Content-Type":"application/json", ...(options.headers || {})};
     const token = options.authRole === "admin" ? getAdminToken() : getToken();
@@ -27,5 +47,5 @@ window.MinicampAPI = (() => {
     } finally { clearTimeout(timeout); }
   }
   const adminRequest = (path, options = {}) => request(path, {...options, authRole: "admin"});
-  return {request, adminRequest, getToken, setToken, getAdminToken, setAdminToken, participantLogin: async (id, contact) => { const data = await request("/api/auth/participant",{method:"POST",body:JSON.stringify({id,contact})}); setToken(data.token); return data; }, logout: () => setToken(""), adminLogout: () => setAdminToken("")};
+  return {request, adminRequest, getToken, setToken, getAdminToken, setAdminToken, isProfileComplete, requireProfile, redirectToProfile, participantLogin: async (id, contact) => { const data = await request("/api/auth/participant",{method:"POST",body:JSON.stringify({id,contact})}); setToken(data.token); return data; }, logout: () => setToken(""), adminLogout: () => setAdminToken("")};
 })();
