@@ -187,7 +187,17 @@
   document.getElementById("applicant-status")?.addEventListener("change", applyFilters);
   document.getElementById("export-csv")?.addEventListener("click", exportCsv);
   document.getElementById("refresh-data")?.addEventListener("click", () => { load(); toast("已刷新"); });
-  document.getElementById("notice-form")?.addEventListener("submit", async e => { e.preventDefault(); const d = Object.fromEntries(new FormData(e.currentTarget)); try { await api.request("/api/admin/notices", { method: "POST", body: JSON.stringify(d) }); e.currentTarget.reset(); toast("通知已发布"); await load(); } catch (err) { toast(err.message); } });
+  document.getElementById("notice-form")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const d = Object.fromEntries(new FormData(form));
+    try {
+      await api.request("/api/admin/notices", { method: "POST", body: JSON.stringify(d) });
+      form.reset();
+      toast("通知已发布");
+      await load();
+    } catch (err) { toast(err.message); }
+  });
 
   function activate(panel) {
     document.querySelectorAll(".admin-nav button").forEach(x => x.classList.toggle("active", x.dataset.panel === panel));
