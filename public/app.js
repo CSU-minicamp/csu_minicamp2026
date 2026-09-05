@@ -67,15 +67,25 @@
   if (!form) return;
   const steps = [...form.querySelectorAll(".form-step")], progress = document.getElementById("form-progress"), error = document.getElementById("form-error");
   const next = document.getElementById("next-step"), prev = document.getElementById("prev-step"), submit = document.getElementById("submit-application");
+  const majorField = form.elements.major, freshmanHelp = document.getElementById("freshman-help");
+  const isFreshman = value => /大一|一年级|freshman/i.test(String(value || ""));
+  const updateGradeHelp = () => {
+    const freshman = isFreshman(majorField?.value);
+    if (freshmanHelp) freshmanHelp.hidden = !freshman;
+    majorField?.setAttribute("aria-describedby", freshman ? "freshman-help" : "");
+  };
   let current = 1;
   const showStep = step => { current = step; steps.forEach(item => { item.hidden = Number(item.dataset.step) !== step; item.classList.toggle("active", Number(item.dataset.step) === step); }); progress.textContent = "步骤 " + step + " / 3"; prev.classList.toggle("hidden", step === 1); next.classList.toggle("hidden", step === 3); next.textContent = step === 1 ? "开始填写" : "继续"; submit.classList.toggle("hidden", step !== 3); error.textContent = ""; };
   const validate = step => { const panel = steps[step - 1]; for (const field of panel.querySelectorAll("[required]")) if (!field.checkValidity()) { field.focus(); error.textContent = "请完成当前步骤中的必填信息。"; return false; } if (step === 2 && !form.querySelector('input[name="skills"]:checked')) { error.textContent = "请至少选择一项能力标签。"; return false; } return true; };
   next.addEventListener("click", () => validate(current) && showStep(current + 1));
   prev.addEventListener("click", () => showStep(current - 1));
+  majorField?.addEventListener("input", updateGradeHelp);
+  majorField?.addEventListener("change", updateGradeHelp);
+  updateGradeHelp();
   form.querySelectorAll('input[name="skills"]').forEach(input => input.addEventListener("change", () => { const checked = form.querySelectorAll('input[name="skills"]:checked'); if (checked.length > 2) input.checked = false; }));
   form.addEventListener("submit", async event => {
     event.preventDefault(); if (!validate(3)) return;
-    const data = new FormData(form), payload = Object.fromEntries(data.entries()); payload.entryType = "个人报名"; payload.skills = data.getAll("skills"); delete payload.consent;
+    const data = new FormData(form), payload = Object.fromEntries(data.entries()); payload.entryType = "个人报名"; payload.skills = data.getAll("skills"); payload.participationMode = isFreshman(payload.major) ? "仅参与路演及后续投票等阶段，不参与开发环节" : "可参与完整活动流程"; delete payload.consent;
     submit.disabled = true; error.textContent = "";
     try {
       const result = await api.request("/api/applications",{method:"POST",body:JSON.stringify(payload)});
