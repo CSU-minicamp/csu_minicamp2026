@@ -46,7 +46,7 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
     const editError = document.getElementById("edit-error");
     editError.textContent = "";
     if (!api.isProfileComplete(payload)) {
-      editError.textContent = "请先填写姓名、学号、学院、专业与年级、手机号、邮箱和参与动机。";
+      editError.textContent = "请先填写姓名、学号、学院、专业、年级、手机号、邮箱和参与动机。";
       return;
     }
     try {

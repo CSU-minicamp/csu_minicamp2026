@@ -5,7 +5,7 @@ window.MinicampAPI = (() => {
   const setToken = value => value ? localStorage.setItem(key, value) : localStorage.removeItem(key);
   const getAdminToken = () => localStorage.getItem(adminKey) || "";
   const setAdminToken = value => value ? localStorage.setItem(adminKey, value) : localStorage.removeItem(adminKey);
-  const profileFields = ["name", "studentId", "college", "major", "phone", "email", "motivation"];
+  const profileFields = ["name", "studentId", "college", "major", "grade", "phone", "email", "motivation"];
   const isProfileComplete = participant => Boolean(participant && profileFields.every(field => String(participant[field] || "").trim()));
   const profileReturnUrl = () => location.pathname.split("/").pop() + location.search + location.hash;
   const redirectToProfile = (returnTo = profileReturnUrl()) => {

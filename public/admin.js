@@ -90,7 +90,7 @@
     box.innerHTML =
       "<div class='admin-detail-head'><div><p class='section-kicker'>APPLICATION · " + esc(x.id) + "</p><h2 id='applicant-detail-name'>" + esc(x.name) + "</h2><span>" + esc(x.college) + " · " + esc(x.major) + "</span></div><span class='status " + (STATUS_CLASS[x.status] || "status-pending") + "'>" + esc(x.status) + "</span></div>" +
       "<div class='admin-detail-status'><span>快速设置状态</span>" + STATUSES.map(s => "<button type='button' class='outline-button" + (s === x.status ? " primary" : "") + "' data-set-status='" + s + "'>" + s + "</button>").join("") + "</div>" +
-      "<dl class='admin-detail-grid'>" + row("学号", x.studentId) + row("手机号", x.phone) + row("邮箱", x.email) + row("能力标签", (x.skills || []).join(" / ")) + row("提交时间", fmt(x.createdAt)) + row("最近更新", x.updatedAt ? fmt(x.updatedAt) : "—") + "</dl>" +
+      "<dl class='admin-detail-grid'>" + row("学号", x.studentId) + row("手机号", x.phone) + row("邮箱", x.email) + row("年级", x.grade) + row("能力标签", (x.skills || []).join(" / ")) + row("提交时间", fmt(x.createdAt)) + row("最近更新", x.updatedAt ? fmt(x.updatedAt) : "—") + "</dl>" +
       blk("参与动机", x.motivation) + blk("做过的项目 / 经历", x.experience) + blk("可以来找 TA 聊什么", x.askMeAbout) + blk("可以帮助别人做什么", x.canHelpWith) + blk("想探索什么", x.explore) +
       "<div class='admin-detail-block'><h3>作品集 / GitHub / 主页</h3><p>" + (x.portfolio ? "<a href='" + esc(x.portfolio) + "' target='_blank' rel='noreferrer'>" + esc(x.portfolio) + " ↗</a>" : "<span class='muted'>未填写</span>") + "</p></div>";
     box.querySelectorAll("[data-set-status]").forEach(btn => btn.onclick = async () => { try { await api.request("/api/admin/applications", { method: "PATCH", body: JSON.stringify({ id: x.id, status: btn.dataset.setStatus }) }); modal.close(); toast("已更新为「" + btn.dataset.setStatus + "」"); await load(); } catch (e) { toast(e.message); } });
@@ -172,7 +172,7 @@
   }
 
   function exportCsv() {
-    const cols = [["申请编号", "id"], ["姓名", "name"], ["学号", "studentId"], ["学院", "college"], ["专业与年级", "major"], ["手机号", "phone"], ["邮箱", "email"], ["能力标签", a => (a.skills || []).join(" / ")], ["参与动机", "motivation"], ["经历", "experience"], ["作品集", "portfolio"], ["能帮助", "canHelpWith"], ["想探索", "explore"], ["找我聊", "askMeAbout"], ["状态", "status"], ["提交时间", a => fmt(a.createdAt)]];
+    const cols = [["申请编号", "id"], ["姓名", "name"], ["学号", "studentId"], ["学院", "college"], ["专业", "major"], ["年级", "grade"], ["手机号", "phone"], ["邮箱", "email"], ["能力标签", a => (a.skills || []).join(" / ")], ["参与动机", "motivation"], ["经历", "experience"], ["作品集", "portfolio"], ["能帮助", "canHelpWith"], ["想探索", "explore"], ["找我聊", "askMeAbout"], ["状态", "status"], ["提交时间", a => fmt(a.createdAt)]];
     const cell = v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
     const head = cols.map(c => cell(c[0])).join(",");
     const rows = (state.applications || []).map(a => cols.map(c => cell(typeof c[1] === "function" ? c[1](a) : a[c[1]])).join(","));
