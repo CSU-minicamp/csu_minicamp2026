@@ -10,7 +10,7 @@
 
 在浏览器打开 http://localhost:4173/。
 
-主办方默认本地密码为 minicamp-admin，正式运行时请设置环境变量：
+主办方默认本地密码为 123456，正式运行时请设置环境变量：
 
     $env:MINICAMP_ADMIN_PASSWORD = "your-password"
     node server.mjs

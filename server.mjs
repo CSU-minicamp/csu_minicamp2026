@@ -9,7 +9,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const publicRoot = path.join(root, "public");
 const port = Number(process.env.MINICAMP_PORT || 4173);
 const dbPath = path.join(root, "data", "minicamp.json");
-const adminPassword = process.env.MINICAMP_ADMIN_PASSWORD || "minicamp-admin";
+const adminPassword = process.env.MINICAMP_ADMIN_PASSWORD || "123456";
 const mysqlConfig = { host: process.env.MYSQL_HOST || "127.0.0.1", port: Number(process.env.MYSQL_PORT || 3306), user: process.env.MYSQL_USER || "root", password: process.env.MYSQL_PASSWORD || "", database: process.env.MYSQL_DATABASE || "minicamp2026", waitForConnections: true, connectionLimit: Number(process.env.MYSQL_CONNECTION_LIMIT || 10), charset: "utf8mb4" };
 const mime = {".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg"};
 const seed = {
