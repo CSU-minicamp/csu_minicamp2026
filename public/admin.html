@@ -20,6 +20,7 @@
         <button type="button" data-panel="voting"><span>06</span><b>投票与结果</b></button>
         <button type="button" data-panel="notices"><span>07</span><b>通知与录取</b></button>
         <button type="button" data-panel="config"><span>08</span><b>活动配置</b></button>
+        <button type="button" data-panel="stage"><span>09</span><b>现场大屏</b></button>
       </nav>
       <div class="admin-sidebar-footer">
         <a href="index.html">← 返回官网</a>
@@ -84,6 +85,43 @@
       <section class="admin-panel" id="panel-config">
         <div class="admin-card" id="config-editor"></div>
       </section>
+
+      <section class="admin-panel" id="panel-stage">
+        <div class="stage-console">
+          <div class="stage-console-head">
+            <div>
+              <p class="section-kicker">LIVE / RUN OF SHOW</p>
+              <h2>现场大屏控制台</h2>
+              <p class="stage-console-lead">推进主持环节、保留现场节奏。开发和项目检查阶段只显示状态，不替参与者做决定。</p>
+            </div>
+            <div class="stage-console-actions">
+              <label class="stage-day-select">活动日<select id="stage-day"><option value="day1">DAY 1 · 相遇与组队</option><option value="day2">DAY 2 · 完成与展示</option></select></label>
+              <button class="outline-button" id="stage-fullscreen" type="button">进入大屏模式 ↗</button>
+            </div>
+          </div>
+          <div class="stage-control-strip">
+            <button class="outline-button" id="stage-previous" type="button">← 上一环节</button>
+            <button class="outline-button primary" id="stage-toggle" type="button">开始倒计时</button>
+            <button class="outline-button stage-timer-adjust" id="stage-timer-minus" type="button" aria-label="倒计时减少一分钟">− 1:00</button>
+            <button class="outline-button stage-timer-adjust" id="stage-timer-plus" type="button" aria-label="倒计时增加一分钟">+ 1:00</button>
+            <button class="outline-button stage-phase-control" id="stage-phase-next" type="button" hidden>下一步骤 →</button>
+            <button class="outline-button" id="stage-reset" type="button">重置本环节</button>
+            <button class="outline-button" id="stage-next" type="button">下一环节 →</button>
+            <span class="stage-control-hint" id="stage-control-hint">倒计时与独立投屏页同步</span>
+          </div>
+          <div class="stage-layout">
+            <div class="stage-preview-frame" id="stage-preview-frame"><iframe id="stage-preview" src="stage.html?embed=1" title="现场大屏预览"></iframe></div>
+            <aside class="stage-brief">
+              <div class="stage-brief-head"><span>主持人提示</span><span id="stage-index-label">01 / 11</span></div>
+              <p id="stage-script">回答三个问题：minicamp 是什么？InnOSeed 为什么举办？我们希望这两天发生什么？</p>
+              <div class="stage-brief-divider"></div>
+              <p class="stage-brief-label">现场动作</p>
+              <ul id="stage-actions"></ul>
+              <div class="stage-reference" id="stage-reference" hidden></div>
+            </aside>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -93,6 +131,6 @@
   </dialog>
 
   <div class="toast" id="admin-toast" role="status"></div>
-  <script src="api.js"></script><script src="admin.js"></script>
+  <script src="api.js"></script><script src="stage.js"></script><script src="admin.js"></script>
 </body>
 </html>

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.mjs",
+    "start": "node --env-file-if-exists=.env server.mjs",
     "check": "node --check server.mjs",
     "test-data": "node scripts/test-data.mjs seed",
     "clear-test-data": "node scripts/test-data.mjs clear"
