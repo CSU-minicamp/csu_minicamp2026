@@ -109,13 +109,13 @@
     document.getElementById("voting-workspace")?.setAttribute("hidden", "true");
     const summary = vote.selections.map(selection => `<li><span>${escapeHtml(selection.award)}</span><strong>${escapeHtml(selection.projectName)}</strong><small>${selection.points} 票</small></li>`).join("");
     const success = document.getElementById("vote-success");
-    success.innerHTML = `<span class='success-mark'>✓</span><p class='section-kicker'>VOTE ALREADY RECORDED</p><h1>你已经完成投票。</h1><p>投票提交后不能修改。以下是你已记录的选择：</p><ul class='recorded-vote-list'>${summary}</ul><a class='button button-dark' href='profile-dashboard.html'>查看我的投票</a>`;
+    success.innerHTML = `<span class='success-mark'>✓</span><p class='section-kicker'>VOTE ALREADY RECORDED</p><h1>你已经完成投票。</h1><p>同一身份只能提交一次投票。以下是你已记录的选择：</p><ul class='recorded-vote-list'>${summary}</ul><a class='button button-dark' href='voting.html'>返回投票入口</a>`;
     success.hidden = false;
   }
 
   function showVoteSuccess() {
     const success = document.getElementById("vote-success");
-    success.innerHTML = "<span class='success-mark'>✓</span><p class='section-kicker'>VOTE RECEIVED</p><h1>你的选择已记录。</h1><p>感谢你认真体验每一个作品。投票提交后不能修改，你可以在个人主页查看自己的投票结果。</p><a class='button button-dark' href='profile-dashboard.html'>查看我的投票</a>";
+    success.innerHTML = "<span class='success-mark'>✓</span><p class='section-kicker'>VOTE RECEIVED</p><h1>你的选择已记录。</h1><p>感谢你认真体验每一个作品。同一身份只能提交一次投票，结果会在颁奖环节公布。</p><a class='button button-dark' href='voting.html'>返回投票入口</a>";
     success.hidden = false;
   }
 
@@ -138,7 +138,10 @@
       return;
     }
     try {
-      await api.participantLogin(document.getElementById("voter-id").value, document.getElementById("voter-contact").value);
+      await api.voterLogin({
+        name: document.getElementById("public-voter-name").value,
+        studentId: document.getElementById("public-voter-student-id").value
+      });
       location.assign("vote.html");
     } catch (error) { document.getElementById("voter-error").textContent = error.message; }
   });
@@ -177,16 +180,15 @@
     const workspace = document.getElementById("voting-workspace");
     if (!workspace || login) return;
     try {
-      const profile = await api.requireProfile("vote.html");
-      if (!profile) return;
       const {config} = await api.request("/api/config");
       document.querySelector("main")?.removeAttribute("hidden");
       if (!config.voteOpen) {
         location.replace("voting.html");
         return;
       }
-      voter = profile.participant;
       const voteState = await api.request("/api/me/vote");
+      if (!voteState.voter) throw new Error("voter session missing");
+      voter = voteState.voter;
       if (voteState.vote) {
         showRecordedVote(voteState.vote);
         return;

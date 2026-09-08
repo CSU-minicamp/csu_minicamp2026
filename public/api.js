@@ -47,5 +47,5 @@ window.MinicampAPI = (() => {
     } finally { clearTimeout(timeout); }
   }
   const adminRequest = (path, options = {}) => request(path, {...options, authRole: "admin"});
-  return {request, adminRequest, getToken, setToken, getAdminToken, setAdminToken, isProfileComplete, requireProfile, redirectToProfile, participantLogin: async (id, contact) => { const data = await request("/api/auth/participant",{method:"POST",body:JSON.stringify({id,contact})}); setToken(data.token); return data; }, logout: () => setToken(""), adminLogout: () => setAdminToken("")};
+  return {request, adminRequest, getToken, setToken, getAdminToken, setAdminToken, isProfileComplete, requireProfile, redirectToProfile, participantLogin: async (id, contact) => { const data = await request("/api/auth/participant",{method:"POST",body:JSON.stringify({id,contact})}); setToken(data.token); return data; }, voterLogin: async identity => { const data = await request("/api/auth/voter",{method:"POST",body:JSON.stringify(identity)}); setToken(data.token); return data; }, logout: () => setToken(""), adminLogout: () => setAdminToken("")};
 })();

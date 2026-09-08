@@ -2834,3 +2834,5 @@ body.drawer-open { overflow:hidden; }
 @media(max-width:620px){
   .theme-reveal{min-height:140px;padding:22px}.application-launcher-body{padding:28px 22px}.application-launcher-body h3{font-size:29px}.application-modal #application-form,.admin-detail-modal #applicant-detail{padding:26px 20px 32px}.admin-detail-grid{grid-template-columns:1fr}.info-modal-card{padding:30px 22px}.info-drawer-panel{width:100vw;box-shadow:none}.info-drawer-head{min-height:70px;padding:12px 20px}.info-drawer-body{padding:22px}.info-drawer-body h2{font-size:44px}.drawer-qr-frame{width:min(100%,330px)}
 }
+
+.identity-privacy { margin-top: 14px; line-height: 1.6; }
