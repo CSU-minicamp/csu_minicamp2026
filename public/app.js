@@ -3,7 +3,21 @@
   const form = document.getElementById("application-form");
   const configPromise = api.request("/api/config").then(({config}) => {
     document.querySelectorAll("[data-config-date]").forEach(el => el.textContent = config.date);
-    document.querySelectorAll("[data-voting-entry]").forEach(el => { if (!config.voteOpen) { el.textContent = "暂未开放"; el.classList.add("is-disabled"); } });
+    document.querySelectorAll("[data-voting-entry]").forEach(el => {
+      if (config.voteOpen) {
+        el.innerHTML = "开始投票 <span>↗</span>";
+        el.setAttribute("href", "voting.html");
+        el.removeAttribute("aria-disabled");
+        el.removeAttribute("tabindex");
+        el.classList.remove("is-disabled");
+      } else {
+        el.textContent = "暂未开放投票";
+        el.removeAttribute("href");
+        el.setAttribute("aria-disabled", "true");
+        el.setAttribute("tabindex", "-1");
+        el.classList.add("is-disabled");
+      }
+    });
     document.querySelectorAll("[data-config-venue]").forEach(el => el.textContent = config.venue);
     const intro = document.querySelector(".apply-intro > p:nth-of-type(2)");
     if (intro) intro.textContent = config.applicationOpen ? "仅面向中南大学在校学生。请如实填写每一项，提交后可凭申请编号和联系方式登录个人主页，查看审核状态与通知。" : "报名通道暂未开放，主办方确定时间后会在官网和主办方 QQ 群同步公布。";
@@ -16,6 +30,9 @@
     document.querySelectorAll(".day-tab").forEach(item => { item.classList.toggle("active", item === tab); item.setAttribute("aria-selected", String(item === tab)); });
     document.querySelectorAll(".timeline-panel").forEach(panel => { const active = panel.id === tab.dataset.day; panel.classList.toggle("active", active); panel.hidden = !active; });
   }));
+
+  document.querySelectorAll('.timeline-panel').forEach(panel => { panel.querySelectorAll('.timeline-item').forEach(item => { item.tabIndex = 0; const activate = () => panel.querySelectorAll('.timeline-item').forEach(entry => entry.classList.toggle('active', entry === item)); item.addEventListener('mouseenter', activate); item.addEventListener('focus', activate); }); });
+
   const faqList = document.querySelector(".faq-list");
   if (faqList) {
     const faqItems = [...faqList.querySelectorAll("details")];
@@ -66,6 +83,7 @@
   applicationModal?.addEventListener("click", event => { if (event.target === applicationModal) applicationModal.close(); });
   if (!form) return;
   const steps = [...form.querySelectorAll(".form-step")], progress = document.getElementById("form-progress"), error = document.getElementById("form-error");
+  form.querySelectorAll('input[name="phone"]').forEach(input => input.addEventListener("input", () => { const digits = input.value.replace(/\D/g, "").slice(0, 11); if (input.value !== digits) input.value = digits; }));
   const next = document.getElementById("next-step"), prev = document.getElementById("prev-step"), submit = document.getElementById("submit-application");
   const gradeField = form.elements.grade, freshmanHelp = document.getElementById("freshman-help");
   const isFreshman = value => /大一|一年级|freshman/i.test(String(value || ""));
@@ -76,7 +94,7 @@
   };
   let current = 1;
   const showStep = step => { current = step; steps.forEach(item => { item.hidden = Number(item.dataset.step) !== step; item.classList.toggle("active", Number(item.dataset.step) === step); }); progress.textContent = "步骤 " + step + " / 3"; prev.classList.toggle("hidden", step === 1); next.classList.toggle("hidden", step === 3); next.textContent = step === 1 ? "开始填写" : "继续"; submit.classList.toggle("hidden", step !== 3); error.textContent = ""; };
-  const validate = step => { const panel = steps[step - 1]; for (const field of panel.querySelectorAll("[required]")) if (!field.checkValidity()) { field.focus(); error.textContent = "请完成当前步骤中的必填信息。"; return false; } if (step === 2 && !form.querySelector('input[name="skills"]:checked')) { error.textContent = "请至少选择一项能力标签。"; return false; } return true; };
+  const validate = step => { const panel = steps[step - 1]; const phone = panel.querySelector('input[name="phone"]'); if (phone && !api.isValidPhone(phone.value)) { phone.focus(); error.textContent = "请输入 11 位手机号。"; return false; } for (const field of panel.querySelectorAll("[required]")) if (!field.checkValidity()) { field.focus(); error.textContent = "请完成当前步骤中的必填信息。"; return false; } if (step === 2 && !form.querySelector('input[name="skills"]:checked')) { error.textContent = "请至少选择一项能力标签。"; return false; } return true; };
   next.addEventListener("click", () => validate(current) && showStep(current + 1));
   prev.addEventListener("click", () => showStep(current - 1));
   gradeField?.addEventListener("change", updateGradeHelp);
@@ -93,3 +111,4 @@
   });
   document.getElementById("close-success")?.addEventListener("click", () => applicationModal?.close());
 })();
+

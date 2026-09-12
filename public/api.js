@@ -7,6 +7,7 @@ window.MinicampAPI = (() => {
   const setAdminToken = value => value ? localStorage.setItem(adminKey, value) : localStorage.removeItem(adminKey);
   const profileFields = ["name", "studentId", "college", "major", "grade", "phone", "email", "motivation"];
   const isProfileComplete = participant => Boolean(participant && profileFields.every(field => String(participant[field] || "").trim()));
+  const isValidPhone = value => /^\d{11}$/.test(String(value || "").trim());
   const profileReturnUrl = () => location.pathname.split("/").pop() + location.search + location.hash;
   const redirectToProfile = (returnTo = profileReturnUrl()) => {
     const query = new URLSearchParams({ returnTo, profileRequired: "1" });
@@ -47,5 +48,5 @@ window.MinicampAPI = (() => {
     } finally { clearTimeout(timeout); }
   }
   const adminRequest = (path, options = {}) => request(path, {...options, authRole: "admin"});
-  return {request, adminRequest, getToken, setToken, getAdminToken, setAdminToken, isProfileComplete, requireProfile, redirectToProfile, participantLogin: async (id, contact) => { const data = await request("/api/auth/participant",{method:"POST",body:JSON.stringify({id,contact})}); setToken(data.token); return data; }, voterLogin: async identity => { const data = await request("/api/auth/voter",{method:"POST",body:JSON.stringify(identity)}); setToken(data.token); return data; }, logout: () => setToken(""), adminLogout: () => setAdminToken("")};
+  return {request, adminRequest, getToken, setToken, getAdminToken, setAdminToken, isProfileComplete, isValidPhone, requireProfile, redirectToProfile, participantLogin: async (id, contact) => { const data = await request("/api/auth/participant",{method:"POST",body:JSON.stringify({id,contact})}); setToken(data.token); return data; }, voterLogin: async identity => { const data = await request("/api/auth/voter",{method:"POST",body:JSON.stringify(identity)}); setToken(data.token); return data; }, logout: () => setToken(""), adminLogout: () => setAdminToken("")};
 })();
