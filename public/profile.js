@@ -4,6 +4,7 @@
   const params = new URLSearchParams(location.search);
   const returnTo = params.get("returnTo") || "";
   const profileRequired = params.get("profileRequired") === "1";
+  document.querySelectorAll('input[name="phone"]').forEach(input => input.addEventListener("input", () => { const digits = input.value.replace(/\D/g, "").slice(0, 11); if (input.value !== digits) input.value = digits; }));
   const activatePanel = id => { document.querySelectorAll("[data-profile-panel]").forEach(item => item.classList.toggle("active", item.dataset.profilePanel === id)); document.querySelectorAll(".profile-panel").forEach(panel => panel.classList.toggle("active", panel.id === id)); };
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
   const show = async () => {
@@ -17,7 +18,7 @@
       await renderVote();
     } catch { if (dashboard) location.replace("profile.html"); }
   };
-  async function renderNotices() { const {notices} = await api.request("/api/me/notices"); const list = document.getElementById("notice-list"); const unread = notices.filter(item => !(item.readBy || []).includes(current.id)).length; document.getElementById("notice-count").textContent = unread; list.innerHTML = notices.map(item => { const read = (item.readBy || []).includes(current.id); return "<article class='notice-item " + (read ? "is-read" : "is-unread") + "'><div class='notice-marker'>" + (read ? "✓" : "!") + "</div><div><div class='notice-meta'><span>" + item.type + "</span><time>" + new Date(item.createdAt).toLocaleString("zh-CN") + "</time></div><h3>" + item.title + "</h3><p>" + item.body + "</p></div></article>"; }).join("") || "<p>暂无通知</p>"; }
+  async function renderNotices() { const {notices} = await api.request("/api/me/notices"); const list = document.getElementById("notice-list"); const unread = notices.filter(item => !(item.readBy || []).includes(current.id)).length; const noticeCount = document.getElementById("notice-count"); noticeCount.textContent = unread; noticeCount.hidden = unread === 0; list.innerHTML = notices.map(item => { const read = (item.readBy || []).includes(current.id); return "<article class='notice-item " + (read ? "is-read" : "is-unread") + "'><div class='notice-marker'>" + (read ? "✓" : "!") + "</div><div><div class='notice-meta'><span>" + item.type + "</span><time>" + new Date(item.createdAt).toLocaleString("zh-CN") + "</time></div><h3>" + item.title + "</h3><p>" + item.body + "</p></div></article>"; }).join("") || "<p>暂无通知</p>"; }
   async function renderVote() {
     const container = document.getElementById("my-vote-content");
     if (!container) return;
@@ -49,6 +50,11 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
       editError.textContent = "请先填写姓名、学号、学院、专业、年级、手机号、邮箱和参与动机。";
       return;
     }
+    if (!api.isValidPhone(payload.phone)) {
+      form.elements.phone.focus();
+      editError.textContent = "请输入 11 位手机号。";
+      return;
+    }
     try {
       await api.request("/api/me", {method:"PATCH", body:JSON.stringify(payload)});
       if (returnTo) { location.assign(returnTo); return; }
@@ -62,3 +68,4 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
   if (dashboard) show();
   else if (api.getToken()) api.request("/api/me").then(() => { const destination = returnTo ? "profile-dashboard.html?returnTo=" + encodeURIComponent(returnTo) + "&profileRequired=1" : "profile-dashboard.html"; location.replace(destination); }).catch(() => api.logout());
 })();
+
