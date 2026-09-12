@@ -104,24 +104,24 @@ const projectId = number => `TEST-PROJECT-${String(number).padStart(2, "0")}`;
 const timestamp = number => `2026-09-${String(10 + number).padStart(2, "0")}T${String(9 + number % 8).padStart(2, "0")}:00:00+08:00`;
 
 const people = [
-  ["林未", "计算机学院", "软件工程 · 大三", ["DEV", "AI/DATA"]],
-  ["陈星", "建筑与艺术学院", "视觉传达 · 大二", ["DESIGN", "CREATIVE"]],
-  ["周航", "自动化学院", "自动化 · 大三", ["HARDWARE", "DEV"]],
-  ["许言", "商学院", "工商管理 · 大二", ["BUSINESS", "PRODUCT"]],
-  ["沈知", "湘雅医学院", "临床医学 · 大三", ["RESEARCH", "PRODUCT"]],
-  ["唐果", "文学与新闻传播学院", "数字出版 · 大二", ["CREATIVE", "DESIGN"]],
-  ["宋临", "计算机学院", "人工智能 · 大四", ["AI/DATA", "DEV"]],
-  ["蒋宁", "地球科学与信息物理学院", "地理信息科学 · 大三", ["RESEARCH", "DEV"]],
-  ["韩青", "交通运输工程学院", "交通运输 · 大二", ["PRODUCT", "DESIGN"]],
-  ["顾漫", "材料科学与工程学院", "材料科学 · 大三", ["HARDWARE", "RESEARCH"]],
-  ["魏然", "法学院", "法学 · 大二", ["PRODUCT", "BUSINESS"]],
-  ["罗一", "数学与统计学院", "统计学 · 大三", ["AI/DATA", "RESEARCH"]],
-  ["方舟", "能源科学与工程学院", "新能源科学 · 大二", ["HARDWARE", "DEV"]],
-  ["叶晓", "外国语学院", "英语 · 大三", ["CREATIVE", "PRODUCT"]],
-  ["陆川", "土木工程学院", "工程管理 · 大四", ["BUSINESS", "DESIGN"]],
-  ["王语", "计算机学院", "软件工程 · 大二", ["DEV", "PRODUCT"]],
-  ["夏禾", "艺术学院", "环境设计 · 大三", ["DESIGN", "CREATIVE"]],
-  ["秦川", "自动化学院", "智能制造 · 大二", ["HARDWARE", "AI/DATA"]]
+  ["林未", "计算机学院", "软件工程 · 大三", ["Frontend", "AI Engineer"]],
+  ["陈星", "建筑与艺术学院", "视觉传达 · 大二", ["Design", "Media"]],
+  ["周航", "自动化学院", "自动化 · 大三", ["Hardware", "Frontend"]],
+  ["许言", "商学院", "工商管理 · 大二", ["Product"]],
+  ["沈知", "湘雅医学院", "临床医学 · 大三", ["AI Engineer", "Product"]],
+  ["唐果", "文学与新闻传播学院", "数字出版 · 大二", ["Media", "Design"]],
+  ["宋临", "计算机学院", "人工智能 · 大四", ["AI Engineer", "Frontend"]],
+  ["蒋宁", "地球科学与信息物理学院", "地理信息科学 · 大三", ["AI Engineer", "Frontend"]],
+  ["韩青", "交通运输工程学院", "交通运输 · 大二", ["Product", "Design"]],
+  ["顾漫", "材料科学与工程学院", "材料科学 · 大三", ["Hardware", "AI Engineer"]],
+  ["魏然", "法学院", "法学 · 大二", ["Product"]],
+  ["罗一", "数学与统计学院", "统计学 · 大三", ["AI Engineer"]],
+  ["方舟", "能源科学与工程学院", "新能源科学 · 大二", ["Hardware", "Frontend"]],
+  ["叶晓", "外国语学院", "英语 · 大三", ["Media", "Product"]],
+  ["陆川", "土木工程学院", "工程管理 · 大四", ["Product", "Design"]],
+  ["王语", "计算机学院", "软件工程 · 大二", ["Frontend", "Product"]],
+  ["夏禾", "艺术学院", "环境设计 · 大三", ["Design", "Media"]],
+  ["秦川", "自动化学院", "智能制造 · 大二", ["Hardware", "AI Engineer"]]
 ];
 
 const teamDefinitions = [
@@ -151,11 +151,11 @@ function createFixtures(state) {
     });
   });
   applications.push(
-    fixture({ id: testId(19), name: "待审核同学", studentId: "2026000019", college: "公共管理学院", major: "行政管理 · 大二", phone: "1390001019", email: "test-pending@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["PRODUCT"], motivation: "【测试数据】等待审核的报名。", experience: "", portfolio: "", askMeAbout: "校园服务", canHelpWith: "用户访谈", explore: "产品设计", status: "待审核", teamId: "", createdAt: timestamp(19) }),
-    fixture({ id: testId(20), name: "候补同学", studentId: "2026000020", college: "资源与安全工程学院", major: "安全工程 · 大三", phone: "1390001020", email: "test-waitlist@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["HARDWARE"], motivation: "【测试数据】候补报名。", experience: "", portfolio: "", askMeAbout: "硬件原型", canHelpWith: "传感器", explore: "智能硬件", status: "候补", teamId: "", createdAt: timestamp(20) }),
-    fixture({ id: testId(21), name: "待复审同学", studentId: "2026000021", college: "冶金与环境学院", major: "环境工程 · 大二", phone: "1390001021", email: "test-review@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["RESEARCH"], motivation: "【测试数据】待复审报名。", experience: "", portfolio: "", askMeAbout: "调研", canHelpWith: "资料整理", explore: "环境议题", status: "待复审", teamId: "", createdAt: timestamp(21) }),
-    fixture({ id: testId(22), name: "创建队伍同学", studentId: "2026000022", college: "计算机学院", major: "软件工程 · 大二", phone: "1390001022", email: "test-create-team@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["DEV", "PRODUCT"], motivation: "【测试数据】可用于测试创建队伍。", experience: "", portfolio: "", askMeAbout: "MVP", canHelpWith: "前端开发", explore: "发起项目", status: "已录取", teamId: "", createdAt: timestamp(22) }),
-    fixture({ id: testId(23), name: "加入队伍同学", studentId: "2026000023", college: "商学院", major: "市场营销 · 大三", phone: "1390001023", email: "test-join-team@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["BUSINESS", "PRODUCT"], motivation: "【测试数据】可用于测试加入和锁定队伍。", experience: "", portfolio: "", askMeAbout: "用户访谈", canHelpWith: "现场展示", explore: "加入队伍", status: "已录取", teamId: "", createdAt: timestamp(23) })
+    fixture({ id: testId(19), name: "待审核同学", studentId: "2026000019", college: "公共管理学院", major: "行政管理 · 大二", phone: "1390001019", email: "test-pending@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["Product"], motivation: "【测试数据】等待审核的报名。", experience: "", portfolio: "", askMeAbout: "校园服务", canHelpWith: "用户访谈", explore: "产品设计", status: "待审核", teamId: "", createdAt: timestamp(19) }),
+    fixture({ id: testId(20), name: "候补同学", studentId: "2026000020", college: "资源与安全工程学院", major: "安全工程 · 大三", phone: "1390001020", email: "test-waitlist@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["Hardware"], motivation: "【测试数据】候补报名。", experience: "", portfolio: "", askMeAbout: "硬件原型", canHelpWith: "传感器", explore: "智能硬件", status: "候补", teamId: "", createdAt: timestamp(20) }),
+    fixture({ id: testId(21), name: "待复审同学", studentId: "2026000021", college: "冶金与环境学院", major: "环境工程 · 大二", phone: "1390001021", email: "test-review@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["AI Engineer"], motivation: "【测试数据】待复审报名。", experience: "", portfolio: "", askMeAbout: "调研", canHelpWith: "资料整理", explore: "环境议题", status: "待复审", teamId: "", createdAt: timestamp(21) }),
+    fixture({ id: testId(22), name: "创建队伍同学", studentId: "2026000022", college: "计算机学院", major: "软件工程 · 大二", phone: "1390001022", email: "test-create-team@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["Frontend", "Product"], motivation: "【测试数据】可用于测试创建队伍。", experience: "", portfolio: "", askMeAbout: "MVP", canHelpWith: "前端开发", explore: "发起项目", status: "已录取", teamId: "", createdAt: timestamp(22) }),
+    fixture({ id: testId(23), name: "加入队伍同学", studentId: "2026000023", college: "商学院", major: "市场营销 · 大三", phone: "1390001023", email: "test-join-team@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["Product"], motivation: "【测试数据】可用于测试加入和锁定队伍。", experience: "", portfolio: "", askMeAbout: "用户访谈", canHelpWith: "现场展示", explore: "加入队伍", status: "已录取", teamId: "", createdAt: timestamp(23) })
   );
 
   const teams = teamDefinitions.map((definition, index) => {
@@ -183,9 +183,9 @@ function createFixtures(state) {
   });
 
   const ideas = [
-    ["TEST-IDEA-01", "图书馆安静角落雷达", "让同学快速找到适合当前任务的学习空间。", "Reimagine Campus", testId(19), ["PRODUCT", "DEV"]],
-    ["TEST-IDEA-02", "校园无障碍路线标注", "把真实体验转化为更友好的校园路线。", "Build for Humans", testId(20), ["DESIGN", "RESEARCH"]],
-    ["TEST-IDEA-03", "食堂剩余餐食提醒", "减少浪费，也让晚到的人有更多选择。", "Create the Unexpected", testId(21), ["DEV", "BUSINESS"]]
+    ["TEST-IDEA-01", "图书馆安静角落雷达", "让同学快速找到适合当前任务的学习空间。", "Reimagine Campus", testId(19), ["Product", "Frontend"]],
+    ["TEST-IDEA-02", "校园无障碍路线标注", "把真实体验转化为更友好的校园路线。", "Build for Humans", testId(20), ["Design", "AI Engineer"]],
+    ["TEST-IDEA-03", "食堂剩余餐食提醒", "减少浪费，也让晚到的人有更多选择。", "Create the Unexpected", testId(21), ["Frontend", "Product"]]
   ].map((item, index) => fixture({ id: item[0], title: item[1], summary: `【测试数据】${item[2]}`, theme: item[3], authorId: item[4], needs: item[5], status: "open", createdAt: timestamp(index + 2) }));
 
   const notices = [

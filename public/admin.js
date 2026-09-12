@@ -2,7 +2,7 @@
   const api = { ...MinicampAPI, request: MinicampAPI.adminRequest };
   let state;
   const root = document.querySelector(".admin-main");
-  const SKILLS = ["DEV", "PRODUCT", "DESIGN", "AI/DATA", "HARDWARE", "BUSINESS", "CREATIVE", "RESEARCH"];
+  const SKILLS = ["Frontend", "Backend", "Product", "Design", "Hardware", "AI Engineer", "Media"];
   const STATUSES = ["待审核", "已录取", "候补", "待复审"];
   const STATUS_CLASS = { "待审核": "status-pending", "已录取": "status-accepted", "候补": "status-waitlist", "待复审": "status-pending" };
   const PANEL_META = {

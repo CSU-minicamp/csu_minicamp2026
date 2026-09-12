@@ -15,12 +15,12 @@ const mime = {".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8
 const seed = {
   config:{eventName:"minicamp 2026",date:"2026-09-26/27",venue:"CSU Smart Classroom",applicationOpen:true,applicationDeadline:"2026-09-05T23:59:00+08:00",resultDate:"2026-09-08T18:00:00+08:00",themeReveal:"Day 1 09:45",voteStartAt:"2026-09-01T00:00:00+08:00",voteOpen:false,juryWeight:40,participantWeight:60,starterPack:{title:"AI Coding Starter Pack",intro:"Prepare your tools and environment before the event.",tools:["Codex","Claude Code","Cursor","GitHub Copilot"],steps:["Install and sign in to your tool","Prepare Node.js, Python and Git","Ask AI to plan before splitting tasks","Share complete errors and verify the result"]}},
   applications:[
-    {id:"MC26-1001",name:"demo-user",studentId:"8201230001",college:"Computer Science",major:"Software Engineering",phone:"13800004021",email:"zhixing@example.com",entryType:"individual",teamCode:"",skills:["DEV","AI/DATA"],motivation:"Build a useful campus tool.",experience:"Campus lost-and-found mini program",portfolio:"",askMeAbout:"Campus tools and frontend",canHelpWith:"Working demos",explore:"Product design",status:"待审核",teamId:"",createdAt:"2026-08-17T10:20:00+08:00"},
-    {id:"MC26-1002",name:"design-user",studentId:"8301230002",college:"Arts",major:"Visual Communication",phone:"13900005218",email:"ruoqing@example.com",entryType:"pair",teamCode:"MC26-A7K2",skills:["DESIGN","CREATIVE"],motivation:"Turn interaction ideas into real things.",experience:"Brand design and portfolio",portfolio:"https://example.com",askMeAbout:"Visual and interaction",canHelpWith:"Clear interfaces",explore:"Product",status:"已录取",teamId:"TEAM 03",createdAt:"2026-08-16T14:05:00+08:00"},
-    {id:"MC26-1003",name:"hardware-user",studentId:"8101230003",college:"Automation",major:"Automation",phone:"13700008860",email:"zhou@example.com",entryType:"pair",teamCode:"MC26-A7K2",skills:["HARDWARE","DEV"],motivation:"Try a campus hardware experience.",experience:"Smart car contest",portfolio:"",askMeAbout:"Hardware and sensors",canHelpWith:"Hardware prototypes",explore:"Interaction",status:"已录取",teamId:"TEAM 03",createdAt:"2026-08-16T14:18:00+08:00"}
+    {id:"MC26-1001",name:"demo-user",studentId:"8201230001",college:"Computer Science",major:"Software Engineering",phone:"13800004021",email:"zhixing@example.com",entryType:"individual",teamCode:"",skills:["Frontend","AI Engineer"],motivation:"Build a useful campus tool.",experience:"Campus lost-and-found mini program",portfolio:"",askMeAbout:"Campus tools and frontend",canHelpWith:"Working demos",explore:"Product design",status:"待审核",teamId:"",createdAt:"2026-08-17T10:20:00+08:00"},
+    {id:"MC26-1002",name:"design-user",studentId:"8301230002",college:"Arts",major:"Visual Communication",phone:"13900005218",email:"ruoqing@example.com",entryType:"pair",teamCode:"MC26-A7K2",skills:["Design","Media"],motivation:"Turn interaction ideas into real things.",experience:"Brand design and portfolio",portfolio:"https://example.com",askMeAbout:"Visual and interaction",canHelpWith:"Clear interfaces",explore:"Product",status:"已录取",teamId:"TEAM 03",createdAt:"2026-08-16T14:05:00+08:00"},
+    {id:"MC26-1003",name:"hardware-user",studentId:"8101230003",college:"Automation",major:"Automation",phone:"13700008860",email:"zhou@example.com",entryType:"pair",teamCode:"MC26-A7K2",skills:["Hardware","Frontend"],motivation:"Try a campus hardware experience.",experience:"Smart car contest",portfolio:"",askMeAbout:"Hardware and sensors",canHelpWith:"Hardware prototypes",explore:"Interaction",status:"已录取",teamId:"TEAM 03",createdAt:"2026-08-16T14:18:00+08:00"}
   ],
   teams:[{id:"TEAM 03",code:"MC26-A7K2",project:"Campus encounter experiment",theme:"TBD",memberIds:["MC26-1002","MC26-1003"],status:"draft",locked:false}],
-  ideas:[{id:"IDEA-01",title:"Discover better campus places",summary:"Make campus life easier to start exploring.",theme:"Build for Humans",authorId:"MC26-1001",needs:["PRODUCT","DESIGN"],status:"open",createdAt:"2026-08-20T10:00:00+08:00"}],
+  ideas:[{id:"IDEA-01",title:"Discover better campus places",summary:"Make campus life easier to start exploring.",theme:"Build for Humans",authorId:"MC26-1001",needs:["Product","Design"],status:"open",createdAt:"2026-08-20T10:00:00+08:00"}],
   projects:[{id:"PROJECT-01",teamId:"TEAM 03",projectName:"Campus Pulse",theme:"Build for Humans",tagline:"Make real campus needs easier to see.",problem:"Campus needs and helpers often miss each other.",solution:"Connect needs, skills and people who can help.",members:[{name:"design-user",role:"design"},{name:"hardware-user",role:"engineering"}],demoUrl:"https://example.com",githubUrl:"",coverUrl:"",aiTools:["Codex"],status:"published",createdAt:"2026-08-20T16:00:00+08:00"}],
   notices:[{id:"NOTICE-01",title:"Welcome to minicamp 2026",body:"After submitting, use your participant page to update details and read notices.",type:"event",target:"ALL",readBy:[],createdAt:"2026-08-20T08:00:00+08:00"}],
   votes:[],sessions:{}
@@ -32,9 +32,12 @@ const makeId=p=>p+"-"+crypto.randomBytes(5).toString("hex").toUpperCase();
 const makeToken=()=>crypto.randomBytes(24).toString("hex");
 const applicationStatuses=new Set(["待审核","已录取","候补","待复审"]);
 const legacyApplicationStatuses={pending:"待审核",accepted:"已录取",waitlist:"候补",reviewing:"待复审"};
+const legacySkillMap={DEV:"Frontend",PRODUCT:"Product",DESIGN:"Design","AI/DATA":"AI Engineer",HARDWARE:"Hardware",BUSINESS:"Product",CREATIVE:"Media",RESEARCH:"AI Engineer"};
+const normalizeSkills=values=>(Array.isArray(values)?values:[]).map(value=>legacySkillMap[value]||value);
 const formalAwards=["Best Overall","Best Product","Best Design","Best Technical","Most Unexpected"];
 async function readJsonDb(){try{return JSON.parse(await fs.readFile(dbPath,"utf8"));}catch{return clone(seed);}}
-function normalizeApplications(){db.applications=(db.applications||[]).map(item=>({...item,status:legacyApplicationStatuses[item.status]|| (applicationStatuses.has(item.status)?item.status:"待审核")}));}
+function normalizeApplications(){db.applications=(db.applications||[]).map(item=>({...item,skills:normalizeSkills(item.skills),status:legacyApplicationStatuses[item.status]|| (applicationStatuses.has(item.status)?item.status:"待审核")}));}
+function normalizeIdeas(){db.ideas=(db.ideas||[]).map(item=>({...item,needs:normalizeSkills(item.needs)}));}
 async function loadDb(){
   try {
     let bootstrap;
@@ -52,6 +55,7 @@ async function loadDb(){
   for(const key of Object.keys(seed))if(!(key in db))db[key]=clone(seed[key]);
   db.config={...clone(seed.config),...(db.config||{})};
   normalizeApplications();
+  normalizeIdeas();
   await saveDb();
 }
 let saveQueue=Promise.resolve();
