@@ -13,7 +13,8 @@
     projects: ["项目审核", "审核项目草稿；发布后会出现在 Project Gallery。"],
     voting: ["投票与结果", "查看参与者和 Jury 投票的实时汇总。"],
     notices: ["通知与录取", "向报名者发送录取结果与活动通知。"],
-    config: ["活动配置", "设置官网、投票与 Starter Pack 的实时配置。"]
+    config: ["活动配置", "设置官网、投票与 Starter Pack 的实时配置。"],
+    stage: ["现场大屏", "推进现场节点，编辑主持人提示和现场动作。"]
   };
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const fmt = t => t ? new Date(t).toLocaleString("zh-CN") : "";
@@ -50,6 +51,7 @@
     renderVoting();
     renderNotices();
     renderConfig();
+    renderStageBriefEditor();
   }
 
   function renderReminders() {
@@ -171,6 +173,50 @@
     };
   }
 
+  function splitStageLines(value) {
+    return String(value || "").split(/\r?\n|,/).map(item => item.trim()).filter(Boolean).slice(0, 20);
+  }
+
+  function stageBriefContext() {
+    const stage = window.MinicampStage;
+    const configured = state.config?.stageSchedule;
+    const schedule = configured && typeof configured === "object"
+      ? JSON.parse(JSON.stringify(configured))
+      : stage?.getSchedule?.();
+    if (!schedule) return { stage, schedule: null, day: "day1", index: 0, item: null };
+    const stageState = stage?.getState?.() || { day: "day1", index: 0 };
+    const day = Array.isArray(schedule[stageState.day]) ? stageState.day : "day1";
+    const list = schedule[day] || [];
+    const index = Math.min(Math.max(list.length - 1, 0), Math.max(0, Number(stageState.index) || 0));
+    return { stage, schedule, day, index, item: list[index] };
+  }
+
+  function renderStageBriefEditor() {
+    const form = document.getElementById("stage-brief-form");
+    if (!form || !state) return;
+    const context = stageBriefContext();
+    if (!context.item) return;
+    const script = form.elements.script;
+    const actions = form.elements.actions;
+    if (document.activeElement !== script) script.value = context.item.script || "";
+    if (document.activeElement !== actions) actions.value = (context.item.actions || []).join("\n");
+    form.onsubmit = async event => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.currentTarget));
+      const next = JSON.parse(JSON.stringify(context.schedule));
+      const target = next[context.day][context.index];
+      target.script = String(data.script || "").trim();
+      target.actions = splitStageLines(data.actions);
+      try {
+        await api.request("/api/admin/config", { method: "PATCH", body: JSON.stringify({ stageSchedule: next }) });
+        state.config.stageSchedule = next;
+        context.stage?.setSchedule?.(next);
+        toast("主持人提示和现场动作已保存");
+        await load();
+      } catch (error) { toast(error.message); }
+    };
+  }
+
   function exportCsv() {
     const cols = [["申请编号", "id"], ["姓名", "name"], ["学号", "studentId"], ["学院", "college"], ["专业", "major"], ["年级", "grade"], ["手机号", "phone"], ["邮箱", "email"], ["能力标签", a => (a.skills || []).join(" / ")], ["参与动机", "motivation"], ["经历", "experience"], ["作品集", "portfolio"], ["能帮助", "canHelpWith"], ["想探索", "explore"], ["找我聊", "askMeAbout"], ["状态", "status"], ["提交时间", a => fmt(a.createdAt)]];
     const cell = v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
@@ -208,5 +254,6 @@
   document.querySelectorAll(".admin-nav button").forEach(b => b.onclick = () => activate(b.dataset.panel));
   document.querySelectorAll("[data-switch]").forEach(b => b.onclick = () => activate(b.dataset.switch));
 
+  window.MinicampStage?.subscribe(() => { if (state) renderStageBriefEditor(); });
   load();
 })();
