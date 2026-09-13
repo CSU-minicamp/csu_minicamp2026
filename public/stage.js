@@ -5,7 +5,7 @@
   if (isEmbed) document.body.classList.add("stage-embed");
   if (isPresentation) document.body.classList.add("stage-present");
   const make = (time, title, subtitle, minutes, host, options = {}) => ({ time, title, subtitle, minutes, host, timed: options.timed ?? true, cues: options.cues || [], script: options.script || subtitle, actions: options.actions || [], referenceTitle: options.referenceTitle || "", reference: options.reference || null, phases: options.phases || null });
-  const schedule = {
+  const defaultSchedule = {
     day1: [
       make("09:00–09:10", "Opening", "先认识彼此，再一起做出一个真正能被看见的作品。", 10, true, { timed: false, script: "回答三个问题：minicamp 是什么？InnOSeed 为什么举办？我们希望这两天发生什么？", actions: ["快速介绍 minicamp 与 InnOSeed", "让参与者知道今天会从相遇走到组队"], referenceTitle: "OPENING / THREE QUESTIONS", reference: { items: [{ label: "WHAT IS MINICAMP?", text: "让不同背景的人相遇，一起做出真实作品" }, { label: "WHY US?", text: "连接技术、产品、设计和更多可能，一起创造真实连接" }, { label: "WHAT HAPPENS?", text: "相遇 → 学习 → 找到想法 → 组队 → 开发 → 展示" }] } }),
       make("09:10–09:35", "AI Coding Quickstart", "看一次完整示范：如何把模糊想法变成可以运行的第一步。", 25, true, { timed: false, script: "展示一次完整的 AI Coding 工作流：描述需求、拆任务、运行、面对报错。", actions: ["演示真实的 AI Coding 对话", "提醒：AI 是开发方式，不是比赛题目"] }),
@@ -33,7 +33,7 @@
 
   // Idea Collision is one continuous host-led block. Keep the full 15 minutes
   // together so the console and the audience screen never drift between rounds.
-  const ideaCollision = schedule.day1.find(item => item.title === "Idea Collision");
+  const ideaCollision = defaultSchedule.day1.find(item => item.title === "Idea Collision");
   const ideaCollisionTimerVersion = 1;
   if (ideaCollision) {
     ideaCollision.phases = null;
@@ -41,6 +41,22 @@
     ideaCollision.script = "这是一个连续 15 分钟的交流环节：先站起来找到没聊过的人，互相讲清 Spark，追问、补充、挑战或合并想法，最后留下最想继续探索的方向。现在还不是正式组队，10:13 开始收集准备进入 Lightning Pitch 的 Idea。";
   }
 
+  const clone = value => JSON.parse(JSON.stringify(value));
+  const stageDays = ["day1", "day2"];
+  const scheduleKey = "minicamp_stage_schedule";
+  const mergeSchedule = value => {
+    const merged = clone(defaultSchedule);
+    if (!value || typeof value !== "object") return merged;
+    for (const day of stageDays) {
+      if (!Array.isArray(value[day])) continue;
+      merged[day] = merged[day].map((item, index) => ({ ...item, ...(value[day][index] || {}) }));
+    }
+    return merged;
+  };
+  const readStoredSchedule = () => {
+    try { return mergeSchedule(JSON.parse(localStorage.getItem(scheduleKey))); } catch { return mergeSchedule(null); }
+  };
+  let schedule = readStoredSchedule();
   const horizontalStages = new Set(["Opening", "Idea Spark", "Idea Collision", "Lightning Pitch", "Team Market"]);
   const stageDisplayTitles = {
     "自由交流 / 结果统计": "Open Exchange / Results",
@@ -60,14 +76,27 @@
     }
   } catch { /* Continue with the in-memory state when storage is unavailable. */ }
   const node = id => document.getElementById(id);
-  const current = () => schedule[state.day][state.index];
+  const normalizeState = () => {
+    if (!schedule[state.day]) state.day = "day1";
+    const list = schedule[state.day] || [];
+    state.index = Math.min(Math.max(list.length - 1, 0), Math.max(0, Number(state.index) || 0));
+    state.phase = Math.max(0, Number(state.phase) || 0);
+  };
+  normalizeState();
+  const current = () => schedule[state.day]?.[state.index] || schedule.day1[0];
   const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("minicamp-stage-control") : null;
+  const listeners = new Set();
+  const notify = () => listeners.forEach(listener => {
+    try { listener({ state: { ...state }, schedule: clone(schedule) }); } catch (error) { console.warn("Stage listener failed", error); }
+  });
   const broadcast = payload => {
     if (!channel) return;
     try { channel.postMessage(payload); } catch (error) { console.warn("Stage sync broadcast failed", error); }
   };
   const publishState = () => broadcast({ type: "stage-state", state: { ...state }, sentAt: Date.now() });
-  const save = () => { localStorage.setItem(key, JSON.stringify(state)); publishState(); };
+  const publishSchedule = () => broadcast({ type: "stage-schedule", schedule: clone(schedule), sentAt: Date.now() });
+  const save = () => { localStorage.setItem(key, JSON.stringify(state)); publishState(); notify(); };
+  const saveSchedule = () => { localStorage.setItem(scheduleKey, JSON.stringify(schedule)); publishSchedule(); notify(); };
   const applyExternalState = incoming => {
     if (!incoming || typeof incoming !== "object" || !schedule[incoming.day]) return;
     const list = schedule[incoming.day];
@@ -78,13 +107,22 @@
     state = next;
     const day = node("stage-day"); if (day) day.value = state.day;
     render();
+    notify();
+  };
+  const applyExternalSchedule = incoming => {
+    schedule = mergeSchedule(incoming);
+    normalizeState();
+    localStorage.setItem(scheduleKey, JSON.stringify(schedule));
+    render();
+    notify();
   };
   if (channel) {
     channel.addEventListener("message", event => {
       const message = event.data;
       if (!message || typeof message !== "object") return;
-      if (message.type === "stage-request-state") publishState();
+      if (message.type === "stage-request-state") { publishState(); publishSchedule(); }
       if (message.type === "stage-state") applyExternalState(message.state);
+      if (message.type === "stage-schedule") applyExternalSchedule(message.schedule);
     });
     broadcast({ type: "stage-request-state", sentAt: Date.now() });
   }
@@ -92,7 +130,8 @@
   const phase = () => current().phases?.[Math.min(state.phase, current().phases.length - 1)] || null;
   const duration = () => phase()?.seconds || current().minutes * 60;
   const remaining = () => { const item = current(); if (!item.timed) return 0; return state.running && state.endsAt ? Math.max(0, (state.endsAt - Date.now()) / 1000) : (state.remaining ?? duration()); };
-  const setText = (id, value) => { const element = node(id); if (element) element.textContent = value; };
+  const setText = (id, value) => { const element = node(id); if (!element) return; if (element.tagName === "INPUT" || element.tagName === "TEXTAREA") { if (document.activeElement !== element) element.value = value == null ? "" : value; } else element.textContent = value; };
+  const escapeHtml = value => String(value == null ? "" : value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const audienceSubtitle = value => String(value || "").replace(/[。！？]+$/g, "");
   const slug = title => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
@@ -195,8 +234,8 @@
       if (target.dataset.referenceKey === referenceKey) return;
       target.dataset.referenceKey = referenceKey;
       if (!reference) { target.hidden = true; target.innerHTML = ""; return; }
-      const themes = reference.themes?.length ? `<div class="stage-reference-themes">${reference.themes.map(theme => `<span>${theme}</span>`).join("")}</div>` : "";
-      const items = reference.items?.length ? `<div class="stage-reference-items">${reference.items.map((entry, index) => `<div class="stage-reference-item"><i>${String(index + 1).padStart(2, "0")}</i><div><b>${entry.label}</b><span>${entry.text}</span></div></div>`).join("")}</div>` : "";
+      const themes = reference.themes?.length ? `<div class="stage-reference-themes">${reference.themes.map(theme => `<span>${escapeHtml(theme)}</span>`).join("")}</div>` : "";
+      const items = reference.items?.length ? `<div class="stage-reference-items">${reference.items.map((entry, index) => `<div class="stage-reference-item"><i>${String(index + 1).padStart(2, "0")}</i><div><b>${escapeHtml(entry.label)}</b><span>${escapeHtml(entry.text)}</span></div></div>`).join("")}</div>` : "";
       target.hidden = false;
       // Keep the audience deck focused on the actual prompts, without utility headers.
       target.innerHTML = `${themes}${items}`;
@@ -308,7 +347,7 @@
       "Demo Fair": ["WALK · TRY · VOTE", "找到展位 · 亲手体验 · 投出喜欢的作品"]
     })[item.title]);
     target.hidden = !content;
-    target.innerHTML = content ? content.map((entry, index) => `<span class="${index === 0 ? "stage-context-label" : ""}">${entry}</span>`).join("") : "";
+    target.innerHTML = content ? content.map((entry, index) => `<span class="${index === 0 ? "stage-context-label" : ""}">${escapeHtml(entry)}</span>`).join("") : "";
   }
 
   function render() {
@@ -346,7 +385,8 @@
     setText("stage-next-label", list[state.index + 1] ? `NEXT · ${list[state.index + 1].title}` : "END OF RUN OF SHOW");
     setText("stage-status-label", item.timed ? (state.running ? "LIVE" : seconds <= 0 ? "TIME" : "READY") : (item.host ? "OPEN" : "TEAM WORK"));
     const pageIndex = `${String(state.index + 1).padStart(2, "0")} / ${String(list.length).padStart(2, "0")}`;
-    setText("stage-script", item.script); setText("stage-index-label", pageIndex); setText("stage-page-index", pageIndex);
+    if (!node("stage-brief-form")) setText("stage-script", item.script);
+    setText("stage-page-index", pageIndex);
     const progressBar = node("stage-progress-bar"); if (progressBar) progressBar.style.width = `${progress}%`;
     renderFeature(item, activePhase);
     if (item.title === "Group Photo") {
@@ -354,12 +394,12 @@
       if (feature) feature.innerHTML = '<div class="stage-photo-new"><div class="stage-photo-new-head"><span>PHOTO CALL</span><b>ONE FRAME</b><small>KEEP THE MOMENT</small></div><div class="stage-photo-new-slots"><div><b>ALL PARTICIPANTS</b><span>全体参与者</span></div><div><b>TEAMS</b><span>各团队与作品</span></div><div><b>ORGANIZERS</b><span>主办团队</span></div><div><b>WINNERS</b><span>获奖团队</span></div></div></div>';
     }
     renderContext(item, activePhase);
-    const cues = node("stage-cues"); if (cues) cues.innerHTML = (activePhase?.cues || item.cues).map(cue => `<span>${cue}</span>`).join("");
+    const cues = node("stage-cues"); if (cues) cues.innerHTML = (activePhase?.cues || item.cues).map(cue => `<span>${escapeHtml(cue)}</span>`).join("");
     renderReference(item);
     const toggle = node("stage-toggle"); if (toggle) { toggle.disabled = !item.timed; toggle.textContent = item.timed ? (state.running ? "暂停倒计时" : "开始倒计时") : "无需倒计时"; }
     [node("stage-timer-minus"), node("stage-timer-plus")].forEach(button => { if (button) button.disabled = !item.timed; });
     const phaseNext = node("stage-phase-next"); if (phaseNext) { const isFinalPhase = Boolean(activePhase && state.phase >= item.phases.length - 1); phaseNext.hidden = !activePhase; phaseNext.disabled = !activePhase || isFinalPhase; phaseNext.textContent = isFinalPhase ? "已到收敛步骤" : "下一步骤 →"; }
-    const actions = node("stage-actions"); if (actions) actions.innerHTML = item.actions.map(action => `<li>${action}</li>`).join("");
+    const actions = node("stage-actions"); if (actions && !node("stage-brief-form")) { if (actions.tagName === "INPUT" || actions.tagName === "TEXTAREA") { if (document.activeElement !== actions) actions.value = item.actions.join("\n"); } else actions.innerHTML = item.actions.map(action => `<li>${escapeHtml(action)}</li>`).join(""); }
   }
 
   function toggle() {
@@ -397,6 +437,39 @@
     setInterval(() => { if (state.running && remaining() <= 0) { state.running = false; state.remaining = 0; state.endsAt = null; save(); } render(); }, 250);
     window.addEventListener("storage", event => { if (event.key === key) applyExternalState(getState()); });
   }
+  const stageApi = {
+    getSchedule: () => clone(schedule),
+    getState: () => ({ ...state }),
+    setSchedule: value => {
+      schedule = mergeSchedule(value);
+      normalizeState();
+      saveSchedule();
+      render();
+    },
+    subscribe: listener => {
+      if (typeof listener !== "function") return () => {};
+      listeners.add(listener);
+      listener({ state: { ...state }, schedule: clone(schedule) });
+      return () => listeners.delete(listener);
+    }
+  };
+  window.MinicampStage = stageApi;
+  async function loadRemoteSchedule() {
+    try {
+      const response = await fetch("/api/config", { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      if (!payload.config?.stageSchedule) return;
+      schedule = mergeSchedule(payload.config.stageSchedule);
+      normalizeState();
+      localStorage.setItem(scheduleKey, JSON.stringify(schedule));
+      render();
+      notify();
+    } catch (error) {
+      console.warn("Stage schedule load failed; using local/default schedule.", error);
+    }
+  }
   window.addEventListener("pagehide", () => channel?.close());
   bind();
+  loadRemoteSchedule();
 })();

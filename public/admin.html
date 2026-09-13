@@ -111,13 +111,12 @@
           </div>
           <div class="stage-layout">
             <div class="stage-preview-frame" id="stage-preview-frame"><iframe id="stage-preview" src="stage.html?embed=1" title="现场大屏预览"></iframe></div>
-            <aside class="stage-brief">
-              <div class="stage-brief-head"><span>主持人提示</span><span id="stage-index-label">01 / 11</span></div>
-              <p id="stage-script">回答三个问题：minicamp 是什么？InnOSeed 为什么举办？我们希望这两天发生什么？</p>
-              <div class="stage-brief-divider"></div>
-              <p class="stage-brief-label">现场动作</p>
-              <ul id="stage-actions"></ul>
-              <div class="stage-reference" id="stage-reference" hidden></div>
+            <aside class="stage-brief stage-brief-editor" aria-label="演讲者模式编辑">
+              <form id="stage-brief-form">
+                <label class="stage-brief-field"><span>主持人提示</span><textarea id="stage-script" name="script" rows="8" maxlength="1200" placeholder="输入主持人提示"></textarea></label>
+                <label class="stage-brief-field"><span>现场动作</span><textarea id="stage-actions" name="actions" rows="8" maxlength="1200" placeholder="每行输入一条现场动作"></textarea></label>
+                <button class="button button-dark" type="submit">保存主持人提示和现场动作</button>
+              </form>
             </aside>
           </div>
         </div>
