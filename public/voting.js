@@ -131,10 +131,17 @@
     }
   }).catch(() => {});
 
+  document.getElementById("public-voter-student-id")?.addEventListener("input", event => { event.target.value = event.target.value.replace(/\D/g, "").slice(0, 10); });
   login?.addEventListener("submit", async event => {
     event.preventDefault();
     if (!votingOpen) {
       document.getElementById("voter-error").textContent = "投票暂未开放。";
+      return;
+    }
+    const studentId = document.getElementById("public-voter-student-id");
+    if (!api.isValidStudentId(studentId.value)) {
+      document.getElementById("voter-error").textContent = "请输入 10 位数字学号。";
+      studentId.focus();
       return;
     }
     try {

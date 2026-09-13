@@ -84,6 +84,7 @@
   if (!form) return;
   const steps = [...form.querySelectorAll(".form-step")], progress = document.getElementById("form-progress"), error = document.getElementById("form-error");
   form.querySelectorAll('input[name="phone"]').forEach(input => input.addEventListener("input", () => { const digits = input.value.replace(/\D/g, "").slice(0, 11); if (input.value !== digits) input.value = digits; }));
+  form.querySelectorAll('input[name="studentId"]').forEach(input => input.addEventListener("input", () => { const digits = input.value.replace(/\D/g, "").slice(0, 10); if (input.value !== digits) input.value = digits; }));
   const next = document.getElementById("next-step"), prev = document.getElementById("prev-step"), submit = document.getElementById("submit-application");
   const gradeField = form.elements.grade, freshmanHelp = document.getElementById("freshman-help");
   const isFreshman = value => /大一|一年级|freshman/i.test(String(value || ""));
@@ -94,7 +95,7 @@
   };
   let current = 1;
   const showStep = step => { current = step; steps.forEach(item => { item.hidden = Number(item.dataset.step) !== step; item.classList.toggle("active", Number(item.dataset.step) === step); }); progress.textContent = "步骤 " + step + " / 3"; prev.classList.toggle("hidden", step === 1); next.classList.toggle("hidden", step === 3); next.textContent = step === 1 ? "开始填写" : "继续"; submit.classList.toggle("hidden", step !== 3); error.textContent = ""; };
-  const validate = step => { const panel = steps[step - 1]; const phone = panel.querySelector('input[name="phone"]'); if (phone && !api.isValidPhone(phone.value)) { phone.focus(); error.textContent = "请输入 11 位手机号。"; return false; } for (const field of panel.querySelectorAll("[required]")) if (!field.checkValidity()) { field.focus(); error.textContent = "请完成当前步骤中的必填信息。"; return false; } if (step === 2 && !form.querySelector('input[name="skills"]:checked')) { error.textContent = "请至少选择一项能力标签。"; return false; } return true; };
+  const validate = step => { const panel = steps[step - 1]; const phone = panel.querySelector('input[name="phone"]'); if (phone && !api.isValidPhone(phone.value)) { phone.focus(); error.textContent = "请输入 11 位手机号。"; return false; } const studentId = panel.querySelector('input[name="studentId"]'); if (studentId && !api.isValidStudentId(studentId.value)) { studentId.focus(); error.textContent = "请输入 10 位数字学号。"; return false; } for (const field of panel.querySelectorAll("[required]")) if (!field.checkValidity()) { field.focus(); error.textContent = "请完成当前步骤中的必填信息。"; return false; } if (step === 2 && !form.querySelector('input[name="skills"]:checked')) { error.textContent = "请至少选择一项能力标签。"; return false; } return true; };
   next.addEventListener("click", () => validate(current) && showStep(current + 1));
   prev.addEventListener("click", () => showStep(current - 1));
   gradeField?.addEventListener("change", updateGradeHelp);

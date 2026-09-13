@@ -5,6 +5,7 @@
   const returnTo = params.get("returnTo") || "";
   const profileRequired = params.get("profileRequired") === "1";
   document.querySelectorAll('input[name="phone"]').forEach(input => input.addEventListener("input", () => { const digits = input.value.replace(/\D/g, "").slice(0, 11); if (input.value !== digits) input.value = digits; }));
+  document.querySelectorAll('input[name="studentId"]').forEach(input => input.addEventListener("input", () => { const digits = input.value.replace(/\D/g, "").slice(0, 10); if (input.value !== digits) input.value = digits; }));
   const activatePanel = id => { document.querySelectorAll("[data-profile-panel]").forEach(item => item.classList.toggle("active", item.dataset.profilePanel === id)); document.querySelectorAll(".profile-panel").forEach(panel => panel.classList.toggle("active", panel.id === id)); };
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
   const show = async () => {
@@ -37,7 +38,7 @@
       ).join("") + "</ol></section>"
     ).join("") + "</div>";
   }
-  document.getElementById("profile-login-form")?.addEventListener("submit", async event => { event.preventDefault(); const id = document.getElementById("login-id").value.trim(), contact = document.getElementById("login-contact").value.trim(); try { await api.participantLogin(id,contact); location.assign(returnTo || "profile-dashboard.html"); } catch (err) { document.getElementById("login-error").textContent = err.message; } });
+  document.getElementById("profile-login-form")?.addEventListener("submit", async event => { event.preventDefault(); const id = document.getElementById("login-id").value.trim(), contact = document.getElementById("login-contact").value.trim(), loginError = document.getElementById("login-error"); if (/^\d+$/.test(contact) && !api.isValidPhone(contact)) { loginError.textContent = "手机号请输入 11 位数字；也可以使用报名时填写的邮箱。"; document.getElementById("login-contact").focus(); return; } try { await api.participantLogin(id,contact); location.assign(returnTo || "profile-dashboard.html"); } catch (err) { loginError.textContent = err.message; } });
 document.getElementById("profile-edit-form")?.addEventListener("submit", async event => {
     event.preventDefault();
     const form = event.currentTarget, data = new FormData(form), payload = Object.fromEntries(data.entries());
@@ -48,6 +49,11 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
     editError.textContent = "";
     if (!api.isProfileComplete(payload)) {
       editError.textContent = "请先填写姓名、学号、学院、专业、年级、手机号、邮箱和参与动机。";
+      return;
+    }
+    if (!api.isValidStudentId(payload.studentId)) {
+      form.elements.studentId.focus();
+      editError.textContent = "请输入 10 位数字学号。";
       return;
     }
     if (!api.isValidPhone(payload.phone)) {

@@ -193,7 +193,7 @@
               <p class="form-caption">这些信息用于校内身份确认、录取评估和活动通知。</p>
               <div class="field-grid">
                 <label>姓名<input name="name" autocomplete="name" required placeholder="你的姓名"></label>
-                <label>学号<input name="studentId" required placeholder="用于校内身份确认"></label>
+                <label>学号<input name="studentId" inputmode="numeric" autocomplete="username" required minlength="10" maxlength="10" pattern="[0-9]{10}" placeholder="用于校内身份确认"><small class="field-help">请输入 10 位数字学号</small></label>
                 <label>学院<input name="college" required placeholder="例如：计算机学院"></label>
                 <label>专业<input name="major" required placeholder="例如：软件工程"></label>
                 <label>年级<select name="grade" id="application-grade" required><option value="">请选择年级</option><option value="大一">大一</option><option value="大二">大二</option><option value="大三">大三</option><option value="大四">大四</option><option value="研究生">研究生</option></select><small class="field-help grade-help" id="freshman-help" hidden>大一同学可以报名，但仅参与路演、项目展示和后续投票等环节，不参与项目开发环节。</small></label>
