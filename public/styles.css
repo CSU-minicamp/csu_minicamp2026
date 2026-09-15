@@ -2993,11 +2993,13 @@ body.drawer-open { overflow:hidden; }
 
 
 /* Prominent participant application number */
-.profile-header-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 64px; flex: 0 0 auto; }
-.profile-application-id { margin-top: 0; display: inline-flex; align-items: center; gap: 14px; padding: 10px 14px; border-left: 5px solid var(--coral); background: var(--yellow); }
+.profile-header-actions { min-width: 230px; display: flex; flex-direction: column; align-items: stretch; gap: 18px; flex: 0 0 auto; }
+.profile-account-actions { display: flex; flex-direction: row; gap: 8px; }
+.profile-account-actions .outline-button { flex: 1 1 0; width: auto; min-width: 0; justify-content: center; white-space: nowrap; }
+.profile-application-id { width: 100%; margin-top: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-left: 5px solid var(--coral); background: var(--yellow); }
 .profile-application-id span { color: var(--ink); font: 700 11px Consolas, monospace; letter-spacing: .04em; }
 .profile-application-id strong { color: var(--ink); font: 900 20px Consolas, monospace; letter-spacing: .06em; }
-@media (max-width: 760px) { .profile-header-actions { width: 100%; align-items: flex-start; gap: 18px; } .profile-application-id strong { font-size: 18px; } }
+@media (max-width: 760px) { .profile-header-actions { width: 100%; min-width: 0; align-items: stretch; gap: 16px; } .profile-application-id strong { font-size: 18px; } }
 .team-phase-badge { display: inline-block; margin-top: 16px; padding: 7px 10px; color: var(--ink); background: var(--yellow); border: 1px solid var(--ink); border-radius: 999px; font: 700 11px Consolas, monospace; }
  .team-recruit-panel{margin-top:16px;padding:14px;background:#f5f4ee;border:1px solid var(--line);font-size:12px}.team-recruit-panel p{margin:6px 0;color:var(--muted)}.team-recruit-panel code{font:700 13px Consolas,monospace}
 
@@ -3005,3 +3007,30 @@ body.drawer-open { overflow:hidden; }
 .cover-upload-preview{display:block;max-width:320px;max-height:180px;margin-top:10px;object-fit:cover;border:1px solid var(--line,#d8d8d2)}.field-hint{display:block;color:var(--muted,#666);font-size:12px;margin-top:6px}
 
 .required-mark,.optional-mark{font-style:normal;font-size:11px;font-weight:700;margin-left:5px}.required-mark{color:#d94b3f}.optional-mark{color:var(--muted,#777)}
+.profile-basic-readonly h3 { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.profile-basic-readonly h3::after { content: "仅可查看"; padding: 5px 8px; color: var(--muted); background: #ecece5; border: 1px solid #d3d3c9; border-radius: 999px; font: 800 10px Consolas, monospace; letter-spacing: .04em; }
+.profile-basic-readonly input[readonly], .profile-basic-readonly select:disabled { color: var(--muted); background: #f0f0ea; border-color: #d0d0c6; cursor: not-allowed; }
+.profile-basic-readonly input[readonly]:focus { border-color: #d0d0c6; box-shadow: none; }
+.profile-delete-button { color: var(--coral); border-color: #f0b0a3; }
+.profile-delete-button:hover { color: white; background: var(--coral); border-color: var(--coral); }
+.profile-intended-teammates { margin-bottom: 18px; padding: 22px; background: linear-gradient(120deg, #fff4c2 0%, #fffbe8 76%); border: 1px solid #d7b839; border-left: 4px solid var(--coral); border-radius: var(--radius); box-shadow: 6px 6px 0 rgba(17, 17, 17, .06); }
+.profile-intended-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.profile-intended-head .section-kicker { margin-bottom: 9px; color: var(--coral); font: 800 10px Consolas, monospace; letter-spacing: .06em; }
+.profile-intended-head h3 { margin: 0 0 7px; font-size: 21px; }
+.profile-intended-head p:not(.section-kicker) { max-width: 580px; margin: 0; color: #5e5a3d; font-size: 11px; line-height: 1.6; }
+.profile-intended-meta { min-width: 78px; padding: 9px 12px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; color: var(--ink); background: rgba(255, 255, 255, .5); border: 1px solid #d7b839; }
+.profile-intended-meta span, .profile-intended-subhead span { color: var(--coral); font: 800 9px Consolas, monospace; letter-spacing: .06em; }
+.profile-intended-meta strong { font: 900 17px Consolas, monospace; }
+.profile-intended-captain-card { margin-top: 18px; padding: 13px 15px; display: grid; grid-template-columns: auto 1fr auto; gap: 13px; align-items: center; background: rgba(255, 255, 255, .78); border: 1px solid #eadb91; border-radius: 4px; }
+.profile-intended-role { padding: 5px 7px; color: white; background: var(--ink); font: 800 9px Consolas, monospace; letter-spacing: .05em; }
+.profile-intended-captain-card div, .profile-intended-list li div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.profile-intended-captain-card strong, .profile-intended-list li strong { color: var(--ink); font-size: 13px; }
+.profile-intended-captain-card span:not(.profile-intended-role), .profile-intended-list li div span { color: var(--muted); font: 10px Consolas, monospace; overflow-wrap: anywhere; }
+.profile-intended-captain-card em, .profile-intended-list li em { padding: 5px 7px; color: var(--green); background: #e2f2ea; border-radius: 999px; font: 700 9px Consolas, monospace; font-style: normal; white-space: nowrap; }
+.profile-intended-subhead { margin-top: 20px; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 1px solid #e2ce72; }
+.profile-intended-subhead small { color: #5e5a3d; font-size: 10px; }
+.profile-intended-list { margin: 9px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; list-style: none; }
+.profile-intended-list li { min-width: 0; padding: 11px 12px; display: grid; grid-template-columns: 25px 1fr auto; gap: 10px; align-items: center; background: rgba(255, 255, 255, .7); border: 1px solid #eadb91; border-radius: 4px; }
+.profile-intended-index { color: #9b8b37; font: 800 10px Consolas, monospace; }
+.profile-success { min-height: 19px; margin: 10px 0 0; color: var(--green); font-size: 11px; }
+@media(max-width:600px) { .profile-intended-teammates { padding: 18px; }.profile-intended-head { flex-direction: column; gap: 16px; }.profile-intended-meta { align-items: flex-start; }.profile-intended-captain-card { grid-template-columns: auto 1fr; }.profile-intended-captain-card em { grid-column: 2; justify-self: start; }.profile-intended-list { grid-template-columns: 1fr; } }

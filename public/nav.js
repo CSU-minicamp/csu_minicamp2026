@@ -58,8 +58,11 @@
   window.MinicampAPI?.request("/api/me").then(({participant}) => {
     const type = participant.registration_type || participant.registrationType || "contestant";
     const pending = participant.status === "待审核";
-    if (type === "roadshow" || pending) {
+    if (type === "roadshow") {
       header.querySelectorAll('a[href="team.html"],a[href="gallery.html"],a[href="voting.html"],a[data-voting-entry]').forEach(link => link.remove());
+    }
+    if (pending) {
+      header.querySelectorAll('a[href="gallery.html"],a[href="voting.html"],a[data-voting-entry]').forEach(link => link.remove());
     }
     if (type === "roadshow") {
       header.querySelector(".button-small")?.setAttribute("href", page === "home" ? "#apply" : "index.html#apply");
