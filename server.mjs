@@ -103,8 +103,73 @@ function normalizeVoteSelections(selections,role){
 function calcResults(){const map={};for(const vote of db.votes)for(const x of vote.selections||[]){const k=x.award+":"+x.projectId;map[k]??={award:x.award,projectId:x.projectId,participant:0,jury:0};map[k][vote.role]+=Number(x.points||0);}return Object.values(map).map(x=>({...x,total:x.participant+x.jury,weighted:x.participant*db.config.participantWeight/100+x.jury*db.config.juryWeight/100})).sort((a,b)=>b.weighted-a.weighted);}
 function participationModeFor(grade){return /大一|一年级|freshman/i.test(String(grade||""))?"仅参与路演及后续投票等阶段，不参与开发环节":"可参与完整活动流程";}
 function isContestant(p){return Boolean(p&&((p.registration_type||p.registrationType||"contestant")==="contestant"));}
+const contestantBasicFields=["name","studentId","college","major","grade","phone","email"];
+const contestantEditableFields=["skills","motivation","experience","portfolio"];
+function lockedContestantProfile(participant){
+  const major=String(participant?.major||"");
+  const grade=String(participant?.grade||"");
+  const match=!grade&&major.match(/^\s*(.*?)\s*·\s*(大一|大二|大三|大四|研究生)\s*$/);
+  return {name:String(participant?.name||""),studentId:String(participant?.studentId||""),college:String(participant?.college||""),major:match?match[1]:major,grade:match?match[2]:grade,phone:String(participant?.phone||""),email:String(participant?.email||"")};
+}
+function patchContestantProfile(participant,data){
+  const locked=lockedContestantProfile(participant);
+  if(contestantBasicFields.some(key=>Object.hasOwn(data,key)&&String(data[key]??"").trim()!==locked[key].trim()))return {status:403,message:"基本信息不可修改"};
+  const next={...participant,...locked};
+  for(const key of contestantEditableFields)if(Object.hasOwn(data,key))next[key]=key==="skills"?normalizeSkills(data[key]):data[key];
+  if(!isProfileComplete(next))return {status:400,message:"required fields missing"};
+  Object.assign(participant,locked);
+  for(const key of contestantEditableFields)if(Object.hasOwn(data,key))participant[key]=next[key];
+  participant.entryType="个人报名";
+  participant.participationMode=participationModeFor(participant.grade);
+  participant.updatedAt=new Date().toISOString();
+  return null;
+}
 function isAccepted(p){return Boolean(p&&(p.status==="已录取"||p.status==="已通过"));}
 function nextRoadshowCode(){const year=new Date().getFullYear();const max=(db.applications||[]).reduce((n,x)=>{const m=String(x.id||"").match(/^RO-\d{4}-(\d{6})$/);return m?Math.max(n,Number(m[1])):n;},0);return "RO-"+year+"-"+String(max+1).padStart(6,"0");}
+function canPreTeam(p){return Boolean(p&&isContestant(p)&&isProfileComplete(p));}
+function parseTeamMemberIds(value){return [...new Set(String(value??"").split(/[\s,，;；]+/).map(item=>item.trim().toUpperCase()).filter(Boolean))];}
+function createPreTeam(owner,data){
+  const ids=parseTeamMemberIds(data.memberIds);
+  if(!ids.length)return {error:"member ids required",status:400};
+  if(ids.length>4)return {error:"too many members",status:400};
+  if(ids.includes(String(owner.id).toUpperCase()))return {error:"cannot include yourself",status:400};
+  if(owner.teamId||db.teams.some(item=>(item.memberIds||[]).includes(owner.id)))return {error:"already belongs to a team",status:409};
+  const members=ids.map(id=>db.applications.find(item=>String(item.id||"").toUpperCase()===id));
+  if(members.some(member=>!member))return {error:"member not found",status:404};
+  if(members.some(member=>!isContestant(member)))return {error:"member must be contestant",status:400};
+  if(members.some(member=>!isProfileComplete(member)))return {error:"member profile incomplete",status:400};
+  if(members.some(member=>member.teamId||db.teams.some(item=>(item.memberIds||[]).includes(member.id))))return {error:"member already belongs to a team",status:409};
+  const team={id:"TEAM "+String(db.teams.length+1).padStart(2,"0"),ownerId:owner.id,code:"MC26-"+crypto.randomBytes(2).toString("hex").toUpperCase(),project:String(data.project||"").trim()||"Untitled",theme:"TBD",memberIds:[owner.id,...members.map(member=>member.id)],status:"draft",locked:false,published:false,testFixture:testFixtureMode()};
+  db.teams.push(team);
+  [owner,...members].forEach(member=>{member.teamId=team.id;member.teamCode=team.code;});
+  return {team};
+}
+function deleteParticipantAccount(participant){
+  const id=String(participant.id),name=String(participant.name||""),affectedTeamIds=new Set(),removedTeamIds=new Set();
+  db.teams=(db.teams||[]).flatMap(team=>{
+    const memberIds=Array.isArray(team.memberIds)?team.memberIds:[];
+    if(!memberIds.includes(id))return [team];
+    affectedTeamIds.add(team.id);
+    const remaining=memberIds.filter(memberId=>memberId!==id);
+    if(!remaining.length||(!team.locked&&team.ownerId===id)){
+      removedTeamIds.add(team.id);
+      for(const memberId of remaining){
+        const member=db.applications.find(item=>String(item.id)===String(memberId));
+        if(member){member.teamId="";member.teamCode="";}
+      }
+      return [];
+    }
+    return [{...team,memberIds:remaining,ownerId:team.ownerId===id?remaining[0]:team.ownerId}];
+  });
+  for(const application of db.applications||[])if(removedTeamIds.has(application.teamId)){application.teamId="";application.teamCode="";}
+  db.projects=(db.projects||[]).filter(project=>!removedTeamIds.has(project.teamId)).map(project=>Array.isArray(project.members)?{...project,members:project.members.filter(member=>member?.id!==id&&member?.name!==name)}:project);
+  db.ideas=(db.ideas||[]).filter(idea=>String(idea.authorId||"")!==id);
+  db.votes=(db.votes||[]).filter(vote=>String(vote.voterId||"")!==id);
+  db.notices=(db.notices||[]).flatMap(notice=>String(notice.target||"")===id?[]:[{...notice,readBy:(notice.readBy||[]).filter(reader=>String(reader)!==id)}]);
+  for(const [token,storedSession] of Object.entries(db.sessions||{}))if(String(storedSession.userId||"")===id)delete db.sessions[token];
+  db.applications=(db.applications||[]).filter(application=>String(application.id)!==id);
+  return {affectedTeamIds:[...affectedTeamIds],removedTeamIds:[...removedTeamIds]};
+}
 
 function resolvedAwards(){const rows=calcResults(),formal=["Best Overall","Best Product","Best Design","Best Technical","Most Unexpected"],used=new Set(),winners=[];for(const award of formal){const row=rows.find(x=>x.award===award&&!used.has(db.projects.find(p=>p.id===x.projectId)?.teamId));if(row){const project=db.projects.find(p=>p.id===row.projectId);used.add(project?.teamId);winners.push({...row,projectName:project?.projectName,teamId:project?.teamId});}}const people=rows.find(x=>x.award==="People's Choice");if(people){const project=db.projects.find(p=>p.id===people.projectId);winners.push({...people,projectName:project?.projectName,teamId:project?.teamId,stackable:true});}return winners;}
 
@@ -118,6 +183,12 @@ async function api(req,res,url){
   if(url.pathname==="/api/auth/admin"&&method==="POST"){const d=await body(req);if(d.password!==adminPassword)return fail(res,401,"invalid admin password");const t=makeToken();db.sessions[t]={role:"admin",userId:"ADMIN",createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,200,{token:t});}
   const me=person(req);
   const voter=publicVoter(req);
+  if(url.pathname==="/api/me"&&method==="DELETE"){if(!me)return fail(res,401,"login required");deleteParticipantAccount(me);await saveDb();return send(res,200,{ok:true});}
+  if(url.pathname==="/api/teams"&&method==="POST"&&me&&canPreTeam(me)){const result=createPreTeam(me,await body(req));if(result.error)return fail(res,result.status,result.error);await saveDb();return send(res,201,{team:teamView(result.team)});}
+  if(url.pathname==="/api/teams"&&method==="POST"&&me&&canPreTeam(me)&&!isAccepted(me)){if(me.teamId||db.teams.some(item=>item.memberIds.includes(me.id)))return fail(res,409,"already belongs to a team");const d=await body(req);const team={id:"TEAM "+String(db.teams.length+1).padStart(2,"0"),ownerId:me.id,code:"MC26-"+crypto.randomBytes(2).toString("hex").toUpperCase(),project:d.project||"Untitled",theme:d.theme||"TBD",memberIds:[me.id],status:"draft",locked:false,published:false,testFixture:testFixtureMode()};db.teams.push(team);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,201,{team:teamView(team)});}
+  if(url.pathname==="/api/teams/join-by-code"&&method==="POST"&&me&&canPreTeam(me)&&!isAccepted(me)){const d=await body(req),code=String(d.code||"").trim().toUpperCase();if(!code)return fail(res,400,"team code required");const team=db.teams.find(x=>String(x.code||"").toUpperCase()===code);if(!team)return fail(res,404,"team code not found");if(team.locked||team.memberIds.length>=5)return fail(res,409,"team is locked or full");const currentTeam=db.teams.find(item=>item.memberIds.includes(me.id)||item.id===me.teamId);if(currentTeam)return fail(res,409,"already belongs to a team");team.memberIds.push(me.id);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,200,{team:teamView(team)});}
+  const preTeamJoin=url.pathname.match(/^\/api\/teams\/([^/]+)\/join$/);if(preTeamJoin&&method==="POST"&&me&&canPreTeam(me)&&!isAccepted(me)){const team=db.teams.find(x=>x.id===decodeURIComponent(preTeamJoin[1]));if(!team)return fail(res,404,"team not found");if(team.locked||team.memberIds.length>=5)return fail(res,409,"team is locked or full");const currentTeam=db.teams.find(item=>item.memberIds.includes(me.id)||item.id===me.teamId);if(currentTeam)return fail(res,409,currentTeam.id===team.id?"already in team":"leave current team first");team.memberIds.push(me.id);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,200,{team:teamView(team)});}
+  if(url.pathname==="/api/me"&&method==="PATCH"&&me&&isContestant(me)){const d=await body(req);const error=patchContestantProfile(me,d);if(error)return fail(res,error.status,error.message);addNotice("资料已更新","你的能力与经历已更新，主办方将重新审核。","资料复核",me.id);await saveDb();return send(res,200,{participant:safe(me)});}
   if(url.pathname==="/api/me"&&method==="GET"){if(!me)return fail(res,401,"login required");return send(res,200,{participant:safe(me),team:teamView(db.teams.find(x=>x.id===me.teamId))});}
   if(url.pathname==="/api/me/vote"&&method==="GET"){if(me&&!isContestant(me))return fail(res,403,"roadshow participants do not have voting access");if(!me&&!voter)return fail(res,401,"login required");const voterId=voter?.userId||me.id;return send(res,200,{voter:voter?.voter||{name:me.name,grade:me.grade,college:me.college,teamId:me.teamId},vote:voteView(db.votes.find(item=>item.role==="participant"&&(item.voterId===voterId||voter&&(item.voterIdentityHash===voter.userId)))),voteOpen:votingIsOpen()});}
   if(url.pathname==="/api/me"&&method==="PATCH"){if(!me)return fail(res,401,"login required");const d=await body(req);if(!isContestant(me)){if(!["name","phone","email","identity_type","school_or_company","grade_or_position"].every(key=>String(d[key]||"").trim()))return fail(res,400,"required fields missing");Object.assign(me,{name:d.name,phone:d.phone,email:d.email,identity_type:d.identity_type,school_or_company:d.school_or_company,grade_or_position:d.grade_or_position,attend_roadshow:d.attend_roadshow===undefined?me.attend_roadshow:d.attend_roadshow!==false&&d.attend_roadshow!=="false",receive_notifications:d.receive_notifications===undefined?me.receive_notifications:d.receive_notifications!==false&&d.receive_notifications!=="false",updatedAt:new Date().toISOString()});await saveDb();return send(res,200,{participant:safe(me)});}if(!d.name||!d.studentId||!d.college||!d.major||!d.grade||!d.phone||!d.email||!d.motivation)return fail(res,400,"required fields missing");if(d.studentId&&d.studentId!==me.studentId&&db.applications.some(item=>item.id!==me.id&&item.studentId===d.studentId))return fail(res,409,"student id already exists");d.entryType="个人报名";d.participationMode=participationModeFor(d.grade);d.teamCode=me.teamCode;Object.assign(me,d,{id:me.id,registration_type:me.registration_type,registrationType:me.registrationType,status:isAccepted(me)?"待复审":me.status,teamId:me.teamId});me.updatedAt=new Date().toISOString();addNotice("资料已更新","你的报名资料已更新，主办方将重新审核。","资料复核",me.id);await saveDb();return send(res,200,{participant:safe(me)});}

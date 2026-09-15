@@ -1,3 +1,61 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>组队工作区｜minicamp 2026</title><link rel="icon" type="image/png" href="assets/brand/minicamp-logo-seal.png"><link rel="stylesheet" href="styles.css"></head><body class="profile-body" data-page="team"><header id="site-header" class="site-header"></header><main class="profile-shell shell" hidden><section class="profile-header"><div><p class="section-kicker">MEET / TEAM UP</p><h1>先组好队，开赛一起做。</h1><p>现在是预组队阶段。报名成功且资料完整即可创建或加入队伍，正式开赛前都可以调整成员。</p><span class="team-phase-badge">预组队进行中 · 正式确认尚未开启</span></div><a class="button button-dark" href="profile.html">进入个人主页</a></section><section class="team-market admin-card"><div class="admin-card-head"><div><h2>Team Market</h2><p class="team-market-caption">我的队伍与可加入的队伍</p></div><span>3–5 人锁定</span></div><p class="team-market-intro">创建或加入一支开放队伍，先确定合作方向；正式确认开启后，再由队长提交最终队伍。</p><p class="team-feedback" id="team-feedback" role="status" aria-live="polite"></p><div id="my-team" class="team-focus" aria-live="polite"></div><form id="create-team-form" class="team-create-form"><label>队伍暂定名称</label><div class="input-action"><input name="projectName" required maxlength="80" placeholder="例如：校园好去处发现计划"><button class="button button-dark" type="submit">创建我的队伍</button></div><small>创建后会生成队伍邀请码，预组队阶段可以随时调整成员。</small></form><form id="join-by-code-form" class="team-code-form"><div><strong>收到队伍邀请吗？</strong><small>粘贴队长发来的邀请码，无需在队伍列表中查找。</small></div><label class="sr-only" for="team-invite-code">队伍邀请码</label><div class="input-action"><input id="team-invite-code" name="code" required autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="例如 MC26-A7K2"><button type="submit">凭码加入</button></div></form><div class="team-market-list-head"><h3>正在招募的队伍</h3><span>加入后需补齐 3–5 人才能锁定</span></div><div id="team-list" class="team-board compact"></div></section></main><script src="api.js"></script><script src="nav.js"></script><script src="team.js"></script>  <div id="participant-fab-root"></div>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>组队工作区｜minicamp 2026</title>
+  <link rel="icon" type="image/png" href="assets/brand/minicamp-logo-seal.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="profile-body" data-page="team">
+  <header id="site-header" class="site-header"></header>
+  <main class="profile-shell shell" hidden>
+    <section class="profile-header">
+      <div>
+        <p class="section-kicker">MEET / TEAM UP</p>
+        <h1>先组好队，开赛一起做。</h1>
+        <p>现在是预组队阶段。报名成功且资料完整即可由队长填写成员编号，形成意向队伍；正式开赛前都可以调整成员。</p>
+        <span class="team-phase-badge">预组队进行中 · 正式确认尚未开启</span>
+      </div>
+      <a class="button button-dark" href="profile.html">进入个人主页</a>
+    </section>
+    <section class="team-market admin-card">
+      <div class="admin-card-head">
+        <div><h2>Team Market</h2><p class="team-market-caption">我的预组队与可加入的队伍</p></div>
+        <span>3–5 人锁定</span>
+      </div>
+      <p class="team-market-intro">队长填写队员报名编号后，会把队长和队员关联为意向队伍；正式确认开启且成员都已录取后，再由队长提交最终队伍。</p>
+      <p class="team-feedback" id="team-feedback" role="status" aria-live="polite"></p>
+      <div id="my-team" class="team-focus" aria-live="polite"></div>
+      <form id="create-team-form" class="team-create-form">
+        <label for="team-project-name">队伍暂定名称</label>
+        <div class="input-action">
+          <input id="team-project-name" name="projectName" required maxlength="80" placeholder="例如：校园好去处发现计划">
+          <button class="button button-dark" type="submit">提交预组队</button>
+        </div>
+        <label for="team-member-ids">成员报名编号</label>
+        <textarea id="team-member-ids" name="memberIds" required rows="4" placeholder="每行填写一个，例如：TEST-APP-02&#10;TEST-APP-03"></textarea>
+        <small>队长本人会自动加入；请填写 1–4 个已报名成员编号，最多组成 5 人预组队。</small>
+      </form>
+      <form id="join-by-code-form" class="team-code-form">
+        <div>
+          <strong>收到队长邀请？</strong>
+          <small>输入队长分享的队伍邀请码，加入这支预组队。</small>
+        </div>
+        <label class="sr-only" for="team-invite-code">队伍邀请码</label>
+        <div class="input-action">
+          <input id="team-invite-code" name="code" required autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="例如 MC26-A7K2">
+          <button type="submit">凭邀请码加入</button>
+        </div>
+      </form>
+      <div class="team-market-list-head"><h3>正在招募的队伍</h3><span>加入后需补齐 3–5 人才能锁定</span></div>
+      <div id="team-list" class="team-board compact"></div>
+    </section>
+  </main>
+  <script src="api.js"></script>
+  <script src="nav.js"></script>
+  <script src="team.js"></script>
+  <div id="participant-fab-root"></div>
   <script src="api.js"></script><script src="participant-fab.js"></script>
-</body></html>
+</body>
+</html>

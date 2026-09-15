@@ -21,6 +21,13 @@
     "team code not found": "没有找到这个邀请码对应的队伍。",
     "team member required": "只有当前队伍成员可以进行这项操作。",
     "team must have 3 to 5 members": "队伍需要有 3–5 名成员才能锁定。",
+    "member ids required": "请至少填写 1 个队员报名编号。",
+    "too many members": "最多填写 4 个队员报名编号，队伍总人数不能超过 5 人。",
+    "member not found": "有成员编号不存在，请确认填写的是报名编号。",
+    "member must be contestant": "只能填写参赛报名者的编号，路演报名者不能加入预组队。",
+    "member profile incomplete": "有成员尚未完善资料，暂时无法加入预组队。",
+    "member already belongs to a team": "有成员已经加入其他队伍，请先调整成员。",
+    "cannot include yourself": "队员编号中不能填写队长本人的报名编号。",
     "locked team cannot be changed": "队伍已锁定，不能再调整成员。",
     "submitter must keep the project team": "该队伍已有项目提交，不能直接解散。请联系主办方处理。"
   }[error.message] || error.message || "操作未完成，请稍后重试。");
@@ -34,15 +41,17 @@
     const joinByCodeForm = document.getElementById("join-by-code-form");
     if (!team) {
       createForm.hidden = false;
-      joinByCodeForm.hidden = false;
+      if (joinByCodeForm) joinByCodeForm.hidden = false;
       document.getElementById("my-team").innerHTML = "<div class='team-empty'><strong>\u4f60\u8fd8\u6ca1\u6709\u961f\u4f0d</strong><p>\u53ef\u4ee5\u81ea\u5df1\u521b\u5efa\u4e00\u652f\u961f\u4f0d\uff0c\u6216\u4ece\u4e0b\u65b9\u52a0\u5165\u6b63\u5728\u62db\u52df\u7684\u961f\u4f0d\u3002</p></div>";
       return;
     }
 
     createForm.hidden = true;
-    joinByCodeForm.hidden = true;
+    if (joinByCodeForm) joinByCodeForm.hidden = true;
     const count = team.members.length;
     const missing = Math.max(0, 3 - count);
+    const accepted = me?.status === "已录取" || me?.status === "已通过";
+    const canLock = teamConfirmOpen && team.ownerId === me?.id && accepted;
     const status = team.locked
       ? "\u5df2\u9501\u5b9a\u00b7 \u6210\u5458\u5df2\u786e\u8ba4"
       : missing
@@ -58,7 +67,7 @@
       (team.locked ? "<span class='team-action-note'>\u961f\u4f0d\u5df2\u9501\u5b9a\uff0c\u5982\u9700\u8c03\u6574\u8bf7\u8054\u7cfb\u4e3b\u529e\u65b9\u3002</span>" :
         (team.ownerId === me?.id ? "<button class='outline-button' id='recruit-team' type='button'>" + (team.published ? "停止招募" : "发布招募") + "</button>" : "") +
         "<button class='outline-button' id='leave-team' type='button'>\u79bb\u5f00\u8fd9\u652f\u961f\u4f0d</button>" +
-        (teamConfirmOpen && team.ownerId === me?.id ? "<button class='button button-primary' id='lock-team' type='button' " + (missing ? "disabled" : "") + ">确认正式队伍</button>" : "<span class='team-action-note'>预组队阶段 · 等待正式确认开启</span>")) +
+        (canLock ? "<button class='button button-primary' id='lock-team' type='button' " + (missing ? "disabled" : "") + ">确认正式队伍</button>" : "<span class='team-action-note'>" + (teamConfirmOpen && team.ownerId === me?.id && !accepted ? "录取后才可正式确认" : "预组队阶段 · 等待正式确认开启") + "</span>")) +
       "</div>";
   }
 
@@ -133,16 +142,18 @@
   document.getElementById("create-team-form").addEventListener("submit", async event => {
     event.preventDefault();
     const form = event.currentTarget;
-    const project = new FormData(form).get("projectName").trim();
+    const formData = new FormData(form);
+    const project = String(formData.get("projectName") || "").trim();
+    const memberIds = String(formData.get("memberIds") || "").trim();
     try {
-      await api.request("/api/teams", { method: "POST", body: JSON.stringify({ project }) });
+      await api.request("/api/teams", { method: "POST", body: JSON.stringify({ project, memberIds }) });
       form.reset();
       setFeedback("\u961f\u4f0d\u5df2\u521b\u5efa\uff0c\u8bf7\u628a\u9080\u8bf7\u7801\u53d1\u7ed9\u961f\u53cb\u3002", "success");
       await render();
     } catch (error) { setFeedback(readableError(error), "error"); }
   });
 
-  document.getElementById("join-by-code-form").addEventListener("submit", async event => {
+  document.getElementById("join-by-code-form")?.addEventListener("submit", async event => {
     event.preventDefault();
     const form = event.currentTarget;
     const input = form.elements.code;
