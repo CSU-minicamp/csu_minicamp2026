@@ -17,7 +17,35 @@
     stage: ["现场大屏", "推进现场节点，编辑主持人提示和现场动作。"]
   };
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const fmt = t => t ? new Date(t).toLocaleString("zh-CN") : "";
+  const fmt = t => t ? new Date(t).toLocaleString("zh-CN", {hour12: false}) : "";
+  // 活动配置的时间用「日期选择器 + 24 小时制下拉」组合。
+  const pad2 = value => String(value).padStart(2, "0");
+  const splitTime = value => {
+    const text = String(value || "").trim();
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+    if (match) return {date: match[1] + "-" + match[2] + "-" + match[3], hour: match[4], minute: match[5]};
+    const parsed = new Date(text);
+    if (!text || Number.isNaN(parsed.getTime())) return {date: "", hour: "00", minute: "00"};
+    return {date: parsed.getFullYear() + "-" + pad2(parsed.getMonth() + 1) + "-" + pad2(parsed.getDate()), hour: pad2(parsed.getHours()), minute: pad2(parsed.getMinutes())};
+  };
+  const timeSelect = (name, label, selected, count) => {
+    let options = "";
+    for (let value = 0; value < count; value += 1) {
+      const text = pad2(value);
+      options += "<option value='" + text + "'" + (text === selected ? " selected" : "") + ">" + text + "</option>";
+    }
+    return "<select name='" + name + "' aria-label='" + label + "'>" + options + "</select>";
+  };
+  const timeInput = (name, label, value) => {
+    const parts = splitTime(value);
+    return "<div class='config-time'><input type='date' name='" + name + "Date' aria-label='" + label + "' value='" + parts.date + "'><span class='config-time-clock'>" + timeSelect(name + "Hour", label + " 小时", parts.hour, 24) + "<b>:</b>" + timeSelect(name + "Minute", label + " 分钟", parts.minute, 60) + "</span></div><small class='field-help'>24 小时制，日期留空表示不设置</small>";
+  };
+  const joinTime = (date, hour, minute) => {
+    const day = String(date || "").trim();
+    if (!day) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return undefined;
+    return day + "T" + pad2(hour || "00") + ":" + pad2(minute || "00");
+  };
   const modal = document.getElementById("applicant-modal");
   function toast(msg, tone = "info") { MinicampUI.toast(msg, {tone}); }
   function setHtml(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; }
@@ -160,7 +188,7 @@
   function renderConfig() {
     const box = document.getElementById("config-editor"); if (!box) return; const c = state.config || {};
     const pack = JSON.stringify(c.starterPack || {}, null, 2);
-    box.innerHTML = "<div class='admin-card-head'><h2>活动配置</h2><span>保存后官网实时生效</span></div><form class='field-grid'><label>活动名称<input name='eventName' value='" + esc(c.eventName) + "'></label><label>活动日期<input name='date' value='" + esc(c.date) + "'></label><label>活动地点<input name='venue' value='" + esc(c.venue) + "'></label><label>主题揭晓<input name='themeReveal' value='" + esc(c.themeReveal) + "'></label><label>报名截止<input type='datetime-local' name='applicationDeadline' value='" + (c.applicationDeadline ? c.applicationDeadline.slice(0, 16) : "") + "'></label><label>录取公布<input type='datetime-local' name='resultDate' value='" + (c.resultDate ? c.resultDate.slice(0, 16) : "") + "'></label><label>投票开始时间<input type='datetime-local' name='voteStartAt' value='" + (c.voteStartAt ? c.voteStartAt.slice(0, 16) : "") + "'></label><label>报名状态<select name='applicationOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>正式组队确认<select name='teamConfirmOpen'><option value='true'>开启</option><option value='false'>关闭</option></select></label><label>投票状态<select name='voteOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>参与者投票权重（%）<input name='participantWeight' type='number' min='0' max='100' value='" + Number(c.participantWeight || 60) + "'></label><label>Jury 投票权重（%）<input name='juryWeight' type='number' min='0' max='100' value='" + Number(c.juryWeight || 40) + "'></label><label class='config-pack'>Starter Pack（JSON）<textarea name='starterPack' rows='10'>" + esc(pack) + "</textarea></label><button class='button button-dark'>保存配置</button></form>";
+    box.innerHTML = "<div class='admin-card-head'><h2>活动配置</h2><span>保存后官网实时生效</span></div><form class='field-grid'><label>活动名称<input name='eventName' value='" + esc(c.eventName) + "'></label><label>活动日期<input name='date' value='" + esc(c.date) + "'></label><label>活动地点<input name='venue' value='" + esc(c.venue) + "'></label><label>主题揭晓<input name='themeReveal' value='" + esc(c.themeReveal) + "'></label><label>报名截止" + timeInput("applicationDeadline", "报名截止", c.applicationDeadline) + "</label><label>录取公布" + timeInput("resultDate", "录取公布", c.resultDate) + "</label><label>投票开始时间" + timeInput("voteStartAt", "投票开始时间", c.voteStartAt) + "</label><label>报名状态<select name='applicationOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>正式组队确认<select name='teamConfirmOpen'><option value='true'>开启</option><option value='false'>关闭</option></select></label><label>投票状态<select name='voteOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>参与者投票权重（%）<input name='participantWeight' type='number' min='0' max='100' value='" + Number(c.participantWeight || 60) + "'></label><label>Jury 投票权重（%）<input name='juryWeight' type='number' min='0' max='100' value='" + Number(c.juryWeight || 40) + "'></label><label class='config-pack'>Starter Pack（JSON）<textarea name='starterPack' rows='10'>" + esc(pack) + "</textarea></label><div class='config-actions'><button class='button button-dark'>保存配置</button></div></form>";
     box.querySelector('[name="applicationOpen"]').value = String(c.applicationOpen);
     box.querySelector('[name="teamConfirmOpen"]').value = String(Boolean(c.teamConfirmOpen));
     box.querySelector('[name="voteOpen"]').value = String(c.voteOpen);
@@ -169,7 +197,12 @@
       const d = Object.fromEntries(new FormData(e.currentTarget));
       d.applicationOpen = d.applicationOpen === "true"; d.teamConfirmOpen = d.teamConfirmOpen === "true"; d.voteOpen = d.voteOpen === "true";
       d.participantWeight = Number(d.participantWeight); d.juryWeight = Number(d.juryWeight);
-      d.voteStartAt = d.voteStartAt || null; d.applicationDeadline = d.applicationDeadline || null; d.resultDate = d.resultDate || null;
+      for (const key of ["applicationDeadline", "resultDate", "voteStartAt"]) {
+        const parsed = joinTime(d[key + "Date"], d[key + "Hour"], d[key + "Minute"]);
+        if (parsed === undefined) return toast("日期格式不正确，请重新选择。", "error");
+        d[key] = parsed;
+        delete d[key + "Date"]; delete d[key + "Hour"]; delete d[key + "Minute"];
+      }
       if (d.participantWeight + d.juryWeight !== 100) return toast("参与者与 Jury 权重之和必须为 100%。", "error");
       try { d.starterPack = JSON.parse(d.starterPack); } catch { return toast("Starter Pack 必须是有效的 JSON。", "error"); }
       try { await api.request("/api/admin/config", { method: "PATCH", body: JSON.stringify(d) }); toast("配置已保存，官网已同步", "success"); await load(); } catch (err) { toast(err.message, "error"); }

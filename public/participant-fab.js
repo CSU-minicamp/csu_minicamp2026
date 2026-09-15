@@ -2,7 +2,7 @@
   const root = document.getElementById("participant-fab-root");
   const api = window.MinicampAPI;
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, character => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character]));
-  if (!root || !api || document.body.dataset.page === "profile" || document.body.dataset.page === "profile-dashboard") return;
+  if (!root || !api || ["profile", "profile-dashboard", "admin"].includes(document.body.dataset.page)) return;
   const render = ({ participant } = {}) => {
     if (participant) {
       const name = participant.name || "参与者", id = participant.id || "已报名";

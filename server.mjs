@@ -34,11 +34,10 @@ const applicationStatuses=new Set(["待审核","已录取","已通过","候补",
 const legacyApplicationStatuses={pending:"待审核",accepted:"已录取",waitlist:"候补",reviewing:"待复审"};
 const legacySkillMap={DEV:"Frontend",PRODUCT:"Product",DESIGN:"Design","AI/DATA":"AI Engineer",HARDWARE:"Hardware",BUSINESS:"Product",CREATIVE:"Media",RESEARCH:"AI Engineer"};
 const normalizeSkills=values=>(Array.isArray(values)?values:[]).map(value=>legacySkillMap[value]||value);
-const isProfileComplete=p=>Boolean(p&&["name","studentId","college","major","grade","phone","email","motivation"].every(k=>String(p[k]||"").trim()));
 const formalAwards=["Best Overall","Best Product","Best Design","Best Technical","Most Unexpected"];
 async function readJsonDb(){try{return JSON.parse(await fs.readFile(dbPath,"utf8"));}catch{return clone(seed);}}
 function normalizeTeams(){db.teams=(db.teams||[]).map(team=>({...team,ownerId:team.memberIds?.includes(team.ownerId)?team.ownerId:team.memberIds?.[0]||"",published:team.published===true}));}
-function normalizeApplications(){db.applications=(db.applications||[]).map(item=>({...item,registration_type:item.registration_type||item.registrationType||"contestant",registrationType:item.registration_type||item.registrationType||"contestant",skills:normalizeSkills(item.skills),status:legacyApplicationStatuses[item.status]|| (applicationStatuses.has(item.status)?item.status:"待审核")}));}
+function normalizeApplications(){db.applications=(db.applications||[]).map(item=>{const legacy=String(item.grade||"").trim()?null:splitLegacyMajor(item.major);return {...item,registration_type:item.registration_type||item.registrationType||"contestant",registrationType:item.registration_type||item.registrationType||"contestant",skills:normalizeSkills(item.skills),...(legacy?{major:legacy.major,grade:legacy.grade}:{}),status:legacyApplicationStatuses[item.status]|| (applicationStatuses.has(item.status)?item.status:"待审核")};});}
 function normalizeIdeas(){db.ideas=(db.ideas||[]).map(item=>({...item,needs:normalizeSkills(item.needs)}));}
 async function loadDb(){
   try {
@@ -105,12 +104,21 @@ function participationModeFor(grade){return /大一|一年级|freshman/i.test(St
 function isContestant(p){return Boolean(p&&((p.registration_type||p.registrationType||"contestant")==="contestant"));}
 const contestantBasicFields=["name","studentId","college","major","grade","phone","email"];
 const contestantEditableFields=["skills","motivation","experience","portfolio"];
-function lockedContestantProfile(participant){
-  const major=String(participant?.major||"");
-  const grade=String(participant?.grade||"");
-  const match=!grade&&major.match(/^\s*(.*?)\s*·\s*(大一|大二|大三|大四|研究生)\s*$/);
-  return {name:String(participant?.name||""),studentId:String(participant?.studentId||""),college:String(participant?.college||""),major:match?match[1]:major,grade:match?match[2]:grade,phone:String(participant?.phone||""),email:String(participant?.email||"")};
+const splitLegacyMajor=value=>{const match=String(value||"").match(/^\s*(.*?)\s*·\s*(大一|大二|大三|大四|研究生)\s*$/);return match?{major:match[1],grade:match[2]}:null;};
+const identityFields=["name","studentId","college","major","phone","email"];
+const fieldLabels={name:"姓名",studentId:"学号",college:"学院",major:"专业",grade:"年级",phone:"手机号",email:"邮箱",motivation:"参与动机"};
+function normalizeContestantProfile(participant){
+  const legacy=String(participant?.grade||"").trim()?null:splitLegacyMajor(participant?.major);
+  return {name:String(participant?.name||""),studentId:String(participant?.studentId||""),college:String(participant?.college||""),major:legacy?legacy.major:String(participant?.major||""),grade:legacy?legacy.grade:String(participant?.grade||""),phone:String(participant?.phone||""),email:String(participant?.email||"")};
 }
+// 老数据可能缺少 grade（报名表加入年级之前提交的记录），身份与联系方式齐全即可加入预组队。
+const memberProfileGaps=p=>{if(!p)return identityFields.slice();const normalized=normalizeContestantProfile(p);return identityFields.filter(key=>!String(normalized[key]||"").trim());};
+function isProfileComplete(participant){
+  if(!participant)return false;
+  const normalized=normalizeContestantProfile(participant);
+  return !memberProfileGaps(participant).length&&Boolean(String(normalized.grade||"").trim())&&Boolean(String(participant.motivation||"").trim());
+}
+const lockedContestantProfile=normalizeContestantProfile;
 function patchContestantProfile(participant,data){
   const locked=lockedContestantProfile(participant);
   if(contestantBasicFields.some(key=>Object.hasOwn(data,key)&&String(data[key]??"").trim()!==locked[key].trim()))return {status:403,message:"基本信息不可修改"};
@@ -121,6 +129,7 @@ function patchContestantProfile(participant,data){
   for(const key of contestantEditableFields)if(Object.hasOwn(data,key))participant[key]=next[key];
   participant.entryType="个人报名";
   participant.participationMode=participationModeFor(participant.grade);
+  if(isAccepted(participant))participant.status="待复审";
   participant.updatedAt=new Date().toISOString();
   return null;
 }
@@ -137,7 +146,8 @@ function createPreTeam(owner,data){
   const members=ids.map(id=>db.applications.find(item=>String(item.id||"").toUpperCase()===id));
   if(members.some(member=>!member))return {error:"member not found",status:404};
   if(members.some(member=>!isContestant(member)))return {error:"member must be contestant",status:400};
-  if(members.some(member=>!isProfileComplete(member)))return {error:"member profile incomplete",status:400};
+  const incomplete=members.filter(member=>memberProfileGaps(member).length);
+  if(incomplete.length)return {error:"member profile incomplete: "+incomplete.map(member=>member.id+" 缺少 "+memberProfileGaps(member).map(key=>fieldLabels[key]||key).join("、")).join("；"),status:400};
   if(members.some(member=>member.teamId||db.teams.some(item=>(item.memberIds||[]).includes(member.id))))return {error:"member already belongs to a team",status:409};
   const team={id:"TEAM "+String(db.teams.length+1).padStart(2,"0"),ownerId:owner.id,code:"MC26-"+crypto.randomBytes(2).toString("hex").toUpperCase(),project:String(data.project||"").trim()||"Untitled",theme:"TBD",memberIds:[owner.id,...members.map(member=>member.id)],status:"draft",locked:false,published:false,testFixture:testFixtureMode()};
   db.teams.push(team);
