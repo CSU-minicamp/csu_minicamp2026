@@ -22,7 +22,7 @@
     const intro = document.querySelector(".apply-intro > p:nth-of-type(2)");
     if (intro) intro.textContent = config.applicationOpen ? "仅面向中南大学在校学生。请如实填写每一项，提交后可凭申请编号和联系方式登录个人主页，查看审核状态与通知。" : "报名通道暂未开放，主办方确定时间后会在官网和主办方 QQ 群同步公布。";
     if (!config.applicationOpen) {
-      const launcher = document.querySelector(".application-launcher");
+      const launcher = document.querySelector(".application-choice-column, .application-launcher");
       if (launcher) launcher.innerHTML = "<div class='form-head'><div><span class='status-dot' style='background:var(--coral)'></span>报名通道</div><span>CLOSED</span></div><div class='application-launcher-body'><p class='section-kicker'>APPLICATION / CLOSED</p><h3>报名通道<br>暂未开放。</h3><p>报名开放与截止时间确定后，会第一时间在官网和主办方 QQ 群公布。已经报名的同学可以进入个人主页查看审核状态与通知。</p><a class='button button-dark' href='profile.html'>进入个人主页 <span>↗</span></a></div>";
     }
   }).catch(() => {});
@@ -81,6 +81,27 @@
   });
   closeApplication?.addEventListener("click", () => applicationModal?.close());
   applicationModal?.addEventListener("click", event => { if (event.target === applicationModal) applicationModal.close(); });
+  const roadshowModal = document.getElementById("roadshow-modal");
+  const roadshowForm = document.getElementById("roadshow-form");
+  document.getElementById("open-roadshow")?.addEventListener("click", () => roadshowModal?.showModal());
+  document.getElementById("close-roadshow")?.addEventListener("click", () => roadshowModal?.close());
+  roadshowModal?.addEventListener("click", event => { if (event.target === roadshowModal) roadshowModal.close(); });
+  roadshowForm?.querySelector('input[name="phone"]')?.addEventListener("input", event => { event.target.value = event.target.value.replace(/\D/g, "").slice(0, 11); });
+  roadshowForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const error = document.getElementById("roadshow-error"), submit = roadshowForm.querySelector("button[type=submit]");
+    const data = new FormData(roadshowForm), payload = Object.fromEntries(data.entries());
+    payload.registration_type = "roadshow";
+    payload.attend_roadshow = data.get("attend_roadshow") === "true";
+    payload.receive_notifications = data.get("receive_notifications") === "true";
+    if (!api.isValidPhone(payload.phone)) { error.textContent = "请输入 11 位手机号。"; return; }
+    submit.disabled = true; error.textContent = "";
+    try {
+      const result = await api.request("/api/applications", {method:"POST", body:JSON.stringify(payload)});
+      api.setToken(result.token); roadshowForm.hidden = true; document.getElementById("roadshow-success").hidden = false; document.getElementById("roadshow-id").textContent = result.application.id;
+    } catch (err) { error.textContent = err.message; } finally { submit.disabled = false; }
+  });
+  document.getElementById("close-roadshow-success")?.addEventListener("click", () => roadshowModal?.close());
   if (!form) return;
   const steps = [...form.querySelectorAll(".form-step")], progress = document.getElementById("form-progress"), error = document.getElementById("form-error");
   form.querySelectorAll('input[name="phone"]').forEach(input => input.addEventListener("input", () => { const digits = input.value.replace(/\D/g, "").slice(0, 11); if (input.value !== digits) input.value = digits; }));

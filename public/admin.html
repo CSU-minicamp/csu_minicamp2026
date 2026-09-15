@@ -47,8 +47,8 @@
       </section>
 
       <section class="admin-panel" id="panel-applicants">
-        <div class="panel-toolbar"><div class="toolbar-left"><input class="admin-search" id="applicant-search" placeholder="搜索姓名 / 学院 / 专业 / 申请编号 / 联系方式"><select class="admin-select" id="applicant-status"><option value="全部">全部状态</option><option value="待审核">待审核</option><option value="已录取">已录取</option><option value="候补">候补</option><option value="待复审">待复审</option></select></div><div class="toolbar-right"><button class="outline-button" id="export-csv">导出 CSV</button><button class="outline-button primary" id="refresh-data">刷新数据</button></div></div>
-        <div class="table-wrap"><table class="data-table"><thead><tr><th>申请人</th><th>申请编号</th><th>联系方式</th><th>能力标签</th><th>提交时间</th><th>状态</th><th>操作</th></tr></thead><tbody id="applicants-table"></tbody></table></div>
+        <div class="panel-toolbar"><div class="toolbar-left"><input class="admin-search" id="applicant-search" placeholder="搜索姓名 / 学院 / 专业 / 申请编号 / 联系方式"><select class="admin-select" id="applicant-type"><option value="全部">全部报名类型</option><option value="roadshow">路演报名</option><option value="contestant">参赛报名</option></select><select class="admin-select" id="applicant-status"><option value="全部">全部状态</option><option value="待审核">待审核</option><option value="已录取">已录取</option><option value="候补">候补</option><option value="待复审">待复审</option><option value="已通过">已通过</option><option value="未通过">未通过</option></select></div><div class="toolbar-right"><button class="outline-button" id="export-csv">导出 CSV</button><button class="outline-button primary" id="refresh-data">刷新数据</button></div></div>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>申请人</th><th>报名类型</th><th>报名码</th><th>联系方式</th><th>能力标签</th><th>提交时间</th><th>状态</th><th>操作</th></tr></thead><tbody id="applicants-table"></tbody></table></div>
       </section>
 
       <section class="admin-panel" id="panel-notices">
@@ -131,5 +131,7 @@
 
   <div class="toast" id="admin-toast" role="status"></div>
   <script src="api.js"></script><script src="stage.js"></script><script src="admin.js"></script>
+  <div id="participant-fab-root"></div>
+  <script src="api.js"></script><script src="participant-fab.js"></script>
 </body>
 </html>

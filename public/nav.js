@@ -55,6 +55,16 @@
     if (event.key === "Escape") closeMenu();
   });
 
+  window.MinicampAPI?.request("/api/me").then(({participant}) => {
+    const type = participant.registration_type || participant.registrationType || "contestant";
+    const pending = participant.status === "待审核";
+    if (type === "roadshow" || pending) {
+      header.querySelectorAll('a[href="team.html"],a[href="gallery.html"],a[href="voting.html"],a[data-voting-entry]').forEach(link => link.remove());
+    }
+    if (type === "roadshow") {
+      header.querySelector(".button-small")?.setAttribute("href", page === "home" ? "#apply" : "index.html#apply");
+    }
+  }).catch(() => {});
   window.MinicampAPI?.request("/api/config").then(({ config }) => {
     if (config.voteOpen) return;
     header.querySelectorAll("[data-voting-entry]").forEach(link => {

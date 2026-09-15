@@ -3,7 +3,7 @@
   let state;
   const root = document.querySelector(".admin-main");
   const SKILLS = ["Frontend", "Backend", "Product", "Design", "Hardware", "AI Engineer", "Media"];
-  const STATUSES = ["待审核", "已录取", "候补", "待复审"];
+  const STATUSES = ["待审核", "已录取", "已通过", "候补", "待复审", "未通过"];
   const STATUS_CLASS = { "待审核": "status-pending", "已录取": "status-accepted", "候补": "status-waitlist", "待复审": "status-pending" };
   const PANEL_META = {
     overview: ["报名总览", "集中管理报名、审核、录取与通知。"],
@@ -69,16 +69,18 @@
   function applyFilters() {
     const q = (document.getElementById("applicant-search")?.value || "").trim().toLowerCase();
     const status = document.getElementById("applicant-status")?.value || "全部";
+    const type = document.getElementById("applicant-type")?.value || "全部";
     const list = (state.applications || []).filter(a => {
       const okStatus = status === "全部" || a.status === status;
+      const okType = type === "全部" || (a.registration_type || "contestant") === type;
       const okQ = !q || [a.name, a.college, a.major, a.id, a.email, a.phone].some(v => String(v || "").toLowerCase().includes(q));
-      return okStatus && okQ;
+      return okStatus && okType && okQ;
     });
     renderRows(list);
   }
   function renderRows(list) {
     const tbody = document.getElementById("applicants-table"); if (!tbody) return;
-    tbody.innerHTML = list.map(x => "<tr><td class='name-cell'><span class='mini-avatar'>" + esc((x.name || "?").slice(0, 1)) + "</span><div><strong>" + esc(x.name) + "</strong><br><small>" + esc(x.college) + " · " + esc(x.major) + "</small></div></td><td>" + esc(x.id) + "</td><td><small>" + esc(x.phone || "—") + "<br>" + esc(x.email || "—") + "</small></td><td>" + ((x.skills || []).map(s => "<span class='tag'>" + esc(s) + "</span>").join(" ") || "—") + "</td><td><small>" + fmt(x.createdAt) + "</small></td><td><select class='status-select' data-id='" + esc(x.id) + "'>" + STATUSES.map(s => "<option " + (s === x.status ? "selected" : "") + ">" + s + "</option>").join("") + "</select></td><td><button class='row-action' data-view='" + esc(x.id) + "'>查看</button></td></tr>").join("") || "<tr><td colspan='7'><div class='empty-state'>没有符合条件的报名</div></td></tr>";
+    tbody.innerHTML = list.map(x => "<tr><td class='name-cell'><span class='mini-avatar'>" + esc((x.name || "?").slice(0, 1)) + "</span><div><strong>" + esc(x.name) + "</strong><br><small>" + esc(x.college) + " · " + esc(x.major) + "</small></div></td><td>" + ((x.registration_type || "contestant") === "roadshow" ? "路演报名" : "参赛报名") + "</td><td>" + esc(x.id) + "</td><td><small>" + esc(x.phone || "—") + "<br>" + esc(x.email || "—") + "</small></td><td>" + ((x.skills || []).map(s => "<span class='tag'>" + esc(s) + "</span>").join(" ") || "—") + "</td><td><small>" + fmt(x.createdAt) + "</small></td><td><select class='status-select' data-id='" + esc(x.id) + "'>" + STATUSES.map(s => "<option " + (s === x.status ? "selected" : "") + ">" + s + "</option>").join("") + "</select></td><td><button class='row-action' data-view='" + esc(x.id) + "'>查看</button></td></tr>").join("") || "<tr><td colspan='7'><div class='empty-state'>没有符合条件的报名</div></td></tr>";
     tbody.querySelectorAll(".status-select").forEach(sel => sel.onchange = async () => { try { await api.request("/api/admin/applications", { method: "PATCH", body: JSON.stringify({ id: sel.dataset.id, status: sel.value }) }); toast("已更新为「" + sel.value + "」"); await load(); } catch (e) { toast(e.message); } });
     tbody.querySelectorAll("[data-view]").forEach(b => b.onclick = () => openDetail(b.dataset.view));
   }
@@ -107,8 +109,8 @@
     if (total) total.textContent = teams.length + " 支队伍";
     setHtml("admin-team-board", teams.map(team => {
       const members = (team.members || []).map(member => "<li>" + esc(member.name) + "<small>" + esc((member.skills || []).join(" / ") || "未填写能力标签") + "</small></li>").join("") || "<li>暂无成员</li>";
-      const status = team.locked ? "已锁定" : team.members.length < 3 ? "待补齐成员" : "可锁定";
-      return "<article class='team-card-admin'><div class='team-card-head'><strong>" + esc(team.project || team.id) + "</strong><span>" + team.members.length + " / 5 人</span></div><p>" + esc(team.id) + " · " + esc(team.code) + "</p><small>" + status + "</small><ul class='team-member-list'>" + members + "</ul><button class='outline-button admin-team-lock' data-id='" + esc(team.id) + "' data-locked='" + String(!team.locked) + "'>" + (team.locked ? "解除锁定" : "锁定队伍") + "</button></article>";
+      const status = team.locked ? "正式队伍·已锁定" : (state.config?.teamConfirmOpen ? "正式确认已开启·等待队长提交" : "预组队中·可继续招募");
+      return "<article class='team-card-admin'><div class='team-card-head'><strong>" + esc(team.project || team.id) + "</strong><span>" + team.members.length + " / 5 人</span></div><p>" + esc(team.id) + " · " + esc(team.code) + (team.ownerId ? " · 队长 " + esc(team.ownerId) : "") + "</p><small>" + status + "</small><ul class='team-member-list'>" + members + "</ul><button class='outline-button admin-team-lock' data-id='" + esc(team.id) + "' data-locked='" + String(!team.locked) + "'>" + (team.locked ? "解除正式锁定" : (state.config?.teamConfirmOpen ? "管理员锁定队伍" : "预览锁定（确认开启后生效）")) + "</button></article>";
     }).join("") || "<p class='empty-state'>暂无队伍</p>");
     document.querySelectorAll(".admin-team-lock").forEach(button => button.onclick = async () => {
       try {
@@ -158,13 +160,14 @@
   function renderConfig() {
     const box = document.getElementById("config-editor"); if (!box) return; const c = state.config || {};
     const pack = JSON.stringify(c.starterPack || {}, null, 2);
-    box.innerHTML = "<div class='admin-card-head'><h2>活动配置</h2><span>保存后官网实时生效</span></div><form class='field-grid'><label>活动名称<input name='eventName' value='" + esc(c.eventName) + "'></label><label>活动日期<input name='date' value='" + esc(c.date) + "'></label><label>活动地点<input name='venue' value='" + esc(c.venue) + "'></label><label>主题揭晓<input name='themeReveal' value='" + esc(c.themeReveal) + "'></label><label>报名截止<input type='datetime-local' name='applicationDeadline' value='" + (c.applicationDeadline ? c.applicationDeadline.slice(0, 16) : "") + "'></label><label>录取公布<input type='datetime-local' name='resultDate' value='" + (c.resultDate ? c.resultDate.slice(0, 16) : "") + "'></label><label>投票开始时间<input type='datetime-local' name='voteStartAt' value='" + (c.voteStartAt ? c.voteStartAt.slice(0, 16) : "") + "'></label><label>报名状态<select name='applicationOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>投票状态<select name='voteOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>参与者投票权重（%）<input name='participantWeight' type='number' min='0' max='100' value='" + Number(c.participantWeight || 60) + "'></label><label>Jury 投票权重（%）<input name='juryWeight' type='number' min='0' max='100' value='" + Number(c.juryWeight || 40) + "'></label><label class='config-pack'>Starter Pack（JSON）<textarea name='starterPack' rows='10'>" + esc(pack) + "</textarea></label><button class='button button-dark'>保存配置</button></form>";
+    box.innerHTML = "<div class='admin-card-head'><h2>活动配置</h2><span>保存后官网实时生效</span></div><form class='field-grid'><label>活动名称<input name='eventName' value='" + esc(c.eventName) + "'></label><label>活动日期<input name='date' value='" + esc(c.date) + "'></label><label>活动地点<input name='venue' value='" + esc(c.venue) + "'></label><label>主题揭晓<input name='themeReveal' value='" + esc(c.themeReveal) + "'></label><label>报名截止<input type='datetime-local' name='applicationDeadline' value='" + (c.applicationDeadline ? c.applicationDeadline.slice(0, 16) : "") + "'></label><label>录取公布<input type='datetime-local' name='resultDate' value='" + (c.resultDate ? c.resultDate.slice(0, 16) : "") + "'></label><label>投票开始时间<input type='datetime-local' name='voteStartAt' value='" + (c.voteStartAt ? c.voteStartAt.slice(0, 16) : "") + "'></label><label>报名状态<select name='applicationOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>正式组队确认<select name='teamConfirmOpen'><option value='true'>开启</option><option value='false'>关闭</option></select></label><label>投票状态<select name='voteOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>参与者投票权重（%）<input name='participantWeight' type='number' min='0' max='100' value='" + Number(c.participantWeight || 60) + "'></label><label>Jury 投票权重（%）<input name='juryWeight' type='number' min='0' max='100' value='" + Number(c.juryWeight || 40) + "'></label><label class='config-pack'>Starter Pack（JSON）<textarea name='starterPack' rows='10'>" + esc(pack) + "</textarea></label><button class='button button-dark'>保存配置</button></form>";
     box.querySelector('[name="applicationOpen"]').value = String(c.applicationOpen);
+    box.querySelector('[name="teamConfirmOpen"]').value = String(Boolean(c.teamConfirmOpen));
     box.querySelector('[name="voteOpen"]').value = String(c.voteOpen);
     box.querySelector("form").onsubmit = async e => {
       e.preventDefault();
       const d = Object.fromEntries(new FormData(e.currentTarget));
-      d.applicationOpen = d.applicationOpen === "true"; d.voteOpen = d.voteOpen === "true";
+      d.applicationOpen = d.applicationOpen === "true"; d.teamConfirmOpen = d.teamConfirmOpen === "true"; d.voteOpen = d.voteOpen === "true";
       d.participantWeight = Number(d.participantWeight); d.juryWeight = Number(d.juryWeight);
       d.voteStartAt = d.voteStartAt || null; d.applicationDeadline = d.applicationDeadline || null; d.resultDate = d.resultDate || null;
       if (d.participantWeight + d.juryWeight !== 100) return toast("参与者与 Jury 权重之和必须为 100%。");
@@ -218,7 +221,7 @@
   }
 
   function exportCsv() {
-    const cols = [["申请编号", "id"], ["姓名", "name"], ["学号", "studentId"], ["学院", "college"], ["专业", "major"], ["年级", "grade"], ["手机号", "phone"], ["邮箱", "email"], ["能力标签", a => (a.skills || []).join(" / ")], ["参与动机", "motivation"], ["经历", "experience"], ["作品集", "portfolio"], ["能帮助", "canHelpWith"], ["想探索", "explore"], ["找我聊", "askMeAbout"], ["状态", "status"], ["提交时间", a => fmt(a.createdAt)]];
+    const cols = [["报名类型", a => (a.registration_type || "contestant") === "roadshow" ? "路演报名" : "参赛报名"], ["报名编号", "id"], ["姓名", "name"], ["学号", "studentId"], ["学院", "college"], ["专业", "major"], ["年级", "grade"], ["手机号", "phone"], ["邮箱", "email"], ["能力标签", a => (a.skills || []).join(" / ")], ["参与动机", "motivation"], ["经历", "experience"], ["作品集", "portfolio"], ["能帮助", "canHelpWith"], ["想探索", "explore"], ["找我聊", "askMeAbout"], ["状态", "status"], ["提交时间", a => fmt(a.createdAt)]];
     const cell = v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
     const head = cols.map(c => cell(c[0])).join(",");
     const rows = (state.applications || []).map(a => cols.map(c => cell(typeof c[1] === "function" ? c[1](a) : a[c[1]])).join(","));
@@ -231,6 +234,7 @@
 
   document.getElementById("applicant-search")?.addEventListener("input", applyFilters);
   document.getElementById("applicant-status")?.addEventListener("change", applyFilters);
+  document.getElementById("applicant-type")?.addEventListener("change", applyFilters);
   document.getElementById("export-csv")?.addEventListener("click", exportCsv);
   document.getElementById("refresh-data")?.addEventListener("click", () => { load(); toast("已刷新"); });
   document.getElementById("notice-form")?.addEventListener("submit", async e => {

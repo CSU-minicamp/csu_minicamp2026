@@ -169,11 +169,42 @@
           </ul>
         </div>
 
-<div class="application-launcher">
-          <div class="form-head" id="launcher-head"><div><span class="status-dot"></span>报名通道</div><span id="launcher-status">OPEN</span></div>
-          <div class="application-launcher-body"><p class="section-kicker">APPLICATION / START</p><h3>准备好加入这场<br>现场创造了吗？</h3><p>报名资料大约需要几分钟完成。提交后，你可以在个人主页查看审核状态并随时修改资料。</p><button class="button button-dark" id="open-application" type="button">开始报名 <span>↗</span></button><small>已经提交过？<a href="profile.html">进入个人主页</a></small></div>
-        </div>
-
+<div class="application-choice-column">
+  <p class="application-choice-note">如果你只想参加现场路演，请选择左侧；如果你需要组队、提交项目并参加评审，请选择右侧。</p>
+  <div class="application-choice-grid">
+    <article class="application-choice-card application-choice-roadshow">
+      <p class="section-kicker">ROADSHOW / VISITOR</p><h3>只报名路演</h3>
+      <p>来现场认识项目，参与交流互动<br>适合大一学生、研究生及校外朋友<br>不需要组队，不需要提交项目</p>
+      <strong>填写信息，获取路演报名码</strong>
+      <button class="button button-dark" id="open-roadshow" type="button">只报名路演 <span>↗</span></button>
+    </article>
+    <article class="application-choice-card application-choice-contest">
+      <p class="section-kicker">CONTEST / PARTICIPANT</p><h3>报名参赛选手</h3>
+      <p>带上你的想法，正式加入比赛<br>审核通过后，可进入组队工作区<br>支持创建队伍、加入队伍和上传项目</p>
+      <strong>提交资料，开启比赛之旅</strong>
+      <button class="button button-primary" id="open-application" type="button">报名参赛 <span>↗</span></button>
+    </article>
+  </div>
+  <div class="application-choice-login">已经提交过？<a href="profile.html">进入个人主页</a></div>
+</div>        <dialog id="roadshow-modal" class="application-box application-modal" aria-labelledby="roadshow-modal-title">
+          <div class="form-head"><div><span class="status-dot"></span>路演报名</div><span>自动通过</span></div>
+          <button class="modal-close" id="close-roadshow" type="button" aria-label="关闭路演报名弹窗">×</button>
+          <form id="roadshow-form" novalidate>
+            <p class="section-kicker">ROADSHOW / REGISTER</p><h3 id="roadshow-modal-title">填写路演报名信息</h3>
+            <p class="form-caption">提交后自动通过，并生成独立的路演报名码。</p>
+            <div class="field-grid">
+              <label>姓名<input name="name" required autocomplete="name"></label>
+              <label>手机号<input name="phone" required inputmode="numeric" pattern="[0-9]{11}" maxlength="11"></label>
+              <label>邮箱<input name="email" required type="email"></label>
+              <label>身份类型<select name="identity_type" required><option value="">请选择</option><option>大一学生</option><option>研究生</option><option>校外人员</option><option>其他在校生</option></select></label>
+              <label>学校 / 单位<input name="school_or_company" required></label>
+              <label>年级 / 职位<input name="grade_or_position" required></label>
+            </div>
+            <fieldset><legend>活动选择</legend><label class="consent"><input type="checkbox" name="attend_roadshow" value="true" checked><span>参加现场路演</span></label><label class="consent"><input type="checkbox" name="receive_notifications" value="true" checked><span>接收活动通知</span></label></fieldset>
+            <p class="form-error" id="roadshow-error" role="alert"></p><div class="form-actions"><button class="button button-primary" type="submit">提交路演报名 <span>↗</span></button></div>
+          </form>
+          <div class="form-success" id="roadshow-success" hidden><span class="success-mark">✓</span><p class="section-kicker">ROADSHOW REGISTERED</p><h3>路演报名成功。</h3><p>你的路演报名码是 <strong id="roadshow-id">RO-2026-000001</strong>。请使用报名码和手机号或邮箱登录个人中心。</p><div class="success-actions"><a class="button button-dark" href="profile.html">进入个人中心</a><button class="text-link dark-link" id="close-roadshow-success" type="button">完成 <span>↗</span></button></div></div>
+        </dialog>
         <dialog id="application-modal" class="application-box application-modal" aria-labelledby="application-modal-title">
           <div class="form-head">
             <div><span class="status-dot"></span>报名通道</div>
@@ -380,9 +411,11 @@
 </aside>
 
   <div class="toast" id="toast" role="status"></div>
-  <script src="api.js"></script><script src="nav.js"></script><script src="app.js"></script>
+  <div id="participant-fab-root"></div>
+  <script src="api.js"></script><script src="nav.js"></script><script src="app.js"></script><script src="participant-fab.js"></script>
 </body>
 </html>
+
 
 
 
