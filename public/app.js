@@ -1,6 +1,42 @@
 (() => {
   const api = window.MinicampAPI;
   const form = document.getElementById("application-form");
+  const FIELD_LABELS = {name:"姓名",studentId:"学号",college:"学院",major:"专业",grade:"年级",phone:"手机号",email:"邮箱",motivation:"参与动机",consent:"信息真实性确认",identity_type:"身份类型",school_or_company:"学校 / 单位",grade_or_position:"年级 / 职位"};
+  const labelOf = field => {
+    if (FIELD_LABELS[field.name]) return FIELD_LABELS[field.name];
+    const label = field.closest("label");
+    const text = label ? [...label.childNodes].find(node => node.nodeType === 3 && node.textContent.trim()) : null;
+    return text ? text.textContent.trim() : field.name;
+  };
+  const clearFieldErrors = scope => scope?.querySelectorAll(".field-error, .field-error-group").forEach(item => item.classList.remove("field-error", "field-error-group"));
+  const markFieldError = field => {
+    if (!field) return;
+    field.classList.add("field-error");
+    if (field.type === "checkbox" || field.type === "radio") field.closest("fieldset, label")?.classList.add("field-error-group");
+  };
+  // 只提示第一项缺失 / 无效的必填项，并高亮该字段。
+  const reminderFor = field => {
+    if (field.name === "phone" && !api.isValidPhone(field.value)) return "请输入 11 位手机号。";
+    if (field.name === "studentId" && !api.isValidStudentId(field.value)) return "请输入 10 位数字学号。";
+    if (field.type === "checkbox" || field.type === "radio") return "请勾选" + labelOf(field) + "。";
+    if (field.tagName === "SELECT") return "请选择" + labelOf(field) + "。";
+    if (!String(field.value || "").trim()) return "请填写" + labelOf(field) + "。";
+    return "请检查" + labelOf(field) + "是否正确。";
+  };
+  const reportMissing = (scope, errorNode) => {
+    clearFieldErrors(scope);
+    const field = [...scope.querySelectorAll("input, select, textarea")].find(item => !item.checkValidity() || (item.name === "phone" && !api.isValidPhone(item.value)) || (item.name === "studentId" && !api.isValidStudentId(item.value)));
+    if (!field) return false;
+    markFieldError(field);
+    errorNode.textContent = reminderFor(field);
+    field.focus();
+    return true;
+  };
+  const clearOnEdit = scope => scope?.querySelectorAll("input, select, textarea").forEach(field => {
+    const drop = () => { field.classList.remove("field-error"); field.closest(".field-error-group")?.classList.remove("field-error-group"); };
+    field.addEventListener("input", drop);
+    field.addEventListener("change", drop);
+  });
   const configPromise = api.request("/api/config").then(({config}) => {
     document.querySelectorAll("[data-config-date]").forEach(el => el.textContent = config.date);
     document.querySelectorAll("[data-voting-entry]").forEach(el => {
@@ -87,15 +123,17 @@
   document.getElementById("close-roadshow")?.addEventListener("click", () => roadshowModal?.close());
   roadshowModal?.addEventListener("click", event => { if (event.target === roadshowModal) roadshowModal.close(); });
   roadshowForm?.querySelector('input[name="phone"]')?.addEventListener("input", event => { event.target.value = event.target.value.replace(/\D/g, "").slice(0, 11); });
+  clearOnEdit(roadshowForm);
   roadshowForm?.addEventListener("submit", async event => {
     event.preventDefault();
     const error = document.getElementById("roadshow-error"), submit = roadshowForm.querySelector("button[type=submit]");
+    error.textContent = "";
+    if (reportMissing(roadshowForm, error)) return;
     const data = new FormData(roadshowForm), payload = Object.fromEntries(data.entries());
     payload.registration_type = "roadshow";
     payload.attend_roadshow = data.get("attend_roadshow") === "true";
     payload.receive_notifications = data.get("receive_notifications") === "true";
-    if (!api.isValidPhone(payload.phone)) { error.textContent = "请输入 11 位手机号。"; return; }
-    submit.disabled = true; error.textContent = "";
+    submit.disabled = true;
     try {
       const result = await api.request("/api/applications", {method:"POST", body:JSON.stringify(payload)});
       api.setToken(result.token); roadshowForm.hidden = true; document.getElementById("roadshow-success").hidden = false; document.getElementById("roadshow-id").textContent = result.application.id;
@@ -115,8 +153,14 @@
     gradeField?.setAttribute("aria-describedby", freshman ? "freshman-help" : "");
   };
   let current = 1;
-  const showStep = step => { current = step; steps.forEach(item => { item.hidden = Number(item.dataset.step) !== step; item.classList.toggle("active", Number(item.dataset.step) === step); }); progress.textContent = "步骤 " + step + " / 3"; prev.classList.toggle("hidden", step === 1); next.classList.toggle("hidden", step === 3); next.textContent = step === 1 ? "开始填写" : "继续"; submit.classList.toggle("hidden", step !== 3); error.textContent = ""; };
-  const validate = step => { const panel = steps[step - 1]; const phone = panel.querySelector('input[name="phone"]'); if (phone && !api.isValidPhone(phone.value)) { phone.focus(); error.textContent = "请输入 11 位手机号。"; return false; } const studentId = panel.querySelector('input[name="studentId"]'); if (studentId && !api.isValidStudentId(studentId.value)) { studentId.focus(); error.textContent = "请输入 10 位数字学号。"; return false; } for (const field of panel.querySelectorAll("[required]")) if (!field.checkValidity()) { field.focus(); error.textContent = "请完成当前步骤中的必填信息。"; return false; } if (step === 2 && !form.querySelector('input[name="skills"]:checked')) { error.textContent = "请至少选择一项能力标签。"; return false; } return true; };
+  const showStep = step => { current = step; steps.forEach(item => { item.hidden = Number(item.dataset.step) !== step; item.classList.toggle("active", Number(item.dataset.step) === step); }); progress.textContent = "步骤 " + step + " / 3"; prev.classList.toggle("hidden", step === 1); next.classList.toggle("hidden", step === 3); next.textContent = step === 1 ? "开始填写" : "继续"; submit.classList.toggle("hidden", step !== 3); error.textContent = ""; clearFieldErrors(form); };
+  const validate = step => {
+    const panel = steps[step - 1];
+    if (reportMissing(panel, error)) return false;
+    if (step === 2 && !form.querySelector('input[name="skills"]:checked')) { form.querySelector(".skill-grid")?.classList.add("field-error-group"); error.textContent = "请至少选择一项能力标签（最多 2 项）。"; return false; }
+    return true;
+  };
+  clearOnEdit(form);
   next.addEventListener("click", () => validate(current) && showStep(current + 1));
   prev.addEventListener("click", () => showStep(current - 1));
   gradeField?.addEventListener("change", updateGradeHelp);

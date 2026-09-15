@@ -174,7 +174,7 @@
   <div class="application-choice-grid">
     <article class="application-choice-card application-choice-roadshow">
       <p class="section-kicker">ROADSHOW / VISITOR</p><h3>只报名路演</h3>
-      <p>来现场认识项目，参与交流互动<br>适合大一学生、研究生及校外朋友<br>不需要组队，不需要提交项目</p>
+      <p>来现场认识项目，参与交流互动<br>适合各年级在校生、教职工、校友及校外朋友<br>不需要组队，不需要提交项目</p>
       <strong>填写信息，获取路演报名码</strong>
       <button class="button button-dark" id="open-roadshow" type="button">只报名路演 <span>↗</span></button>
     </article>
@@ -196,11 +196,11 @@
               <label>姓名<input name="name" required autocomplete="name"></label>
               <label>手机号<input name="phone" required inputmode="numeric" pattern="[0-9]{11}" maxlength="11"></label>
               <label>邮箱<input name="email" required type="email"></label>
-              <label>身份类型<select name="identity_type" required><option value="">请选择</option><option>大一学生</option><option>研究生</option><option>校外人员</option><option>其他在校生</option></select></label>
+              <label>身份类型<select name="identity_type" required><option value="">请选择</option><option>大一学生</option><option>大二学生</option><option>大三学生</option><option>大四学生</option><option>研究生</option><option>其他在校生</option><option>教职工</option><option>校友</option><option>校外人员</option><option>企业人士</option></select></label>
               <label>学校 / 单位<input name="school_or_company" required></label>
               <label>年级 / 职位<input name="grade_or_position" required></label>
             </div>
-            <fieldset><legend>活动选择</legend><label class="consent"><input type="checkbox" name="attend_roadshow" value="true" checked><span>参加现场路演</span></label><label class="consent"><input type="checkbox" name="receive_notifications" value="true" checked><span>接收活动通知</span></label></fieldset>
+            <fieldset class="choice-fieldset"><legend>活动选择</legend><label class="consent"><input type="checkbox" name="attend_roadshow" value="true" checked><span>参加现场路演</span></label><label class="consent"><input type="checkbox" name="receive_notifications" value="true" checked><span>接收活动通知</span></label></fieldset>
             <p class="form-error" id="roadshow-error" role="alert"></p><div class="form-actions"><button class="button button-primary" type="submit">提交路演报名 <span>↗</span></button></div>
           </form>
           <div class="form-success" id="roadshow-success" hidden><span class="success-mark">✓</span><p class="section-kicker">ROADSHOW REGISTERED</p><h3>路演报名成功。</h3><p>你的路演报名码是 <strong id="roadshow-id">RO-2026-000001</strong>。请使用报名码和手机号或邮箱登录个人中心。</p><div class="success-actions"><a class="button button-dark" href="profile.html">进入个人中心</a><button class="text-link dark-link" id="close-roadshow-success" type="button">完成 <span>↗</span></button></div></div>

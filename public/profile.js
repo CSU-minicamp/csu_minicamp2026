@@ -53,12 +53,29 @@
       const roadshowBox = document.getElementById("roadshow-profile");
       if (roadshowBox) {
         roadshowBox.hidden = !roadshow;
-        roadshowBox.innerHTML = roadshow ? "<div class='roadshow-summary'><p class='section-kicker'>ROADSHOW PROFILE</p><h3>路演报名已通过</h3><p>报名码 <strong>" + escapeHtml(current.id) + "</strong></p><dl><div><dt>身份类型</dt><dd>" + escapeHtml(current.identity_type) + "</dd></div><div><dt>学校 / 单位</dt><dd>" + escapeHtml(current.school_or_company) + "</dd></div><div><dt>年级 / 职位</dt><dd>" + escapeHtml(current.grade_or_position) + "</dd></div><div><dt>现场路演</dt><dd>" + (current.attend_roadshow ? "参加" : "不参加") + "</dd></div><div><dt>活动通知</dt><dd>" + (current.receive_notifications ? "接收" : "不接收") + "</dd></div></dl><p class='field-help'>路演用户仅可查看和修改个人资料、报名码和活动通知。如需参赛，请从首页重新选择“报名参赛”。</p></div>" : "";
+        roadshowBox.innerHTML = roadshow ? "<div class='roadshow-summary'><p class='section-kicker'>ROADSHOW PROFILE</p><h3>路演报名已通过</h3><p>报名码 <strong>" + escapeHtml(current.id) + "</strong></p><p class='field-help'>下面是你的路演报名资料，可随时修改并保存，主办方会同步看到最新版本。如需参赛、组队与提交项目，请从首页重新选择「报名参赛」。</p></div>" : "";
         document.querySelectorAll('[data-profile-panel="profile-votes"],#profile-votes,.profile-side-tip').forEach(el => { if (roadshow) el.hidden = true; });
       }
-      document.getElementById("profile-name").textContent = current.name; document.getElementById("profile-application-id").textContent = current.id; document.getElementById("profile-status").innerHTML = "<strong>" + escapeHtml(current.status) + "</strong><span>" + (data.team ? escapeHtml(data.team.id) + " · " + data.team.members.length + " 人" : "尚未确认队伍") + "</span>"; renderIntendedTeammates(data.team); if (profileRequired && !api.isProfileComplete(current)) { activatePanel("profile-details"); document.getElementById("edit-save-state").textContent = "请先完善所有必填个人信息，再继续。"; }
+      const roadshowReady = ["name", "phone", "email", "identity_type", "school_or_company", "grade_or_position"].every(key => String(current[key] || "").trim());
+      document.getElementById("profile-name").textContent = current.name; document.getElementById("profile-application-id").textContent = current.id; document.getElementById("profile-status").innerHTML = "<strong>" + escapeHtml(current.status) + "</strong><span>" + (data.team ? escapeHtml(data.team.id) + " · " + data.team.members.length + " 人" : roadshow ? "路演观众 · 无需组队" : "尚未确认队伍") + "</span>"; renderIntendedTeammates(data.team); if (profileRequired && !(roadshow ? roadshowReady : api.isProfileComplete(current))) { activatePanel("profile-details"); document.getElementById("edit-save-state").textContent = roadshow ? "请先完善姓名、手机号、邮箱与身份信息，再继续。" : "请先完善所有必填个人信息，再继续。"; }
       const legacyContestantProfile = !roadshow ? splitLegacyMajor(current) : null;
-      const form = document.getElementById("profile-edit-form"); if (form && roadshow) { form.hidden = false; form.elements.studentId.required = false; form.elements.motivation.required = false; form.elements.studentId.closest("label").hidden = true; form.elements.college.closest("label").querySelector("input").previousElementSibling; form.elements.college.closest("label").firstChild.textContent = "学校 / 单位"; form.elements.major.closest("label").firstChild.textContent = "年级 / 职位"; form.elements.grade.closest("label").hidden = true; form.elements.motivation.closest("label").hidden = true; } if (form) setBasicFieldsEditable(form, roadshow); for (const [name,value] of Object.entries(current)) { const field = form?.elements[name]; if (field && field.type !== "checkbox" && field.type !== "radio") field.value = value || ""; } if (form && !roadshow && legacyContestantProfile) { form.elements.major.value = legacyContestantProfile.major; form.elements.grade.value = legacyContestantProfile.grade; } if (form && roadshow) { form.elements.college.value = current.school_or_company || ""; form.elements.major.value = current.grade_or_position || ""; }
+      const form = document.getElementById("profile-edit-form");
+      const setBlock = (id, hidden) => { const block = document.getElementById(id); if (block) block.hidden = hidden; };
+      const setBlockDisabled = (id, disabled) => { const block = document.getElementById(id); if (block) block.querySelectorAll("input, select, textarea").forEach(field => { field.disabled = disabled; }); };
+      if (form) { setBlock("profile-basic-block", roadshow); setBlock("profile-skills-block", roadshow); setBlock("roadshow-basic-block", !roadshow); setBasicFieldsEditable(form, false); setBlockDisabled("roadshow-basic-block", !roadshow); setBlockDisabled("profile-skills-block", roadshow); }
+      if (form && roadshow) {
+        const lead = document.querySelector("#profile-details .profile-panel-lead");
+        if (lead) lead.textContent = "路演报名资料可随时更新，保存后会同步给主办方；身份类型与活动选择也可以在这里修改。";
+        const fill = (name, value) => { const field = form.elements[name]; if (field) field.value = value ?? ""; };
+        fill("rs_name", current.name); fill("rs_phone", current.phone); fill("rs_email", current.email);
+        fill("rs_identity_type", current.identity_type); fill("rs_school_or_company", current.school_or_company); fill("rs_grade_or_position", current.grade_or_position);
+        if (form.elements.rs_attend_roadshow) form.elements.rs_attend_roadshow.checked = current.attend_roadshow !== false;
+        if (form.elements.rs_receive_notifications) form.elements.rs_receive_notifications.checked = current.receive_notifications !== false;
+      }
+      if (form && !roadshow) {
+        for (const [name,value] of Object.entries(current)) { const field = form.elements[name]; if (field && field.type !== "checkbox" && field.type !== "radio") field.value = value || ""; }
+        if (legacyContestantProfile) { form.elements.major.value = legacyContestantProfile.major; form.elements.grade.value = legacyContestantProfile.grade; }
+      }
       form.querySelectorAll('input[name="skills"]').forEach(input => input.checked = (current.skills || []).includes(input.value));
       document.getElementById("last-updated").textContent = current.updatedAt ? new Date(current.updatedAt).toLocaleString("zh-CN") : "已提交";
       if (!localPreview) { await renderNotices(); if (!roadshow) await renderVote(); }
@@ -86,27 +103,25 @@
   document.getElementById("profile-login-form")?.addEventListener("submit", async event => { event.preventDefault(); const id = document.getElementById("login-id").value.trim(), contact = document.getElementById("login-contact").value.trim(), loginError = document.getElementById("login-error"); if (/^\d+$/.test(contact) && !api.isValidPhone(contact)) { loginError.textContent = "手机号请输入 11 位数字；也可以使用报名时填写的邮箱。"; document.getElementById("login-contact").focus(); return; } try { await api.participantLogin(id,contact); location.assign(returnTo || "profile-dashboard.html"); } catch (err) { loginError.textContent = err.message; } });
 document.getElementById("profile-edit-form")?.addEventListener("submit", async event => {
     event.preventDefault();
-    const form = event.currentTarget, data = new FormData(form), payload = Object.fromEntries(data.entries());
+    const form = event.currentTarget, data = new FormData(form);
+    let payload = Object.fromEntries(data.entries());
     payload.skills = data.getAll("skills");
     delete payload.consent;
     const saveState = document.getElementById("edit-save-state");
     const editError = document.getElementById("edit-error");
     editError.textContent = "";
     const roadshow = (current.registration_type || current.registrationType) === "roadshow";
+    const fail = (field, message) => { form.querySelectorAll(".field-error").forEach(el => el.classList.remove("field-error")); if (field) { field.classList.add("field-error"); field.focus(); } editError.textContent = message; };
     if (!roadshow) {
       const legacyContestantProfile = splitLegacyMajor(current);
       contestantBasicFields.forEach(name => { payload[name] = legacyContestantProfile[name] ?? current[name] ?? ""; });
     }
     if (roadshow) {
-      payload.identity_type = current.identity_type;
-      payload.school_or_company = payload.college;
-      payload.grade_or_position = payload.major;
-      payload.attend_roadshow = current.attend_roadshow;
-      payload.receive_notifications = current.receive_notifications;
-      if (!["name", "phone", "email", "identity_type", "school_or_company", "grade_or_position"].every(key => String(payload[key] || "").trim())) {
-        editError.textContent = "请先填写姓名、手机号、邮箱、学校 / 单位和年级 / 职位。";
-        return;
-      }
+      const value = name => { const field = form.elements[name]; return field ? String(field.value || "").trim() : ""; };
+      const missing = [["rs_name", "姓名"], ["rs_phone", "手机号"], ["rs_email", "邮箱"], ["rs_identity_type", "身份类型"], ["rs_school_or_company", "学校 / 单位"], ["rs_grade_or_position", "年级 / 职位"]].find(([name]) => !value(name));
+      if (missing) { fail(form.elements[missing[0]], "请先填写：" + missing[1] + "。"); return; }
+      if (form.elements.rs_email && !form.elements.rs_email.checkValidity()) { fail(form.elements.rs_email, "请检查邮箱格式。"); return; }
+      payload = {name: value("rs_name"), phone: value("rs_phone"), email: value("rs_email"), identity_type: value("rs_identity_type"), school_or_company: value("rs_school_or_company"), grade_or_position: value("rs_grade_or_position"), attend_roadshow: Boolean(form.elements.rs_attend_roadshow?.checked), receive_notifications: Boolean(form.elements.rs_receive_notifications?.checked)};
     } else if (!api.isProfileComplete(payload)) {
       editError.textContent = "请先填写姓名、学号、学院、专业、年级、手机号、邮箱和参与动机。";
       return;
@@ -117,8 +132,7 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
       return;
     }
     if (!api.isValidPhone(payload.phone)) {
-      form.elements.phone.focus();
-      editError.textContent = "请输入 11 位手机号。";
+      fail(roadshow ? form.elements.rs_phone : form.elements.phone, "请输入 11 位手机号。");
       return;
     }
     try {

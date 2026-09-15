@@ -3034,3 +3034,41 @@ body.drawer-open { overflow:hidden; }
 .profile-intended-index { color: #9b8b37; font: 800 10px Consolas, monospace; }
 .profile-success { min-height: 19px; margin: 10px 0 0; color: var(--green); font-size: 11px; }
 @media(max-width:600px) { .profile-intended-teammates { padding: 18px; }.profile-intended-head { flex-direction: column; gap: 16px; }.profile-intended-meta { align-items: flex-start; }.profile-intended-captain-card { grid-template-columns: auto 1fr; }.profile-intended-captain-card em { grid-column: 2; justify-self: start; }.profile-intended-list { grid-template-columns: 1fr; } }
+
+/* Missing-field reminder highlight for registration forms */
+.field-error { border-color: var(--error) !important; background: #fff7f6; }
+.field-error:focus { border-color: var(--error) !important; box-shadow: 0 0 0 3px rgba(180, 35, 24, .14); }
+.field-error::placeholder { color: #c2716a; }
+input[type="checkbox"].field-error, input[type="radio"].field-error { outline: 2px solid var(--error); outline-offset: 3px; }
+.field-error-group { outline: 2px solid var(--error); outline-offset: 5px; border-radius: 4px; }
+
+/* Roadshow participant summary on the personal page */
+.roadshow-summary { margin-bottom: 20px; padding: 24px; background: linear-gradient(120deg, #e4f6fa 0%, #f8fdfe 74%); border: 1px solid #a9d6de; border-left: 4px solid var(--cyan); border-radius: var(--radius); box-shadow: 6px 6px 0 rgba(17, 17, 17, .06); }
+.roadshow-summary .section-kicker { margin-bottom: 9px; color: var(--cyan); font: 800 10px Consolas, monospace; letter-spacing: .06em; }
+.roadshow-summary h3 { margin: 0 0 8px; font-size: 21px; }
+.roadshow-summary > p:not(.section-kicker):not(.field-help) { margin: 0 0 18px; color: var(--muted); font-size: 12px; }
+.roadshow-summary > p strong { padding: 4px 8px; color: var(--ink); background: var(--yellow); font: 900 13px Consolas, monospace; letter-spacing: .05em; }
+.roadshow-summary dl { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.roadshow-summary dl > div { min-width: 0; padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; background: rgba(255, 255, 255, .82); border: 1px solid #cbe4ea; border-radius: 4px; }
+.roadshow-summary dt { color: var(--muted); font: 800 9px Consolas, monospace; letter-spacing: .06em; }
+.roadshow-summary dd { margin: 0; color: var(--ink); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.roadshow-summary .field-help { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid #cbe4ea; line-height: 1.6; }
+@media (max-width: 600px) { .roadshow-summary { padding: 18px; } .roadshow-summary dl { grid-template-columns: 1fr; } }
+
+/* Modal header: 给右上角关闭按钮留出空间，避免与标题/步骤文字重叠 */
+.application-modal .form-head { padding-right: 64px; }
+.application-modal .modal-close { border-radius: 50%; transition: color .15s, background .15s; }
+.application-modal .modal-close:hover { color: var(--ink); background: #ededE7; }
+@media (max-width: 760px) { .application-modal .form-head { padding-right: 58px; } }
+
+/* 活动选择：复选框选项（路演报名 / 路演个人主页共用） */
+.choice-fieldset { padding: 0; border: 0; }
+.choice-fieldset legend { margin-bottom: 12px; font-size: 12px; font-weight: 700; }
+#roadshow-form .choice-fieldset, .profile-form-block .choice-fieldset { margin: 24px 0 0; }
+.choice-fieldset .consent { padding: 13px 15px; align-items: center; gap: 11px; background: #f7f7f2; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; cursor: pointer; transition: border-color .15s, background .15s, box-shadow .15s; }
+.choice-fieldset .consent + .consent { margin-top: 8px; }
+.choice-fieldset .consent:hover { border-color: var(--ink); }
+.choice-fieldset .consent input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink); cursor: pointer; }
+.choice-fieldset .consent span { font-weight: 700; }
+.choice-fieldset .consent:has(input:checked) { background: white; border-color: var(--ink); box-shadow: 3px 3px 0 rgba(17, 17, 17, .07); }
+@media (max-width: 600px) { .choice-fieldset .consent { padding: 12px 13px; } }
