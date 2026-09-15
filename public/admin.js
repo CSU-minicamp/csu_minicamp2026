@@ -5,6 +5,10 @@
   const SKILLS = ["Frontend", "Backend", "Product", "Design", "Hardware", "AI Engineer", "Media"];
   const STATUSES = ["待审核", "已录取", "已通过", "候补", "待复审", "未通过"];
   const STATUS_CLASS = { "待审核": "status-pending", "已录取": "status-accepted", "候补": "status-waitlist", "待复审": "status-pending" };
+  const isRoadshow = a => (a.registration_type || a.registrationType || "contestant") === "roadshow";
+  const statusCell = a => isRoadshow(a)
+    ? "<button type='button' class='status status-accepted status-locked' data-locked-status='" + esc(a.id) + "' title='路演报名固定为「已通过」，不可更改'>已通过 <span aria-hidden='true'>锁</span></button>"
+    : "<select class='status-select' data-id='" + esc(a.id) + "'>" + STATUSES.map(s => "<option " + (s === a.status ? "selected" : "") + ">" + s + "</option>").join("") + "</select>";
   const PANEL_META = {
     overview: ["报名总览", "集中管理报名、审核、录取与通知。"],
     applicants: ["报名审核", "查看报名者资料、调整录取状态、导出名单。"],
@@ -108,8 +112,9 @@
   }
   function renderRows(list) {
     const tbody = document.getElementById("applicants-table"); if (!tbody) return;
-    tbody.innerHTML = list.map(x => "<tr><td class='name-cell'><span class='mini-avatar'>" + esc((x.name || "?").slice(0, 1)) + "</span><div><strong>" + esc(x.name) + "</strong><br><small>" + esc(x.college) + " · " + esc(x.major) + "</small></div></td><td>" + ((x.registration_type || "contestant") === "roadshow" ? "路演报名" : "参赛报名") + "</td><td>" + esc(x.id) + "</td><td><small>" + esc(x.phone || "—") + "<br>" + esc(x.email || "—") + "</small></td><td>" + ((x.skills || []).map(s => "<span class='tag'>" + esc(s) + "</span>").join(" ") || "—") + "</td><td><small>" + fmt(x.createdAt) + "</small></td><td><select class='status-select' data-id='" + esc(x.id) + "'>" + STATUSES.map(s => "<option " + (s === x.status ? "selected" : "") + ">" + s + "</option>").join("") + "</select></td><td><button class='row-action' data-view='" + esc(x.id) + "'>查看</button></td></tr>").join("") || "<tr><td colspan='7'><div class='empty-state'>没有符合条件的报名</div></td></tr>";
-    tbody.querySelectorAll(".status-select").forEach(sel => sel.onchange = async () => { try { await api.request("/api/admin/applications", { method: "PATCH", body: JSON.stringify({ id: sel.dataset.id, status: sel.value }) }); toast("已更新为「" + sel.value + "」", "success"); await load(); } catch (e) { toast(e.message, "error"); } });
+    tbody.innerHTML = list.map(x => "<tr><td class='name-cell'><span class='mini-avatar'>" + esc((x.name || "?").slice(0, 1)) + "</span><div><strong>" + esc(x.name) + "</strong><br><small>" + esc(x.college) + " · " + esc(x.major) + "</small></div></td><td>" + (isRoadshow(x) ? "路演报名" : "参赛报名") + "</td><td>" + esc(x.id) + "</td><td><small>" + esc(x.phone || "—") + "<br>" + esc(x.email || "—") + "</small></td><td>" + ((x.skills || []).map(s => "<span class='tag'>" + esc(s) + "</span>").join(" ") || "—") + "</td><td><small>" + fmt(x.createdAt) + "</small></td><td class='status-cell'>" + statusCell(x) + "</td><td><button class='row-action' data-view='" + esc(x.id) + "'>查看</button></td></tr>").join("") || "<tr><td colspan='8'><div class='empty-state'>没有符合条件的报名</div></td></tr>";
+    tbody.querySelectorAll(".status-select").forEach(sel => sel.onchange = async () => { try { await api.request("/api/admin/applications", { method: "PATCH", body: JSON.stringify({ id: sel.dataset.id, status: sel.value }) }); toast("已更新为「" + sel.value + "」", "success"); await load(); } catch (e) { toast(e.message, "error"); await load(); } });
+    tbody.querySelectorAll("[data-locked-status]").forEach(b => b.onclick = () => toast("路演报名固定为「已通过」，无法更改。", "info"));
     tbody.querySelectorAll("[data-view]").forEach(b => b.onclick = () => openDetail(b.dataset.view));
   }
 
@@ -121,7 +126,9 @@
     const blk = (h, body) => "<div class='admin-detail-block'><h3>" + h + "</h3><p>" + (body ? esc(body) : "<span class='muted'>未填写</span>") + "</p></div>";
     box.innerHTML =
       "<div class='admin-detail-head'><div><p class='section-kicker'>APPLICATION · " + esc(x.id) + "</p><h2 id='applicant-detail-name'>" + esc(x.name) + "</h2><span>" + esc(x.college) + " · " + esc(x.major) + "</span></div><span class='status " + (STATUS_CLASS[x.status] || "status-pending") + "'>" + esc(x.status) + "</span></div>" +
-      "<div class='admin-detail-status'><span>快速设置状态</span>" + STATUSES.map(s => "<button type='button' class='outline-button" + (s === x.status ? " primary" : "") + "' data-set-status='" + s + "'>" + s + "</button>").join("") + "</div>" +
+      (isRoadshow(x)
+        ? "<div class='admin-detail-status is-locked'><span>报名状态</span><b class='status status-accepted status-locked'>已通过</b><small>路演报名提交后自动通过，主办方不可更改状态。</small></div>"
+        : "<div class='admin-detail-status'><span>快速设置状态</span>" + STATUSES.map(s => "<button type='button' class='outline-button" + (s === x.status ? " primary" : "") + "' data-set-status='" + s + "'>" + s + "</button>").join("") + "</div>") +
       "<dl class='admin-detail-grid'>" + row("学号", x.studentId) + row("手机号", x.phone) + row("邮箱", x.email) + row("年级", x.grade) + row("能力标签", (x.skills || []).join(" / ")) + row("提交时间", fmt(x.createdAt)) + row("最近更新", x.updatedAt ? fmt(x.updatedAt) : "—") + "</dl>" +
       blk("参与动机", x.motivation) + blk("做过的项目 / 经历", x.experience) + blk("可以来找 TA 聊什么", x.askMeAbout) + blk("可以帮助别人做什么", x.canHelpWith) + blk("想探索什么", x.explore) +
       "<div class='admin-detail-block'><h3>作品集 / GitHub / 主页</h3><p>" + (x.portfolio ? "<a href='" + esc(x.portfolio) + "' target='_blank' rel='noreferrer'>" + esc(x.portfolio) + " ↗</a>" : "<span class='muted'>未填写</span>") + "</p></div>";
@@ -136,9 +143,11 @@
     const total = document.getElementById("team-total");
     if (total) total.textContent = teams.length + " 支队伍";
     setHtml("admin-team-board", teams.map(team => {
-      const members = (team.members || []).map(member => "<li>" + esc(member.name) + "<small>" + esc((member.skills || []).join(" / ") || "未填写能力标签") + "</small></li>").join("") || "<li>暂无成员</li>";
-      const status = team.locked ? "正式队伍·已锁定" : (state.config?.teamConfirmOpen ? "正式确认已开启·等待队长提交" : "预组队中·可继续招募");
-      return "<article class='team-card-admin'><div class='team-card-head'><strong>" + esc(team.project || team.id) + "</strong><span>" + team.members.length + " / 5 人</span></div><p>" + esc(team.id) + " · " + esc(team.code) + (team.ownerId ? " · 队长 " + esc(team.ownerId) : "") + "</p><small>" + status + "</small><ul class='team-member-list'>" + members + "</ul><button class='outline-button admin-team-lock' data-id='" + esc(team.id) + "' data-locked='" + String(!team.locked) + "'>" + (team.locked ? "解除正式锁定" : (state.config?.teamConfirmOpen ? "管理员锁定队伍" : "预览锁定（确认开启后生效）")) + "</button></article>";
+      const members = (team.members || []).map(member => "<li><span class='team-member-name'>" + esc(member.name) + "</span><small>" + esc((member.skills || []).join(" / ") || "未填写能力标签") + "</small></li>").join("") || "<li class='is-empty'>暂无成员</li>";
+      const locked = Boolean(team.locked);
+      const statusText = locked ? "正式队伍 · 已锁定" : (state.config?.teamConfirmOpen ? "正式确认已开启 · 等待队长提交" : "预组队中 · 可继续招募");
+      const owner = team.ownerId ? "<span>队长 <b>" + esc(team.ownerId) + "</b></span>" : "";
+      return "<article class='team-card-admin" + (locked ? " is-locked" : "") + "'><header class='team-card-head'><strong class='team-card-name'>" + esc(team.project || team.id) + "</strong><span class='team-card-count'>" + team.members.length + " / 5 人</span></header><div class='team-card-meta'><span>队伍码 <b>" + esc(team.code) + "</b></span><span>编号 <b>" + esc(team.id) + "</b></span>" + owner + "</div><p class='team-card-status'><i class='status-dot-mark'></i>" + statusText + "</p><ul class='team-member-list'>" + members + "</ul><button class='outline-button admin-team-lock' data-id='" + esc(team.id) + "' data-locked='" + String(!locked) + "'>" + (locked ? "解除正式锁定" : (state.config?.teamConfirmOpen ? "管理员锁定队伍" : "预览锁定（确认开启后生效）")) + "</button></article>";
     }).join("") || "<p class='empty-state'>暂无队伍</p>");
     document.querySelectorAll(".admin-team-lock").forEach(button => button.onclick = async () => {
       try {
@@ -150,7 +159,13 @@
 
   function renderIdeas() {
     const ideas = state.ideas || [];
-    setHtml("admin-idea-list", ideas.map(idea => "<article class='idea-card'><span>" + esc(idea.status === "open" ? "公开中" : "已关闭") + " · " + esc(idea.theme) + "</span><h3>" + esc(idea.title) + "</h3><p>" + esc(idea.summary) + "</p><small>寻找：" + esc((idea.needs || []).join(" / ")) + "</small><button class='outline-button admin-idea-status' data-id='" + esc(idea.id) + "' data-status='" + (idea.status === "open" ? "closed" : "open") + "'>" + (idea.status === "open" ? "关闭 Idea" : "重新公开") + "</button></article>").join("") || "<p class='empty-state'>暂无 Idea</p>");
+    const total = document.getElementById("idea-total");
+    if (total) total.textContent = ideas.length + " 条创意";
+    setHtml("admin-idea-list", ideas.map(idea => {
+      const open = idea.status === "open";
+      const needs = (idea.needs || []).map(need => "<span class='idea-need'>" + esc(need) + "</span>").join("");
+      return "<article class='idea-card" + (open ? "" : " is-closed") + "'><p class='idea-card-status'><i class='status-dot-mark'></i>" + (open ? "公开中" : "已关闭") + "<span class='idea-card-theme'>" + esc(idea.theme) + "</span></p><h3>" + esc(idea.title) + "</h3><p class='idea-summary'>" + esc(idea.summary) + "</p><div class='idea-needs'><small>寻找</small>" + (needs || "<span class='idea-need is-empty'>未填写</span>") + "</div><button class='outline-button admin-idea-status' data-id='" + esc(idea.id) + "' data-status='" + (open ? "closed" : "open") + "'>" + (open ? "关闭 Idea" : "重新公开") + "</button></article>";
+    }).join("") || "<p class='empty-state'>暂无 Idea</p>");
     document.querySelectorAll(".admin-idea-status").forEach(button => button.onclick = async () => {
       try {
         await api.request("/api/admin/ideas/" + encodeURIComponent(button.dataset.id), { method: "PATCH", body: JSON.stringify({ status: button.dataset.status }) });

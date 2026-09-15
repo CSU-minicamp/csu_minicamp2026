@@ -14,6 +14,15 @@
     const button = root.querySelector(".participant-fab-joined"), panel = root.querySelector(".participant-fab-panel");
     button?.addEventListener("click", () => { const open = panel.hidden; panel.hidden = !open; button.setAttribute("aria-expanded", String(open)); });
   };
-  render();
-  if (api.getToken() || api.isLocalPreview()) api.request("/api/me").then(render).catch(() => {});
+  // 报名截止（含通道关闭）后不再提供报名入口；未报名时才显示「立即报名」。
+  const finish = registration => {
+    api.request("/api/me").then(data => render(data)).catch(() => {
+      if (registration.open) render();
+    });
+  };
+  api.request("/api/config").then(({ config }) => {
+    const deadline = config?.applicationDeadline ? Date.parse(config.applicationDeadline) : NaN;
+    const closed = config?.applicationOpen === false || (Number.isFinite(deadline) && Date.now() > deadline);
+    finish({ open: !closed });
+  }).catch(() => finish({ open: true }));
 })();

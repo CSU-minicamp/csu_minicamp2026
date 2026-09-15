@@ -132,6 +132,24 @@ test("confirmation gate and roadshow team restrictions remain enforced", async (
   assert.equal((await request("POST", "/api/teams", token, { project: "No" })).status, 403);
 });
 
+test("roadshow registrations stay 已通过 and cannot be restatused from admin", async () => {
+  const { db, request } = fixture();
+  db.sessions.ADMIN = { role: "admin", userId: "ADMIN" };
+  const created = await request("POST", "/api/applications", "", roadshow);
+  assert.equal(created.status, 201);
+  const id = created.data.application.id;
+  assert.equal(created.data.application.status, "已通过");
+  const rejected = await request("PATCH", "/api/admin/applications", "ADMIN", { id, status: "未通过" });
+  assert.equal(rejected.status, 403);
+  assert.equal(db.applications.find(item => item.id === id).status, "已通过");
+  // 重复提交同一状态仍然允许（不触发锁定分支）。
+  assert.equal((await request("PATCH", "/api/admin/applications", "ADMIN", { id, status: "已通过" })).status, 200);
+  // 参赛报名者不受影响，管理员仍可调整状态。
+  const contestant = participant("MC26-9100", "待审核");
+  db.applications.push(contestant);
+  assert.equal((await request("PATCH", "/api/admin/applications", "ADMIN", { id: contestant.id, status: "已录取" })).status, 200);
+});
+
 test("legacy members without a grade field can still be invited to a pre-team", async () => {
   const { db, request } = fixture();
   addFreeOwner(db);
