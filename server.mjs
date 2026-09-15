@@ -4,11 +4,13 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import mysql from "mysql2/promise";
+import { createQaStore } from "./storage/qa-store.mjs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const publicRoot = path.join(root, "public");
 const port = Number(process.env.MINICAMP_PORT || 4173);
 const dbPath = path.join(root, "data", "minicamp.json");
+const qaPath = path.join(root, "data", "qa.json");
 const adminPassword = process.env.MINICAMP_ADMIN_PASSWORD || "123456";
 const mysqlConfig = { host: process.env.MYSQL_HOST || "127.0.0.1", port: Number(process.env.MYSQL_PORT || 3306), user: process.env.MYSQL_USER || "root", password: process.env.MYSQL_PASSWORD || "", database: process.env.MYSQL_DATABASE || "minicamp2026", waitForConnections: true, connectionLimit: Number(process.env.MYSQL_CONNECTION_LIMIT || 10), charset: "utf8mb4" };
 const mime = {".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg"};
@@ -27,6 +29,15 @@ const seed = {
 };
 let db;
 let pool;
+// 问答信息独立成表（qa_questions）；MySQL 不可用时回退到 data/qa.json。
+const qaStore = createQaStore({
+  query: (sql, params) => {
+    if (!pool) throw new Error("MySQL unavailable");
+    return pool.query(sql, params);
+  },
+  getPool: () => pool,
+  fallbackPath: qaPath
+});
 const clone=x=>JSON.parse(JSON.stringify(x));
 const makeId=p=>p+"-"+crypto.randomBytes(5).toString("hex").toUpperCase();
 const makeToken=()=>crypto.randomBytes(24).toString("hex");
@@ -60,6 +71,7 @@ async function loadDb(){
   normalizeApplications();
   normalizeIdeas();
   await saveDb();
+  await qaStore.initialize();
 }
 let saveQueue=Promise.resolve();
 function saveDb(){saveQueue=saveQueue.catch(()=>{}).then(async()=>{if(pool)await pool.query("INSERT INTO app_state (state_key, state_json) VALUES ('main', ?) ON DUPLICATE KEY UPDATE state_json = VALUES(state_json)",[JSON.stringify(db)]);else{await fs.mkdir(path.dirname(dbPath),{recursive:true});await fs.writeFile(dbPath,JSON.stringify(db,null,2),"utf8");}});return saveQueue;}
@@ -199,6 +211,29 @@ async function api(req,res,url){
   if(url.pathname==="/api/teams"&&method==="POST"){if(!me)return fail(res,401,"login required");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");if(!isProfileComplete(me))return fail(res,400,"profile incomplete");if(me.teamId||db.teams.some(item=>item.memberIds.includes(me.id)))return fail(res,409,"already belongs to a team");const d=await body(req);const team={id:"TEAM "+String(db.teams.length+1).padStart(2,"0"),ownerId:me.id,code:"MC26-"+crypto.randomBytes(2).toString("hex").toUpperCase(),project:d.project||"Untitled",theme:d.theme||"TBD",memberIds:[me.id],status:"draft",locked:false,published:false,testFixture:testFixtureMode()};db.teams.push(team);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,201,{team:teamView(team)});}
   const tm=url.pathname.match(/^\/api\/teams\/([^/]+)\/(join|lock|leave|recruit)$/);
   if(tm){const team=db.teams.find(x=>x.id===decodeURIComponent(tm[1]));if(!team)return fail(res,404,"team not found");if(tm[2]==="recruit"&&method==="PATCH"){if(!me||team.ownerId!==me.id||!team.memberIds.includes(me.id))return fail(res,403,"team owner required");if(team.locked)return fail(res,409,"locked team cannot be changed");team.published=!team.published;await saveDb();return send(res,200,{team:teamView(team)});}if(tm[2]==="join"&&method==="POST"){if(!me)return fail(res,401,"login required");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");if(!isProfileComplete(me))return fail(res,400,"profile incomplete");if(team.locked||team.memberIds.length>=5)return fail(res,409,"team is locked or full");const currentTeam=db.teams.find(item=>item.memberIds.includes(me.id)||item.id===me.teamId);if(currentTeam)return fail(res,409,currentTeam.id===team.id?"already in team":"leave current team first");team.memberIds.push(me.id);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,200,{team:teamView(team)});}if(tm[2]==="leave"&&method==="POST"){if(!me||!team.memberIds.includes(me.id))return fail(res,403,"team member required");if(team.locked)return fail(res,409,"locked team cannot be changed");if(team.memberIds.length===1&&db.projects.some(project=>project.teamId===team.id))return fail(res,409,"submitter must keep the project team");team.memberIds=team.memberIds.filter(memberId=>memberId!==me.id);if(team.ownerId===me.id)team.ownerId=team.memberIds[0]||"";me.teamId="";me.teamCode="";if(!team.memberIds.length)db.teams=db.teams.filter(item=>item.id!==team.id);await saveDb();return send(res,200,{ok:true});}if(tm[2]==="lock"&&method==="PATCH"){if(!db.config.teamConfirmOpen)return fail(res,403,"team confirmation not open");if(!me||team.ownerId!==me.id||!team.memberIds.includes(me.id))return fail(res,403,"team owner required");if(team.memberIds.length<3||team.memberIds.length>5)return fail(res,400,"team must have 3 to 5 members");if(team.memberIds.some(id=>{const p=db.applications.find(x=>x.id===id);return !isContestant(p)||!isAccepted(p)||!isProfileComplete(p);}))return fail(res,400,"all members must be accepted and complete");team.locked=true;team.status="locked";await saveDb();return send(res,200,{team:teamView(team)});}}
+  // ---- 问答信息（qa_questions）：参与者提问，主办方回答 ----
+  if(url.pathname==="/api/qa"&&method==="POST"){
+    if(!me)return fail(res,401,"login required");
+    const d=await body(req);
+    const result=await qaStore.createQuestion({askerId:me.id,question:d.question??d.content??d.text});
+    if(result.error)return fail(res,result.status,result.error);
+    return send(res,201,{question:result.question});
+  }
+  if(url.pathname==="/api/qa"&&method==="GET"){
+    if(admin(req))return send(res,200,{questions:qaStore.list({status:url.searchParams.get("status")||undefined}),stats:qaStore.stats(),storage:qaStore.mode()});
+    const askerId=me?me.id:url.searchParams.get("askerId");
+    if(!askerId)return fail(res,401,"login required");
+    return send(res,200,{questions:qaStore.list({askerId})});
+  }
+  if(url.pathname==="/api/qa/answered"&&method==="GET")return send(res,200,{questions:qaStore.listAnswered()});
+  const qaAnswerMatch=url.pathname.match(/^\/api\/admin\/qa\/([^/]+)$/);
+  if(qaAnswerMatch&&method==="PATCH"){
+    if(!admin(req))return fail(res,401,"admin required");
+    const d=await body(req);
+    const result=await qaStore.answerQuestion({questionId:decodeURIComponent(qaAnswerMatch[1]),answer:d.answer??d.content,answeredBy:d.answeredBy});
+    if(result.error)return fail(res,result.status,result.error);
+    return send(res,200,{question:result.question});
+  }
   if(url.pathname==="/api/ideas"&&method==="GET")return send(res,200,{ideas:db.ideas.filter(x=>x.status==="open")});
   if(url.pathname==="/api/ideas"&&method==="POST"){if(!me)return fail(res,401,"login required");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");const d=await body(req);if(!d.title||!d.summary)return fail(res,400,"idea title and summary required");const idea={id:makeId("IDEA"),title:d.title,summary:d.summary,theme:d.theme||"TBD",needs:d.needs||[],authorId:me.id,status:"open",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.ideas.unshift(idea);await saveDb();return send(res,201,{idea});}
   if(url.pathname==="/api/projects"&&method==="GET")return send(res,200,{projects:db.projects.filter(x=>x.status==="published").map(projectView)});
@@ -218,5 +253,5 @@ async function api(req,res,url){
 }
 async function serve(req,res){const url=new URL(req.url,"http://"+(req.headers.host||"localhost"));if(url.pathname.startsWith("/api/")){try{await api(req,res,url);}catch(e){console.error(e);fail(res,500,e.message||"server error");}return;}const requested=url.pathname==="/"?"/index.html":url.pathname;const file=path.resolve(publicRoot,"."+path.posix.normalize(requested));if(file!==publicRoot&&!file.startsWith(publicRoot+path.sep)){res.writeHead(403);res.end("Forbidden");return;}try{const data=await fs.readFile(file);res.writeHead(200,{"Content-Type":mime[path.extname(file)]||"application/octet-stream","Cache-Control":"no-store"});res.end(data);}catch{res.writeHead(404);res.end("Not found");}}
 await loadDb();
-http.createServer(serve).listen(port,"127.0.0.1",()=>console.log("minicamp preview: http://localhost:"+port));
+http.createServer(serve).listen(port,"127.0.0.1",()=>console.log("minicamp preview: http://localhost:"+port+" (qa storage: "+qaStore.mode()+")"));
 

@@ -20,3 +20,8 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 data/
+
+# local debug files
+*.local.mjs
+*.local.json
+*.local.sql
