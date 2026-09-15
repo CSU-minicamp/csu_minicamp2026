@@ -19,7 +19,7 @@
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const fmt = t => t ? new Date(t).toLocaleString("zh-CN") : "";
   const modal = document.getElementById("applicant-modal");
-  function toast(msg) { const t = document.getElementById("admin-toast"); if (!t) return; t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1800); }
+  function toast(msg, tone = "info") { MinicampUI.toast(msg, {tone}); }
   function setHtml(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; }
 
   function showLogin() {
@@ -81,7 +81,7 @@
   function renderRows(list) {
     const tbody = document.getElementById("applicants-table"); if (!tbody) return;
     tbody.innerHTML = list.map(x => "<tr><td class='name-cell'><span class='mini-avatar'>" + esc((x.name || "?").slice(0, 1)) + "</span><div><strong>" + esc(x.name) + "</strong><br><small>" + esc(x.college) + " · " + esc(x.major) + "</small></div></td><td>" + ((x.registration_type || "contestant") === "roadshow" ? "路演报名" : "参赛报名") + "</td><td>" + esc(x.id) + "</td><td><small>" + esc(x.phone || "—") + "<br>" + esc(x.email || "—") + "</small></td><td>" + ((x.skills || []).map(s => "<span class='tag'>" + esc(s) + "</span>").join(" ") || "—") + "</td><td><small>" + fmt(x.createdAt) + "</small></td><td><select class='status-select' data-id='" + esc(x.id) + "'>" + STATUSES.map(s => "<option " + (s === x.status ? "selected" : "") + ">" + s + "</option>").join("") + "</select></td><td><button class='row-action' data-view='" + esc(x.id) + "'>查看</button></td></tr>").join("") || "<tr><td colspan='7'><div class='empty-state'>没有符合条件的报名</div></td></tr>";
-    tbody.querySelectorAll(".status-select").forEach(sel => sel.onchange = async () => { try { await api.request("/api/admin/applications", { method: "PATCH", body: JSON.stringify({ id: sel.dataset.id, status: sel.value }) }); toast("已更新为「" + sel.value + "」"); await load(); } catch (e) { toast(e.message); } });
+    tbody.querySelectorAll(".status-select").forEach(sel => sel.onchange = async () => { try { await api.request("/api/admin/applications", { method: "PATCH", body: JSON.stringify({ id: sel.dataset.id, status: sel.value }) }); toast("已更新为「" + sel.value + "」", "success"); await load(); } catch (e) { toast(e.message, "error"); } });
     tbody.querySelectorAll("[data-view]").forEach(b => b.onclick = () => openDetail(b.dataset.view));
   }
 
@@ -97,7 +97,7 @@
       "<dl class='admin-detail-grid'>" + row("学号", x.studentId) + row("手机号", x.phone) + row("邮箱", x.email) + row("年级", x.grade) + row("能力标签", (x.skills || []).join(" / ")) + row("提交时间", fmt(x.createdAt)) + row("最近更新", x.updatedAt ? fmt(x.updatedAt) : "—") + "</dl>" +
       blk("参与动机", x.motivation) + blk("做过的项目 / 经历", x.experience) + blk("可以来找 TA 聊什么", x.askMeAbout) + blk("可以帮助别人做什么", x.canHelpWith) + blk("想探索什么", x.explore) +
       "<div class='admin-detail-block'><h3>作品集 / GitHub / 主页</h3><p>" + (x.portfolio ? "<a href='" + esc(x.portfolio) + "' target='_blank' rel='noreferrer'>" + esc(x.portfolio) + " ↗</a>" : "<span class='muted'>未填写</span>") + "</p></div>";
-    box.querySelectorAll("[data-set-status]").forEach(btn => btn.onclick = async () => { try { await api.request("/api/admin/applications", { method: "PATCH", body: JSON.stringify({ id: x.id, status: btn.dataset.setStatus }) }); modal.close(); toast("已更新为「" + btn.dataset.setStatus + "」"); await load(); } catch (e) { toast(e.message); } });
+    box.querySelectorAll("[data-set-status]").forEach(btn => btn.onclick = async () => { try { await api.request("/api/admin/applications", { method: "PATCH", body: JSON.stringify({ id: x.id, status: btn.dataset.setStatus }) }); modal.close(); toast("已更新为「" + btn.dataset.setStatus + "」", "success"); await load(); } catch (e) { toast(e.message, "error"); } });
     modal.showModal();
   }
   document.getElementById("applicant-modal-close")?.addEventListener("click", () => modal?.close());
@@ -115,8 +115,8 @@
     document.querySelectorAll(".admin-team-lock").forEach(button => button.onclick = async () => {
       try {
         await api.request("/api/admin/teams/" + encodeURIComponent(button.dataset.id), { method: "PATCH", body: JSON.stringify({ locked: button.dataset.locked === "true" }) });
-        toast("队伍状态已更新"); await load();
-      } catch (error) { toast(error.message); }
+        toast("队伍状态已更新", "success"); await load();
+      } catch (error) { toast(error.message, "error"); }
     });
   }
 
@@ -126,8 +126,8 @@
     document.querySelectorAll(".admin-idea-status").forEach(button => button.onclick = async () => {
       try {
         await api.request("/api/admin/ideas/" + encodeURIComponent(button.dataset.id), { method: "PATCH", body: JSON.stringify({ status: button.dataset.status }) });
-        toast("Idea 状态已更新"); await load();
-      } catch (error) { toast(error.message); }
+        toast("Idea 状态已更新", "success"); await load();
+      } catch (error) { toast(error.message, "error"); }
     });
   }
 
@@ -138,8 +138,8 @@
     document.querySelectorAll(".project-status").forEach(button => button.onclick = async () => {
       try {
         await api.request("/api/admin/projects", { method: "PATCH", body: JSON.stringify({ id: button.dataset.id, status: button.dataset.status }) });
-        toast(button.dataset.status === "published" ? "项目已发布到 Gallery" : "项目已撤回"); await load();
-      } catch (error) { toast(error.message); }
+        toast(button.dataset.status === "published" ? "项目已发布到 Gallery" : "项目已撤回", "success"); await load();
+      } catch (error) { toast(error.message, "error"); }
     });
   }
 
@@ -170,9 +170,9 @@
       d.applicationOpen = d.applicationOpen === "true"; d.teamConfirmOpen = d.teamConfirmOpen === "true"; d.voteOpen = d.voteOpen === "true";
       d.participantWeight = Number(d.participantWeight); d.juryWeight = Number(d.juryWeight);
       d.voteStartAt = d.voteStartAt || null; d.applicationDeadline = d.applicationDeadline || null; d.resultDate = d.resultDate || null;
-      if (d.participantWeight + d.juryWeight !== 100) return toast("参与者与 Jury 权重之和必须为 100%。");
-      try { d.starterPack = JSON.parse(d.starterPack); } catch { return toast("Starter Pack 必须是有效的 JSON。"); }
-      try { await api.request("/api/admin/config", { method: "PATCH", body: JSON.stringify(d) }); toast("配置已保存，官网已同步"); await load(); } catch (err) { toast(err.message); }
+      if (d.participantWeight + d.juryWeight !== 100) return toast("参与者与 Jury 权重之和必须为 100%。", "error");
+      try { d.starterPack = JSON.parse(d.starterPack); } catch { return toast("Starter Pack 必须是有效的 JSON。", "error"); }
+      try { await api.request("/api/admin/config", { method: "PATCH", body: JSON.stringify(d) }); toast("配置已保存，官网已同步", "success"); await load(); } catch (err) { toast(err.message, "error"); }
     };
   }
 
@@ -214,9 +214,9 @@
         await api.request("/api/admin/config", { method: "PATCH", body: JSON.stringify({ stageSchedule: next }) });
         state.config.stageSchedule = next;
         context.stage?.setSchedule?.(next);
-        toast("主持人提示和现场动作已保存");
+        toast("主持人提示和现场动作已保存", "success");
         await load();
-      } catch (error) { toast(error.message); }
+      } catch (error) { toast(error.message, "error"); }
     };
   }
 
@@ -229,7 +229,7 @@
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a"); link.href = url; link.download = "minicamp-报名名单-" + new Date().toISOString().slice(0, 10) + ".csv";
     document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-    toast("已导出 " + (state.applications || []).length + " 条报名");
+    toast("已导出 " + (state.applications || []).length + " 条报名", "success");
   }
 
   document.getElementById("applicant-search")?.addEventListener("input", applyFilters);
@@ -244,9 +244,9 @@
     try {
       await api.request("/api/admin/notices", { method: "POST", body: JSON.stringify(d) });
       form.reset();
-      toast("通知已发布");
+      toast("通知已发布", "success");
       await load();
-    } catch (err) { toast(err.message); }
+    } catch (err) { toast(err.message, "error"); }
   });
 
   function activate(panel) {

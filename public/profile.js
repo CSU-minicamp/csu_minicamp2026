@@ -147,7 +147,8 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
   document.getElementById("profile-logout")?.addEventListener("click", () => { api.logout(); location.reload(); });
   document.getElementById("profile-delete-account")?.addEventListener("click", async event => {
     const button = event.currentTarget;
-    if (!window.confirm("注销后将永久删除你的报名资料、预组队、项目成员记录、创意、投票、通知和登录会话，且无法恢复。确定要注销账号吗？")) return;
+    const ok = await MinicampUI.confirm({kicker: "ACCOUNT / DELETE", tone: "danger", title: "确定注销账号？", body: "注销后将永久删除你的报名资料、预组队、项目成员记录、创意、投票、通知和登录会话，且无法恢复。", confirmText: "永久注销"});
+    if (!ok) return;
     button.disabled = true;
     try {
       await api.request("/api/me", {method:"DELETE"});

@@ -79,6 +79,7 @@
 - Idea 发布、项目草稿提交、主办方审核发布、动态 Gallery。
 - 参与者投票、Jury 投票、参与者/Jury 权重统计。
 - 活动日期、报名状态、投票权重和 Starter Pack 可在后台配置。
+- 统一的通知与确认模块 `public/ui.js`（`MinicampUI.toast / confirm / alert`）：页面不再使用 `window.confirm` 等浏览器默认弹窗，需要时在页面里加一行 `<script src="ui.js"></script>` 即可。
 
 正式部署前仍应配置生产 MySQL，接入 HTTPS、统一身份认证、限流、CSRF 防护、审计日志和备份机制。
 

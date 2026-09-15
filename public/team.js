@@ -105,7 +105,8 @@
     document.querySelectorAll(".join-team").forEach(button => button.addEventListener("click", async () => {
       const card = button.closest("article");
       const name = card?.querySelector("strong")?.textContent || "\u8fd9\u652f\u961f\u4f0d";
-      if (!window.confirm("\u52a0\u5165\u201c" + name + "\u201d\uff1f\u52a0\u5165\u540e\u5728\u961f\u4f0d\u672a\u9501\u5b9a\u524d\u4ecd\u53ef\u4ee5\u79bb\u5f00\u3002")) return;
+      const ok = await MinicampUI.confirm({kicker: "TEAM / JOIN", title: "\u52a0\u5165\u201c" + name + "\u201d\uff1f", body: "\u52a0\u5165\u540e\u5728\u961f\u4f0d\u672a\u9501\u5b9a\u524d\u4ecd\u53ef\u4ee5\u79bb\u5f00\u3002", confirmText: "\u52a0\u5165\u961f\u4f0d"});
+      if (!ok) return;
       try {
         await api.request("/api/teams/" + encodeURIComponent(button.dataset.id) + "/join", { method: "POST" });
         setFeedback("\u5df2\u52a0\u5165\u961f\u4f0d\uff0c\u8bf7\u7ee7\u7eed\u9080\u8bf7\u6210\u5458\u3002", "success");
@@ -113,7 +114,9 @@
       } catch (error) { setFeedback(readableError(error), "error"); }
     }));
     document.getElementById("lock-team")?.addEventListener("click", async () => {
-      if (!team || !window.confirm("\u9501\u5b9a\u540e\u65e0\u6cd5\u81ea\u884c\u589e\u51cf\u6210\u5458\u3002\u786e\u8ba4\u961f\u4f0d\u6210\u5458\u65e0\u8bef\uff1f")) return;
+      if (!team) return;
+      const ok = await MinicampUI.confirm({kicker: "TEAM / LOCK", tone: "danger", title: "\u786e\u8ba4\u6b63\u5f0f\u9501\u5b9a\u8fd9\u652f\u961f\u4f0d\uff1f", body: "\u9501\u5b9a\u540e\u65e0\u6cd5\u81ea\u884c\u589e\u51cf\u6210\u5458\uff0c\u8bf7\u5148\u786e\u8ba4\u961f\u4f0d\u6210\u5458\u65e0\u8bef\u3002", confirmText: "\u786e\u8ba4\u9501\u5b9a"});
+      if (!ok) return;
       try {
         await api.request("/api/teams/" + encodeURIComponent(team.id) + "/lock", { method: "PATCH" });
         setFeedback("\u961f\u4f0d\u5df2\u9501\u5b9a\uff0c\u63a5\u4e0b\u6765\u53ef\u4ee5\u51c6\u5907\u9879\u76ee\u63d0\u4ea4\u3002", "success");
@@ -121,7 +124,9 @@
       } catch (error) { setFeedback(readableError(error), "error"); }
     });
     document.getElementById("leave-team")?.addEventListener("click", async () => {
-      if (!team || !window.confirm("\u786e\u5b9a\u79bb\u5f00\u201c" + team.project + "\u201d\uff1f\u961f\u4f0d\u672a\u9501\u5b9a\u524d\u53ef\u4ee5\u91cd\u65b0\u52a0\u5165\u5176\u4ed6\u961f\u4f0d\u3002")) return;
+      if (!team) return;
+      const ok = await MinicampUI.confirm({kicker: "TEAM / LEAVE", tone: "danger", title: "\u786e\u5b9a\u79bb\u5f00\u201c" + (team.project || team.id) + "\u201d\uff1f", body: "\u961f\u4f0d\u672a\u9501\u5b9a\u524d\u53ef\u4ee5\u91cd\u65b0\u52a0\u5165\u5176\u4ed6\u961f\u4f0d\u3002", confirmText: "\u79bb\u5f00\u961f\u4f0d"});
+      if (!ok) return;
       try {
         await api.request("/api/teams/" + encodeURIComponent(team.id) + "/leave", { method: "POST" });
         setFeedback("\u4f60\u5df2\u79bb\u5f00\u961f\u4f0d\uff0c\u53ef\u4ee5\u521b\u5efa\u6216\u52a0\u5165\u5176\u4ed6\u961f\u4f0d\u3002", "success");
