@@ -10,6 +10,12 @@
  * 表结构见 schema.sql / storage/qa-upgrade.sql：
  *   question_id(PK) / asker_id / question / asked_at / answer / answered_at
  *   + status / answered_by / updated_at（后台筛选与审计用）
+ *
+ * status 四种取值：
+ *   pending  待回答：仅提问者本人和主办方可见，不出现在公开列表
+ *   answered 已回答：公开展示给所有人
+ *   pinned   置顶：已回答且公开，在公开列表最前面
+ *   hidden   隐藏：不公开展示（仅提问者本人和主办方可见）
  */
 
 import fs from "node:fs/promises";
@@ -17,16 +23,21 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 const QUESTION_ID_RE = /^[A-Za-z0-9-]{1,32}$/;
-export const QA_STATUSES = Object.freeze(["pending", "answered"]);
+/** status 的全部取值，顺序即业务优先级：置顶 > 已回答 > 待回答 > 隐藏。 */
+export const QA_STATUSES = Object.freeze(["pinned", "answered", "pending", "hidden"]);
+/** 公开展示给所有人的状态。 */
+export const QA_PUBLIC_STATUSES = Object.freeze(["pinned", "answered"]);
 
 const COLUMNS = "question_id, asker_id, question, asked_at, answer, answered_at, status, answered_by, updated_at";
 const HYDRATE_SQL = `SELECT ${COLUMNS} FROM qa_questions ORDER BY asked_at DESC, question_id DESC`;
 /** 表已存在但缺列时补齐（例如手工建表只写了 6 个字段），避免升级时启动失败。 */
 const EXTRA_COLUMN_DDL = {
-  status: "ALTER TABLE qa_questions ADD COLUMN status ENUM('pending','answered') NOT NULL DEFAULT 'pending'",
+  status: "ALTER TABLE qa_questions ADD COLUMN status ENUM('pending','answered','pinned','hidden') NOT NULL DEFAULT 'pending'",
   answered_by: "ALTER TABLE qa_questions ADD COLUMN answered_by VARCHAR(64) NOT NULL DEFAULT ''",
   updated_at: "ALTER TABLE qa_questions ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
 };
+/** 旧库的 status 可能只有 pending/answered 两种取值，缺值就升级枚举。 */
+const STATUS_ENUM_DDL = "ALTER TABLE qa_questions MODIFY COLUMN status ENUM('pending','answered','pinned','hidden') NOT NULL DEFAULT 'pending'";
 
 function toText(value) {
   if (value === null || value === undefined) return "";
@@ -58,6 +69,12 @@ function toSqlTimestamp(value) {
   return Number.isNaN(parsed) ? null : new Date(parsed).toISOString().slice(0, 19).replace("T", " ");
 }
 
+/** 未知状态一律按 pending 处理，避免脏数据把问题意外公开。 */
+function normalizeStatus(value) {
+  const status = toText(value).trim().toLowerCase();
+  return QA_STATUSES.includes(status) ? status : "pending";
+}
+
 function normalizeStored(row) {
   return {
     question_id: toText(row?.question_id),
@@ -66,7 +83,7 @@ function normalizeStored(row) {
     asked_at: toIsoText(row?.asked_at),
     answer: toNullableText(row?.answer),
     answered_at: toIsoText(row?.answered_at),
-    status: row?.status === "answered" ? "answered" : "pending",
+    status: normalizeStatus(row?.status),
     answered_by: toText(row?.answered_by),
     updated_at: toIsoText(row?.updated_at)
   };
@@ -76,6 +93,15 @@ function sortedDescending(rows) {
   return [...rows].sort((a, b) => {
     const diff = String(b.asked_at || "").localeCompare(String(a.asked_at || ""));
     return diff !== 0 ? diff : String(b.question_id).localeCompare(String(a.question_id));
+  });
+}
+
+/** 公开列表顺序：置顶在前，其余按提问时间倒序。 */
+function publicOrder(rows) {
+  return [...rows].sort((a, b) => {
+    const pin = (a.status === "pinned" ? 0 : 1) - (b.status === "pinned" ? 0 : 1);
+    if (pin !== 0) return pin;
+    return String(b.asked_at || "").localeCompare(String(a.asked_at || ""));
   });
 }
 
@@ -111,18 +137,20 @@ export function createQaStore({ query, getPool, fallbackPath, answeredBy = "ADMI
         asked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         answer TEXT NULL,
         answered_at TIMESTAMP NULL DEFAULT NULL,
-        status ENUM('pending','answered') NOT NULL DEFAULT 'pending',
+        status ENUM('pending','answered','pinned','hidden') NOT NULL DEFAULT 'pending',
         answered_by VARCHAR(64) NOT NULL DEFAULT '',
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         KEY idx_qa_asker (asker_id),
         KEY idx_qa_status (status, asked_at),
         KEY idx_qa_asked_at (asked_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
-      const [existing] = await query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'qa_questions'");
-      const present = new Set(existing.map(column => column.COLUMN_NAME || column.column_name));
+      const [existing] = await query("SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'qa_questions'");
+      const present = new Map(existing.map(column => [column.COLUMN_NAME || column.column_name, column.COLUMN_TYPE || column.column_type || ""]));
       for (const [column, ddl] of Object.entries(EXTRA_COLUMN_DDL)) {
         if (!present.has(column)) await query(ddl);
       }
+      // 旧库的 status 只有 pending/answered，缺 pinned/hidden 时升级枚举。
+      if (present.has("status") && !["pinned", "hidden"].every(value => String(present.get("status")).includes(value))) await query(STATUS_ENUM_DDL);
       rows = (await query(HYDRATE_SQL))[0].map(normalizeStored);
       useTable = true;
     } catch (error) {
@@ -149,27 +177,36 @@ export function createQaStore({ query, getPool, fallbackPath, answeredBy = "ADMI
     return useTable ? "table" : "json";
   }
 
-  /** 全部问答，新的在前。 */
-  function list({ askerId, status } = {}) {
-    return sortedDescending(
-      rows.filter(row => {
-        if (askerId && row.asker_id !== String(askerId)) return false;
-        if (status && row.status !== status) return false;
-        return true;
-      })
-    );
+  /**
+   * 问答列表，新的在前。
+   * @param {object} [options]
+   * @param {string} [options.askerId] 只看某人的提问
+   * @param {string|string[]} [options.status] 只看某些状态
+   * @param {boolean} [options.publicOrder] true 时置顶排最前（公开列表用）
+   */
+  function list({ askerId, status, publicOrder: byPin } = {}) {
+    const wanted = status === undefined || status === null ? null : (Array.isArray(status) ? status : [status]);
+    const filtered = rows.filter(row => {
+      if (askerId && row.asker_id !== String(askerId)) return false;
+      if (wanted && !wanted.includes(row.status)) return false;
+      return true;
+    });
+    return byPin ? publicOrder(filtered) : sortedDescending(filtered);
   }
 
-  /** 公开 FAQ：只返回已回答的问题。 */
-  function listAnswered() {
-    return list({ status: "answered" });
+  /** 公开 FAQ：置顶在最前，然后是已回答；待回答与隐藏的问题一律不出现。 */
+  function listPublic() {
+    return list({ status: [...QA_PUBLIC_STATUSES], publicOrder: true });
   }
 
   function stats() {
+    const count = status => rows.filter(row => row.status === status).length;
     return {
       total: rows.length,
-      pending: rows.filter(row => row.status === "pending").length,
-      answered: rows.filter(row => row.status === "answered").length
+      pending: count("pending"),
+      answered: count("answered"),
+      pinned: count("pinned"),
+      hidden: count("hidden")
     };
   }
 
@@ -186,7 +223,7 @@ export function createQaStore({ query, getPool, fallbackPath, answeredBy = "ADMI
     if (!row.question) return { error: "question required", status: 400 };
     const now = new Date().toISOString();
     row.asked_at = row.asked_at || now;
-    if (row.status === "answered" && !row.answered_at) row.answered_at = now;
+    if (["answered", "pinned"].includes(row.status) && !row.answered_at) row.answered_at = now;
     row.updated_at = row.updated_at || row.answered_at || row.asked_at;
     if (!useTable) {
       rows = rows.filter(item => item.question_id !== row.question_id);
@@ -232,6 +269,7 @@ export function createQaStore({ query, getPool, fallbackPath, answeredBy = "ADMI
     return { question: row };
   }
 
+  /** 回答或修正答案：置顶状态在回答后保持不变，其它状态转为 answered。 */
   async function answerQuestion({ questionId, answer, answeredBy: by }) {
     const id = toText(questionId).trim();
     if (!id || !QUESTION_ID_RE.test(id)) return { error: "invalid question id", status: 400 };
@@ -242,15 +280,49 @@ export function createQaStore({ query, getPool, fallbackPath, answeredBy = "ADMI
     if (!row) return { error: "question not found", status: 404 };
     const now = new Date().toISOString();
     const author = toText(by).trim() || answeredBy;
+    const status = row.status === "pinned" ? "pinned" : "answered";
     const previous = { answer: row.answer, answered_at: row.answered_at, status: row.status, answered_by: row.answered_by, updated_at: row.updated_at };
     row.answer = text;
     row.answered_at = now;
     row.answered_by = author;
-    row.status = "answered";
+    row.status = status;
     row.updated_at = now;
     if (useTable) {
       try {
-        await query("UPDATE qa_questions SET answer = ?, answered_at = ?, answered_by = ?, status = 'answered', updated_at = ? WHERE question_id = ?", [row.answer, toSqlTimestamp(row.answered_at), author, toSqlTimestamp(now), row.question_id]);
+        await query("UPDATE qa_questions SET answer = ?, answered_at = ?, answered_by = ?, status = ?, updated_at = ? WHERE question_id = ?", [row.answer, toSqlTimestamp(row.answered_at), author, status, toSqlTimestamp(now), row.question_id]);
+      } catch (error) {
+        Object.assign(row, previous);
+        return { error: error?.message || "storage error", status: 500 };
+      }
+    } else {
+      await persist();
+    }
+    return { question: row };
+  }
+
+  /**
+   * 主办方调整状态：置顶 / 显示 / 隐藏 / 打回待回答。
+   * 置顶与显示都要求已有答案；隐藏保留原答案，便于之后再公开；
+   * 已经有答案的问题不允许退回 pending（后台下拉框也不会给这个选项）。
+   */
+  async function setStatus({ questionId, status, answeredBy: by }) {
+    const id = toText(questionId).trim();
+    if (!id || !QUESTION_ID_RE.test(id)) return { error: "invalid question id", status: 400 };
+    const next = normalizeStatus(status);
+    if (toText(status).trim().toLowerCase() !== next) return { error: "invalid status", status: 400 };
+    const row = rows.find(item => String(item.question_id).toUpperCase() === id.toUpperCase());
+    if (!row) return { error: "question not found", status: 404 };
+    if (["pinned", "answered"].includes(next) && !toNullableText(row.answer)) return { error: "answer required before publishing", status: 400 };
+    if (next === "pending" && toNullableText(row.answer)) return { error: "answered question cannot go back to pending", status: 400 };
+    const now = new Date().toISOString();
+    const author = toText(by).trim() || row.answered_by || answeredBy;
+    const previous = { status: row.status, answered_by: row.answered_by, updated_at: row.updated_at };
+    row.status = next;
+    if (row.answer) row.answered_by = author;
+    row.updated_at = now;
+    if (useTable) {
+      try {
+        await query("UPDATE qa_questions SET status = ?, answered_by = ?, updated_at = ? WHERE question_id = ?", [next, row.answered_by, toSqlTimestamp(now), row.question_id]);
       } catch (error) {
         Object.assign(row, previous);
         return { error: error?.message || "storage error", status: 500 };
@@ -266,5 +338,5 @@ export function createQaStore({ query, getPool, fallbackPath, answeredBy = "ADMI
     return queue.catch(() => {});
   }
 
-  return { initialize, mode, list, listAnswered, stats, createQuestion, putQuestion, answerQuestion, flush };
+  return { initialize, mode, list, listPublic, stats, createQuestion, putQuestion, answerQuestion, setStatus, flush };
 }

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="minicamp 2026 问答：搜索主办方已回答的问题，登录后可以直接向主办方提问。">
+  <title>Q&amp;A｜minicamp 2026</title>
+  <link rel="icon" type="image/png" href="assets/brand/minicamp-logo-seal.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="profile-body" data-page="qa">
+  <header id="site-header" class="site-header"></header>
+
+  <main class="profile-shell shell">
+    <section class="profile-header">
+      <div>
+        <p class="section-kicker">Q&amp;A / ASK THE ORGANIZERS</p>
+        <h1>先搜一搜，<br>再问主办方。</h1>
+        <p>主办方回答过的问题都会出现在这里。搜关键词就能找到答案；没有答案的问题，登录后可以直接提问。</p>
+      </div>
+      <a class="button button-dark" href="#ask">提问 <span>↗</span></a>
+    </section>
+
+    <section class="qa-toolbar" aria-label="问答搜索">
+      <label class="qa-search">
+        <span class="section-kicker">SEARCH</span>
+        <input id="qa-search" type="search" placeholder="搜索问题或答案，例如：电源、组队、录取" autocomplete="off">
+      </label>
+      <p class="qa-count" id="qa-count" role="status"></p>
+    </section>
+
+    <section class="qa-ask" id="ask">
+      <article class="qa-login-note" id="qa-login-note" hidden>
+        <p class="section-kicker">LOGIN REQUIRED</p>
+        <h2>登录后即可提问。</h2>
+        <p>提问需要使用报名时拿到的申请编号（例如 <code>MC26-1001</code>）和报名填写的手机号或邮箱登录。你的问题会先进入待回答列表，主办方回答后其他人才能看到。</p>
+        <a class="button button-primary" id="qa-login-link" href="profile.html">登录后提问 <span>↗</span></a>
+      </article>
+      <article class="qa-ask-card" id="qa-ask-card" hidden>
+        <p class="section-kicker">ASK / NEW QUESTION</p>
+        <h2>向主办方提问</h2>
+        <form id="qa-ask-form" novalidate>
+          <label>你的问题
+            <textarea id="qa-ask-input" rows="4" required placeholder="请把问题写具体一些，例如：现场提供电源和 Wi-Fi 吗？需要自带插排吗？"></textarea>
+            <small class="field-help">2–2000 字。相同内容的待回答问题不会重复提交。</small>
+          </label>
+          <p class="form-error" id="qa-ask-error" role="alert"></p>
+          <div class="qa-ask-actions">
+            <button class="button button-dark" type="submit">提交问题 <span>↗</span></button>
+            <small id="qa-ask-state">已登录：<b id="qa-ask-who">—</b></small>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section class="qa-section" id="qa-pinned-section" hidden>
+      <div class="qa-section-head">
+        <div>
+          <p class="section-kicker">PINNED</p>
+          <h2>置顶问题</h2>
+        </div>
+        <p>主办方认为最值得先看的问题。</p>
+      </div>
+      <div class="qa-list" id="qa-pinned"></div>
+    </section>
+
+    <section class="qa-section" id="qa-mine-section" hidden>
+      <div class="qa-section-head">
+        <div>
+          <p class="section-kicker">MY QUESTIONS</p>
+          <h2>我的提问</h2>
+        </div>
+        <p>包括还没被回答的问题，只有你和主办方能看到。</p>
+      </div>
+      <div class="qa-list" id="qa-mine"></div>
+    </section>
+
+    <section class="qa-section" id="qa-others-section">
+      <div class="qa-section-head">
+        <div>
+          <p class="section-kicker">ALL ANSWERS</p>
+          <h2>其他已回答</h2>
+        </div>
+        <p>主办方已回答的全部问题。</p>
+      </div>
+      <div class="qa-grid" id="qa-grid"></div>
+      <p class="qa-empty" id="qa-empty" hidden></p>
+    </section>
+  </main>
+
+  <script src="api.js"></script>
+  <script src="nav.js"></script>
+  <script src="ui.js"></script>
+  <script src="qa.js"></script>
+  <div id="participant-fab-root"></div>
+  <script src="api.js"></script>
+  <script src="participant-fab.js"></script>
+</body>
+</html>

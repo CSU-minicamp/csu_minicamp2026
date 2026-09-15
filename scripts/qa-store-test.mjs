@@ -49,10 +49,17 @@ function createFakeMysql() {
         return [{ affectedRows: 1 }, []];
       }
       if (/^UPDATE qa_questions SET/i.test(sql)) {
-        const [answer, answered_at, answered_by, updated_at, question_id] = params;
+        if (/SET status = \?/i.test(sql)) {
+          const [status, answered_by, updated_at, question_id] = params;
+          const row = table.get(question_id);
+          if (!row) return [{ affectedRows: 0 }, []];
+          Object.assign(row, { status, answered_by, updated_at });
+          return [{ affectedRows: 1 }, []];
+        }
+        const [answer, answered_at, answered_by, status, updated_at, question_id] = params;
         const row = table.get(question_id);
         if (!row) return [{ affectedRows: 0 }, []];
-        Object.assign(row, { answer, answered_at, answered_by, updated_at, status: "answered" });
+        Object.assign(row, { answer, answered_at, answered_by, updated_at, status });
         return [{ affectedRows: 1 }, []];
       }
       throw new Error("unexpected SQL: " + sql);
@@ -83,20 +90,50 @@ check("asker_id 原样写入", insert?.params[1] === "MC26-1001", insert?.params
 
 const answered = await store.answerQuestion({ questionId: created.question.question_id, answer: "有，建议自带插排。", answeredBy: "组委会" });
 const update = fake.calls.find(call => /^UPDATE qa_questions SET/i.test(call.sql));
-check("UPDATE 语句包含答案、回答时间、回答人、状态与主键", Boolean(update) && /status = 'answered'/i.test(update.sql) && update.params.length === 5, update);
+check("UPDATE 语句包含答案、回答时间、回答人、状态与主键", Boolean(update) && /answer = \?, answered_at = \?, answered_by = \?, status = \?/i.test(update.sql) && update.params.length === 6 && update.params[3] === "answered", update);
 check("回答后内存对象同步更新", answered.question?.status === "answered" && answered.question?.answered_by === "组委会" && Boolean(Date.parse(answered.question?.answered_at)), answered.question);
 check("表模式不写 JSON 回退文件", await fs.readFile(fallbackPath, "utf8").then(() => false, () => true), fallbackPath);
-check("统计与筛选可用", store.stats().answered === 1 && store.listAnswered().length === 1 && store.list({ askerId: "MC26-1001" }).length === 1, store.stats());
+check("统计与筛选可用", store.stats().answered === 1 && store.listPublic().length === 1 && store.list({ askerId: "MC26-1001" }).length === 1, store.stats());
 
 const duplicate = await store.createQuestion({ askerId: "MC26-1001", question: "  现场有电源吗？  " });
 check("已回答的问题允许再次提问（去重只针对待回答）", !duplicate.error, duplicate);
 
+// --- 置顶 / 隐藏 ---
+const pinned = await store.setStatus({ questionId: created.question.question_id, status: "pinned", answeredBy: "组委会" });
+check("置顶成功且状态为 pinned", pinned.question?.status === "pinned", pinned);
+check("置顶问题仍在公开列表最前", store.listPublic()[0]?.question_id === created.question.question_id, store.listPublic().map(row => [row.question_id, row.status]));
+const updatePin = fake.calls.filter(call => /^UPDATE qa_questions SET status = \?/i.test(call.sql)).pop();
+check("置顶走独立的 status UPDATE 语句", Boolean(updatePin) && updatePin.params[0] === "pinned" && updatePin.params.length === 4, updatePin);
+
+const hidden = await store.setStatus({ questionId: created.question.question_id, status: "hidden" });
+check("隐藏后不出现在公开列表", hidden.question?.status === "hidden" && !store.listPublic().some(row => row.question_id === created.question.question_id), store.stats());
+// 已回答过的问题不允许退回 pending（无论当前是 answered / pinned / hidden）
+const revertFromHidden = await store.setStatus({ questionId: created.question.question_id, status: "pending" });
+check("隐藏态不能退回待回答(400)", revertFromHidden.status === 400 && revertFromHidden.error === "answered question cannot go back to pending", revertFromHidden);
+await store.setStatus({ questionId: created.question.question_id, status: "answered" });
+const revertFromAnswered = await store.setStatus({ questionId: created.question.question_id, status: "pending" });
+check("已回答态不能退回待回答(400)", revertFromAnswered.status === 400 && revertFromAnswered.error === "answered question cannot go back to pending", revertFromAnswered);
+await store.setStatus({ questionId: created.question.question_id, status: "hidden" });
+const hiddenPending = await store.createQuestion({ askerId: "MC26-1002", question: "隐藏的待回答问题？" });
+await store.createQuestion({ askerId: "MC26-1002", question: "重复提交一次？" });
+const stillPending = await store.setStatus({ questionId: hiddenPending.question.question_id, status: "pending" });
+check("没有答案的问题仍可保持待回答", stillPending.question?.status === "pending", stillPending);
+const publishedWithoutAnswer = await store.setStatus({ questionId: hiddenPending.question.question_id, status: "answered" });
+check("没有答案时不允许公开(400)", publishedWithoutAnswer.status === 400 && publishedWithoutAnswer.error === "answer required before publishing", publishedWithoutAnswer);
+const invalidStatus = await store.setStatus({ questionId: hiddenPending.question.question_id, status: "top" });
+check("非法状态被拒绝(400)", invalidStatus.status === 400 && invalidStatus.error === "invalid status", invalidStatus);
+const missingQuestion = await store.setStatus({ questionId: "Q-NOTEXIST", status: "hidden" });
+check("对不存在的问题置顶/隐藏返回 404", missingQuestion.status === 404, missingQuestion);
+check("stats 覆盖四种状态", ["pending", "answered", "pinned", "hidden"].every(key => Number.isInteger(store.stats()[key])), store.stats());
+const pendingDedup = await store.createQuestion({ askerId: "MC26-1002", question: "隐藏的待回答问题？" });
+check("待回答问题仍然去重(409)", pendingDedup.status === 409, pendingDedup);
+
 // --- 表模式 hydrate：模拟服务重启后从表里读回数据 ---
 const restart = createQaStore({ query: fake.query, getPool: () => ({ fake: true }), fallbackPath, warn: message => warnings.push(message) });
 const reloaded = await restart.initialize();
-check("重启后从表 hydrate 到 2 条记录", reloaded === 2 && restart.mode() === "table", { reloaded, mode: restart.mode() });
+check("重启后从表 hydrate（4 条记录）", reloaded === 4 && restart.mode() === "table", { reloaded, mode: restart.mode() });
 const restored = restart.list().find(row => row.question_id === created.question.question_id);
-check("hydrate 保留答案、回答人与状态", restored?.answer === "有，建议自带插排。" && restored?.status === "answered" && restored?.answered_by === "组委会", restored);
+check("hydrate 保留答案、回答人与隐藏状态", restored?.answer === "有，建议自带插排。" && restored?.status === "hidden" && restored?.answered_by === "组委会", restored);
 check("hydrate 把 TIMESTAMP 转成可读时间", /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(String(restored?.asked_at)), restored?.asked_at);
 
 // --- 回退模式 ---

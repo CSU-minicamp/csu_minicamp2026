@@ -60,41 +60,6 @@
 
 清除命令只删除带测试标记的数据，并恢复生成前的活动配置；不会删除原有报名、队伍、项目、通知或投票记录。
 
-## 问答信息存储
-
-问答信息单独存放在 `qa_questions` 表（不再塞进 `app_state` 的 JSON），字段如下：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `question_id` | `VARCHAR(32)` PK | 问题 id，形如 `Q-1A2B3C4D5E` |
-| `asker_id` | `VARCHAR(64)` | 提问人 id，报名编号如 `MC26-1001`（对应 `applications.id`） |
-| `question` | `TEXT` | 问题内容 |
-| `asked_at` | `TIMESTAMP` | 提问时间 |
-| `answer` | `TEXT NULL` | 答案，未回答为 `NULL` |
-| `answered_at` | `TIMESTAMP NULL` | 回答时间，未回答为 `NULL` |
-| `status` | `ENUM('pending','answered')` | 待回答 / 已回答，便于后台筛选 |
-| `answered_by` | `VARCHAR(64)` | 回答人（主办方标识） |
-| `updated_at` | `TIMESTAMP` | 最后更新时间 |
-
-存储层在 `storage/qa-store.mjs`：MySQL 可用时读写 `qa_questions` 表；MySQL 不可用（离线开发）时自动回退到 `data/qa.json`，接口行为完全一致。启动日志会显示当前模式：`minicamp preview: http://localhost:4173 (qa storage: table|json)`。
-
-接口（只提供数据层，暂无页面）：
-
-| 方法与路径 | 权限 | 说明 |
-| --- | --- | --- |
-| `POST /api/qa` | 参与者登录 | 提问，body：`{ "question": "..." }` |
-| `GET /api/qa` | 参与者 | 查看自己的问答 |
-| `GET /api/qa?status=pending` | 主办方 | 查看全部问答（可筛选状态），返回 `stats` |
-| `GET /api/qa/answered` | 公开 | 已回答问题，可直接用于 FAQ 展示 |
-| `PATCH /api/admin/qa/{questionId}` | 主办方 | 回答或修正答案，body：`{ "answer": "...", "answeredBy": "组委会" }` |
-
-验证：
-
-    npm run qa-store-test   # 存储层单元测试：表模式的 SQL、参数、时间戳与 hydrate 映射（无需 MySQL）
-    npm run qa-import       # 把离线期间的 data/qa.json 记录导入数据库（见下）
-
-接上 MySQL 后确认表已生效：启动日志出现 `(qa storage: table)`，用主办方 token 调 `GET /api/qa` 返回 `{"questions":[],"stats":{...}}`。
-
 ## 部署与反向代理
 
 前端通过相对路径请求 `/api/*`。Node 服务（`server.mjs`）同时负责**静态页面**和 **`/api` 接口**，并绑定在本机 `127.0.0.1:4173`。因此上线时只需把域名反向代理到这个 Node 服务即可。
@@ -118,6 +83,7 @@
 ## 页面入口
 
 - 官网首页：/
+- Q&A 问答：/qa.html
 - 个人主页：/profile.html
 - 组队与 Idea：/team.html
 - 项目提交：/submission.html
@@ -137,7 +103,7 @@
 - Idea 发布、项目草稿提交、主办方审核发布、动态 Gallery。
 - 参与者投票、Jury 投票、参与者/Jury 权重统计。
 - 活动日期、报名状态、投票权重和 Starter Pack 可在后台配置。
-- 问答信息独立存储于 `qa_questions` 表（见上文），已提供数据层与接口。
+- 问答信息独立存储于 `qa_questions` 表，前台 `/qa.html` 支持搜索、折叠展开、置顶、我的提问分段展示，后台可回答与置顶/隐藏，回答后自动通知提问者（见上文）。
 - 统一的通知与确认模块 `public/ui.js`（`MinicampUI.toast / confirm / alert`）：页面不再使用 `window.confirm` 等浏览器默认弹窗，需要时在页面里加一行 `<script src="ui.js"></script>` 即可。
 
 正式部署前仍应配置生产 MySQL，接入 HTTPS、统一身份认证、限流、CSRF 防护、审计日志和备份机制。
