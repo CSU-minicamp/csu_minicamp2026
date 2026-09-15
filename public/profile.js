@@ -4,19 +4,26 @@
   const params = new URLSearchParams(location.search);
   const returnTo = params.get("returnTo") || "";
   const profileRequired = params.get("profileRequired") === "1";
+  const localPreview = api.isLocalPreview?.();
   document.querySelectorAll('input[name="phone"]').forEach(input => input.addEventListener("input", () => { const digits = input.value.replace(/\D/g, "").slice(0, 11); if (input.value !== digits) input.value = digits; }));
   document.querySelectorAll('input[name="studentId"]').forEach(input => input.addEventListener("input", () => { const digits = input.value.replace(/\D/g, "").slice(0, 10); if (input.value !== digits) input.value = digits; }));
   const activatePanel = id => { document.querySelectorAll("[data-profile-panel]").forEach(item => item.classList.toggle("active", item.dataset.profilePanel === id)); document.querySelectorAll(".profile-panel").forEach(panel => panel.classList.toggle("active", panel.id === id)); };
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
   const show = async () => {
     try {
-      const data = await api.request("/api/me"); current = data.participant; if (login) login.hidden = true; if (dashboard) dashboard.hidden = false;
-      document.getElementById("profile-name").textContent = current.name; document.getElementById("profile-status").innerHTML = "<strong>" + current.status + "</strong><span>" + (data.team ? data.team.id + " · " + data.team.members.length + " 人" : "尚未确认队伍") + "</span>"; if (profileRequired && !api.isProfileComplete(current)) { activatePanel("profile-details"); document.getElementById("edit-save-state").textContent = "请先完善所有必填个人信息，再继续。"; }
-      const form = document.getElementById("profile-edit-form"); for (const [name,value] of Object.entries(current)) { const field = form.elements[name]; if (field && field.type !== "checkbox" && field.type !== "radio") field.value = value || ""; }
+      const data = localPreview ? {participant: api.getPreviewParticipant(), team: null} : await api.request("/api/me"); current = data.participant; if (login) login.hidden = true; if (dashboard) dashboard.hidden = false;
+      const roadshow = (current.registration_type || current.registrationType || "contestant") === "roadshow";
+      const roadshowBox = document.getElementById("roadshow-profile");
+      if (roadshowBox) {
+        roadshowBox.hidden = !roadshow;
+        roadshowBox.innerHTML = roadshow ? "<div class='roadshow-summary'><p class='section-kicker'>ROADSHOW PROFILE</p><h3>路演报名已通过</h3><p>报名码 <strong>" + escapeHtml(current.id) + "</strong></p><dl><div><dt>身份类型</dt><dd>" + escapeHtml(current.identity_type) + "</dd></div><div><dt>学校 / 单位</dt><dd>" + escapeHtml(current.school_or_company) + "</dd></div><div><dt>年级 / 职位</dt><dd>" + escapeHtml(current.grade_or_position) + "</dd></div><div><dt>现场路演</dt><dd>" + (current.attend_roadshow ? "参加" : "不参加") + "</dd></div><div><dt>活动通知</dt><dd>" + (current.receive_notifications ? "接收" : "不接收") + "</dd></div></dl><p class='field-help'>路演用户仅可查看和修改个人资料、报名码和活动通知。如需参赛，请从首页重新选择“报名参赛”。</p></div>" : "";
+        document.querySelectorAll('[data-profile-panel="profile-votes"],#profile-votes,.profile-side-tip').forEach(el => { if (roadshow) el.hidden = true; });
+      }
+      document.getElementById("profile-name").textContent = current.name; document.getElementById("profile-application-id").textContent = current.id; document.getElementById("profile-status").innerHTML = "<strong>" + escapeHtml(current.status) + "</strong><span>" + (data.team ? escapeHtml(data.team.id) + " · " + data.team.members.length + " 人" : "尚未确认队伍") + "</span>"; if (profileRequired && !api.isProfileComplete(current)) { activatePanel("profile-details"); document.getElementById("edit-save-state").textContent = "请先完善所有必填个人信息，再继续。"; }
+      const form = document.getElementById("profile-edit-form"); if (form && roadshow) { form.hidden = false; form.elements.studentId.required = false; form.elements.motivation.required = false; form.elements.studentId.closest("label").hidden = true; form.elements.college.closest("label").querySelector("input").previousElementSibling; form.elements.college.closest("label").firstChild.textContent = "学校 / 单位"; form.elements.major.closest("label").firstChild.textContent = "年级 / 职位"; form.elements.grade.closest("label").hidden = true; form.elements.motivation.closest("label").hidden = true; } for (const [name,value] of Object.entries(current)) { const field = form?.elements[name]; if (field && field.type !== "checkbox" && field.type !== "radio") field.value = value || ""; } if (form && roadshow) { form.elements.college.value = current.school_or_company || ""; form.elements.major.value = current.grade_or_position || ""; }
       form.querySelectorAll('input[name="skills"]').forEach(input => input.checked = (current.skills || []).includes(input.value));
       document.getElementById("last-updated").textContent = current.updatedAt ? new Date(current.updatedAt).toLocaleString("zh-CN") : "已提交";
-      await renderNotices();
-      await renderVote();
+      if (!localPreview) { await renderNotices(); if (!roadshow) await renderVote(); }
     } catch { if (dashboard) location.replace("profile.html"); }
   };
   async function renderNotices() { const {notices} = await api.request("/api/me/notices"); const list = document.getElementById("notice-list"); const unread = notices.filter(item => !(item.readBy || []).includes(current.id)).length; const noticeCount = document.getElementById("notice-count"); noticeCount.textContent = unread; noticeCount.hidden = unread === 0; list.innerHTML = notices.map(item => { const read = (item.readBy || []).includes(current.id); return "<article class='notice-item " + (read ? "is-read" : "is-unread") + "'><div class='notice-marker'>" + (read ? "✓" : "!") + "</div><div><div class='notice-meta'><span>" + item.type + "</span><time>" + new Date(item.createdAt).toLocaleString("zh-CN") + "</time></div><h3>" + item.title + "</h3><p>" + item.body + "</p></div></article>"; }).join("") || "<p>暂无通知</p>"; }
@@ -47,11 +54,22 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
     const saveState = document.getElementById("edit-save-state");
     const editError = document.getElementById("edit-error");
     editError.textContent = "";
-    if (!api.isProfileComplete(payload)) {
+    const roadshow = (current.registration_type || current.registrationType) === "roadshow";
+    if (roadshow) {
+      payload.identity_type = current.identity_type;
+      payload.school_or_company = payload.college;
+      payload.grade_or_position = payload.major;
+      payload.attend_roadshow = current.attend_roadshow;
+      payload.receive_notifications = current.receive_notifications;
+      if (!["name", "phone", "email", "identity_type", "school_or_company", "grade_or_position"].every(key => String(payload[key] || "").trim())) {
+        editError.textContent = "请先填写姓名、手机号、邮箱、学校 / 单位和年级 / 职位。";
+        return;
+      }
+    } else if (!api.isProfileComplete(payload)) {
       editError.textContent = "请先填写姓名、学号、学院、专业、年级、手机号、邮箱和参与动机。";
       return;
     }
-    if (!api.isValidStudentId(payload.studentId)) {
+    if (!roadshow && !api.isValidStudentId(payload.studentId)) {
       form.elements.studentId.focus();
       editError.textContent = "请输入 10 位数字学号。";
       return;
@@ -64,7 +82,7 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
     try {
       await api.request("/api/me", {method:"PATCH", body:JSON.stringify(payload)});
       if (returnTo) { location.assign(returnTo); return; }
-      saveState.textContent = "已保存，等待主办方复核。";
+      saveState.textContent = roadshow ? "已保存。" : "已保存，等待主办方复核。";
       await show();
     } catch (err) { editError.textContent = err.message; }
   });
@@ -72,6 +90,7 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
   document.getElementById("mark-read")?.addEventListener("click", async () => { await api.request("/api/me/notices/read",{method:"POST"}); await renderNotices(); });
   document.getElementById("profile-logout")?.addEventListener("click", () => { api.logout(); location.reload(); });
   if (dashboard) show();
+  else if (localPreview) location.replace("profile-dashboard.html?preview=1");
   else if (api.getToken()) api.request("/api/me").then(() => { const destination = returnTo ? "profile-dashboard.html?returnTo=" + encodeURIComponent(returnTo) + "&profileRequired=1" : "profile-dashboard.html"; location.replace(destination); }).catch(() => api.logout());
 })();
 

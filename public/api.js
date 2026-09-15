@@ -10,11 +10,14 @@ window.MinicampAPI = (() => {
   const isValidPhone = value => /^\d{11}$/.test(String(value || "").trim());
   const isValidStudentId = value => /^\d{10}$/.test(String(value || "").trim());
   const profileReturnUrl = () => location.pathname.split("/").pop() + location.search + location.hash;
+  const isLocalPreview = () => ["localhost", "127.0.0.1"].includes(location.hostname) && new URLSearchParams(location.search).get("preview") === "1";
+  const previewParticipant = { id: "PREVIEW-01", name: "预览用户", studentId: "2026000001", college: "计算机学院", major: "软件工程", grade: "大三", phone: "13800000000", email: "preview@minicamp.local", motivation: "本地 UI 预览", status: "已录取", teamId: "", teamCode: "" };
   const redirectToProfile = (returnTo = profileReturnUrl()) => {
     const query = new URLSearchParams({ returnTo, profileRequired: "1" });
     location.replace("profile.html?" + query.toString());
   };
   async function requireProfile(returnTo = profileReturnUrl()) {
+    if (isLocalPreview()) return { participant: previewParticipant, team: null };
     try {
       const data = await request("/api/me");
       if (!isProfileComplete(data.participant)) {
@@ -49,5 +52,5 @@ window.MinicampAPI = (() => {
     } finally { clearTimeout(timeout); }
   }
   const adminRequest = (path, options = {}) => request(path, {...options, authRole: "admin"});
-  return {request, adminRequest, getToken, setToken, getAdminToken, setAdminToken, isProfileComplete, isValidPhone, isValidStudentId, requireProfile, redirectToProfile, participantLogin: async (id, contact) => { const data = await request("/api/auth/participant",{method:"POST",body:JSON.stringify({id,contact})}); setToken(data.token); return data; }, voterLogin: async identity => { const data = await request("/api/auth/voter",{method:"POST",body:JSON.stringify(identity)}); setToken(data.token); return data; }, logout: () => setToken(""), adminLogout: () => setAdminToken("")};
+  return {request, adminRequest, getToken, setToken, getAdminToken, setAdminToken, isProfileComplete, isValidPhone, isValidStudentId, isLocalPreview, getPreviewParticipant: () => ({...previewParticipant}), requireProfile, redirectToProfile, participantLogin: async (id, contact) => { const data = await request("/api/auth/participant",{method:"POST",body:JSON.stringify({id,contact})}); setToken(data.token); return data; }, voterLogin: async identity => { const data = await request("/api/auth/voter",{method:"POST",body:JSON.stringify(identity)}); setToken(data.token); return data; }, logout: () => setToken(""), adminLogout: () => setAdminToken("")};
 })();

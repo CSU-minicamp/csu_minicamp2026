@@ -2,6 +2,11 @@
   const api = MinicampAPI;
   const feedback = document.getElementById("team-feedback");
   let me;
+  let teamConfirmOpen = false;
+  const previewTeams = [
+    { id: "PREVIEW-TEAM-01", code: "MC26-DEMO", project: "夜航指南", locked: false, members: [{ name: "林未", skills: ["Frontend", "AI Engineer"] }, { name: "陈星", skills: ["Design", "Media"] }] },
+    { id: "PREVIEW-TEAM-02", code: "MC26-OPEN", project: "无障碍食堂", locked: false, members: [{ name: "周航", skills: ["Hardware"] }, { name: "许言", skills: ["Product"] }, { name: "沈知", skills: ["AI Engineer"] }] }
+  ];
 
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, character => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character]));
   const setFeedback = (message = "", type = "") => {
@@ -48,10 +53,12 @@
       "<div class='team-focus-head'><div><p class='section-kicker'>MY TEAM</p><h3>" + escapeHtml(team.project || team.id) + "</h3><span class='team-status " + (team.locked ? "is-locked" : "") + "\">" + status + "</span></div><b>" + count + " / 5 \u4eba</b></div>" +
       "<p class='team-code'>\u961f\u4f0d\u9080\u8bf7\u7801 <strong>" + escapeHtml(team.code) + "</strong><button class='copy-code' type='button' data-code='" + escapeHtml(team.code) + "'>\u590d\u5236</button></p>" +
       "<ul class='team-member-list team-member-slots'>" + members + "</ul>" +
+      "<div class='team-recruit-panel' id='team-recruit-panel' hidden><strong>招募队友</strong><p>把邀请码发给报名并完善资料的同学，对方输入邀请码即可加入。</p><div><code>" + escapeHtml(team.code) + "</code><button class='copy-code' type='button' data-code='" + escapeHtml(team.code) + "'>复制邀请码</button></div></div>" +
       "<div class='team-focus-actions'>" +
       (team.locked ? "<span class='team-action-note'>\u961f\u4f0d\u5df2\u9501\u5b9a\uff0c\u5982\u9700\u8c03\u6574\u8bf7\u8054\u7cfb\u4e3b\u529e\u65b9\u3002</span>" :
+        (team.ownerId === me?.id ? "<button class='outline-button' id='recruit-team' type='button'>" + (team.published ? "停止招募" : "发布招募") + "</button>" : "") +
         "<button class='outline-button' id='leave-team' type='button'>\u79bb\u5f00\u8fd9\u652f\u961f\u4f0d</button>" +
-        "<button class='button button-primary' id='lock-team' type='button' " + (missing ? "disabled title='\u9700\u8981\u81f3\u5c11 3 \u4eba\u624d\u80fd\u9501\u5b9a'" : "") + ">\u786e\u8ba4\u5e76\u9501\u5b9a\u961f\u4f0d</button>") +
+        (teamConfirmOpen && team.ownerId === me?.id ? "<button class='button button-primary' id='lock-team' type='button' " + (missing ? "disabled" : "") + ">确认正式队伍</button>" : "<span class='team-action-note'>预组队阶段 · 等待正式确认开启</span>")) +
       "</div>";
   }
 
@@ -74,7 +81,9 @@
       if (!mine) return;
       me = mine.participant;
       document.querySelector("main")?.removeAttribute("hidden");
-      const teamData = await api.request("/api/teams");
+      const configData = await api.request("/api/config");
+      teamConfirmOpen = Boolean(configData.config?.teamConfirmOpen);
+      const teamData = api.isLocalPreview?.() ? { teams: previewTeams } : await api.request("/api/teams");
       renderMyTeam(mine.team);
       renderTeams(teamData.teams, mine.team);
       bindTeamActions(mine.team);
@@ -110,6 +119,7 @@
         await render();
       } catch (error) { setFeedback(readableError(error), "error"); }
     });
+    document.getElementById("recruit-team")?.addEventListener("click", async () => { try { await api.request("/api/teams/" + encodeURIComponent(team.id) + "/recruit", { method: "PATCH" }); setFeedback(team.published ? "已停止公开招募。" : "已发布招募，其他同学现在可以在公开列表中看到你的队伍。", "success"); await render(); } catch (error) { setFeedback(readableError(error), "error"); } });
     document.querySelectorAll(".copy-code").forEach(button => button.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(button.dataset.code);
@@ -122,10 +132,11 @@
 
   document.getElementById("create-team-form").addEventListener("submit", async event => {
     event.preventDefault();
-    const project = new FormData(event.currentTarget).get("projectName").trim();
+    const form = event.currentTarget;
+    const project = new FormData(form).get("projectName").trim();
     try {
       await api.request("/api/teams", { method: "POST", body: JSON.stringify({ project }) });
-      event.currentTarget.reset();
+      form.reset();
       setFeedback("\u961f\u4f0d\u5df2\u521b\u5efa\uff0c\u8bf7\u628a\u9080\u8bf7\u7801\u53d1\u7ed9\u961f\u53cb\u3002", "success");
       await render();
     } catch (error) { setFeedback(readableError(error), "error"); }
@@ -133,7 +144,8 @@
 
   document.getElementById("join-by-code-form").addEventListener("submit", async event => {
     event.preventDefault();
-    const input = event.currentTarget.elements.code;
+    const form = event.currentTarget;
+    const input = form.elements.code;
     const code = input.value.trim().toUpperCase();
     try {
       await api.request("/api/teams/join-by-code", { method: "POST", body: JSON.stringify({ code }) });
