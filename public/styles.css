@@ -3228,7 +3228,6 @@ input[type="checkbox"].field-error, input[type="radio"].field-error { outline: 2
   .qa-admin-side .qa-choice { flex: 0 0 auto; }
   .qa-admin-editor-input { min-height: 160px; }
 }
-=======
 /* RO status */
 #panel-applicants .status-cell { white-space: nowrap; }
 #panel-applicants .status-select { width: auto; min-width: 104px; padding: 8px 10px; border-color: #c8c8c1; border-radius: 4px; font-size: 11px; font-weight: 700; }
