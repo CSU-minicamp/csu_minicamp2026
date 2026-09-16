@@ -55,12 +55,32 @@ function questionWithId(row){
   const {rootQuestionId,depth}=qaStore.rootOf(row.question_id);
   return {question_id:row.question_id,parent_question_id:row.parent_question_id||null,root_question_id:rootQuestionId||row.question_id,depth,asker_id:row.asker_id,question:row.question,asked_at:row.asked_at,answer:row.answer,answered_at:row.answered_at,status:row.status,answered_by:row.answered_by};
 }
-/** 公开页面的追问链：只有公开状态的追问可见，嵌套成树（不限层数）。 */
+/**
+ * 会话根不公开、但链上某条追问自己已公开时，把它作为 detached 条目返回（前端独立成卡）。
+ * 根公开的会话不在此列 —— 那些追问已经挂在公开链里了。
+ */
+function qaDetachedQuestions(publicRoots){
+  const publicRootIds=new Set(publicRoots.map(row=>row.question_id));
+  const seen=new Set();
+  const result=[];
+  for(const row of qaStore.list({status:[...QA_PUBLIC_STATUSES]})){
+    if(!row.parent_question_id)continue;
+    const {rootQuestionId}=qaStore.rootOf(row.question_id);
+    if(!rootQuestionId||publicRootIds.has(rootQuestionId)||seen.has(row.question_id))continue;
+    seen.add(row.question_id);
+    result.push({...publicQuestion(row),detached:true,root_question_id:rootQuestionId});
+  }
+  return result;
+}
+/**
+ * 公开页面的追问链：只展示公开状态的追问，但会保留"通往更深公开追问"的链接节点
+ * （父问题被隐藏、父还没回答时，已公开的子追问不会丢，客户端会把它断开独立显示）。
+ */
 function qaPublicFollowUps(rootQuestionId){
   const session=qaStore.listSession(rootQuestionId);
-  const build=parentId=>session
-    .filter(row=>String(row.parent_question_id||"")===String(parentId)&&QA_PUBLIC_STATUSES.includes(row.status))
-    .map(row=>publicQuestion(row,build(row.question_id)));
+  const childrenOf=parentId=>session.filter(row=>String(row.parent_question_id||"")===String(parentId));
+  const isVisible=row=>QA_PUBLIC_STATUSES.includes(row.status)||childrenOf(row.question_id).some(isVisible);
+  const build=parentId=>childrenOf(parentId).filter(isVisible).map(row=>publicQuestion(row,build(row.question_id)));
   return build(rootQuestionId);
 }
 /** 后台列表：每个会话根对应的追问条数、未回答追问数与最后活动时间（用于列表角标与排序）。 */
@@ -308,7 +328,10 @@ async function api(req,res,url){
   // 公开列表：会话根（置顶在前 + 已回答），每条根带自己可见的追问链；不含 asker_id 等身份信息。
   if((url.pathname==="/api/qa/public"||url.pathname==="/api/qa/answered")&&method==="GET"){
     const roots=qaStore.listPublic();
-    return send(res,200,{questions:roots.map(row=>publicQuestion(row,qaPublicFollowUps(row.question_id)))});
+    const questions=roots.map(row=>publicQuestion(row,qaPublicFollowUps(row.question_id)));
+    // 断开显示：某条追问自己已公开，但它所在会话的根没公开（根被隐藏 / 还没回答）时，
+    // 这条追问不属于任何公开链，单独作为 detached 条目返回，由前端独立成卡。
+    return send(res,200,{questions:[...questions,...qaDetachedQuestions(roots)]});
   }
   // 单条会话的完整树（仅主办方）：含未公开的追问，按层级与时间排列。
   const qaThreadMatch=url.pathname.match(/^\/api\/qa\/threads\/([^/]+)$/);

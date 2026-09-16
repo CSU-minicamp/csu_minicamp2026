@@ -3171,6 +3171,34 @@ input[type="checkbox"].field-error, input[type="radio"].field-error { outline: 2
 .qa-waiting-mark { width: 22px; height: 22px; display: grid; place-items: center; color: var(--ink); background: var(--yellow); border-radius: 50%; font-weight: 900; }
 .qa-card.is-pending { background: #fdfdf9; border-style: dashed; }
 
+/* follow-up question */
+.qa-chain { margin-top: 14px; padding-top: 14px; display: grid; gap: 10px; border-top: 1px dashed #e3e3dc; }
+.qa-chain-body { display: grid; gap: 10px; }
+.qa-chain.is-collapsed .qa-chain-body { display: none; }
+.qa-thread-toggle { padding: 0; border: 0; background: transparent; display: inline-flex; align-items: center; gap: 7px; justify-self: start; color: var(--muted); font: 800 11px inherit; cursor: pointer; }
+.qa-thread-toggle:hover { color: var(--ink); }
+.qa-thread-toggle-mark { width: 18px; height: 18px; display: grid; place-items: center; color: var(--ink); background: #f1f0ea; border: 1px solid #d8d8d1; border-radius: 4px; font: 800 12px Consolas, monospace; }
+.qa-chain-branch { display: grid; gap: 10px; }
+.qa-chain .qa-chain { margin-top: 10px; padding-top: 10px; padding-left: 16px; border-top: 0; border-left: 2px solid var(--yellow); }
+/* 状态与父问题不同的追问：断开独立显示；置顶的追问也会抽到置顶区单独显示 */
+.qa-card-detached { background: #fdfdf9; border-style: dashed; }
+.qa-card-detached .qa-tag { color: var(--muted); }
+.qa-detached-context { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.qa-followup { padding: 14px 16px; background: #fbfbf6; border: 1px solid #e2e2da; border-radius: var(--radius); }
+.qa-followup.is-pending { background: #fdfdf9; border-style: dashed; }
+.qa-followup.is-hidden { opacity: .72; }
+.qa-followup-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.qa-followup-head .qa-time { margin-left: auto; }
+.qa-followup-label { color: var(--coral); font: 800 10px Consolas, monospace; letter-spacing: .08em; }
+.qa-followup-question { margin: 9px 0 0; font-size: 15px; line-height: 1.55; }
+.qa-followup .qa-answer { margin-top: 11px; padding-top: 11px; }
+.qa-followup .qa-waiting { margin-top: 10px; }
+.qa-followup-form-host { display: grid; gap: 10px; justify-items: start; }
+.qa-followup-form { width: 100%; max-width: 640px; padding: 14px 16px; display: grid; gap: 11px; background: white; border: 1px solid var(--ink); border-radius: var(--radius); }
+.qa-followup-form label { display: flex; flex-direction: column; gap: 7px; font-size: 11px; font-weight: 700; }
+.qa-followup-form textarea { min-height: 74px; resize: vertical; font-size: 13px; font-weight: 400; }
+.qa-followup-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
 .qa-empty { margin-top: 18px; padding: 26px 24px; color: var(--muted); background: #f2f2ed; border-radius: var(--radius); font-size: 13px; line-height: 1.7; }
 
 @media (max-width: 900px) {
@@ -3204,6 +3232,22 @@ input[type="checkbox"].field-error, input[type="radio"].field-error { outline: 2
 .qa-admin-status { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font: 800 10px Consolas, monospace; letter-spacing: .08em; }
 .qa-admin-status .admin-select { width: 100%; }
 .qa-admin-side-hint { color: var(--muted); font-size: 11px; line-height: 1.6; text-align: center; }
+
+/* admin follow-up question */
+.qa-admin-followups { margin-top: 16px; padding-top: 14px; display: grid; gap: 12px; border-top: 1px dashed #e3e3dc; }
+.qa-admin-followup { padding: 14px 16px; background: #fbfbf6; border: 1px solid #e2e2da; border-radius: var(--radius); }
+.qa-admin-followup.is-pending { background: #fdfdf9; border-style: dashed; }
+.qa-admin-followup-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.qa-admin-followup-head .qa-time { margin-left: auto; }
+.qa-admin-followup-label { color: var(--coral); font: 800 10px Consolas, monospace; letter-spacing: .08em; }
+.qa-admin-followup .qa-admin-card-main { margin-top: 12px; grid-template-columns: minmax(0, 1fr) 200px; }
+.qa-admin-followup .qa-admin-followups { margin-top: 12px; padding-top: 10px; padding-left: 14px; border-top: 0; border-left: 2px solid var(--yellow); }
+.qa-admin-followup-branch { display: grid; gap: 10px; }
+.qa-admin-followup-count { padding: 3px 9px; color: #664d00; background: #fff7d6; border: 1px solid #e4d089; border-radius: 999px; font: 700 10px Consolas, monospace; }
+.qa-admin-followup-count b { color: var(--error); }
+@media (max-width: 860px) {
+  .qa-admin-followup .qa-admin-card-main { grid-template-columns: 1fr; }
+}
 .qa-admin-inline-error { margin: 12px 0 0; color: var(--error); font-size: 12px; }
 
 .qa-admin-editor { grid-column: 1 / -1; display: grid; gap: 10px; }

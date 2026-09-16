@@ -469,6 +469,8 @@ export function createQaStore({ query, getPool, fallbackPath, answeredBy = "ADMI
     const parent = rows.find(row => String(row.question_id).toUpperCase() === parentId.toUpperCase());
     if (!parent) return { error: "parent question not found", status: 404 };
     if (parent.asker_id !== asker) return { error: "only the original asker can follow up", status: 403 };
+    // 只有已经被回答过的问题才能追问：还没有答案时追问无从谈起。
+    if (!toNullableText(parent.answer)) return { error: "parent question is not answered yet", status: 409 };
     const text = toText(question).trim();
     if (text.length < 2) return { error: "question required", status: 400 };
     if (text.length > 2000) return { error: "question too long", status: 400 };

@@ -108,9 +108,14 @@ check("INSERT 默认 pending、无答案、parent 为 NULL", insert?.params[2] =
 check("原始问题同时登记会话行（depth 0）", fake.dump("qa_threads").some(row => row.root_question_id === created.question.question_id && Number(row.depth) === 0), fake.dump("qa_threads"));
 
 // --- 追问 ---
+// 追问的前提是"父问题已经被回答过"，所以先给根问题一个答案。
+const rootAnsweredFirst = await store.answerQuestion({ questionId: created.question.question_id, answer: "有，建议自带插排。", answeredBy: "组委会" });
+check("准备：先回答根问题（追问的前提）", rootAnsweredFirst.question?.status === "answered", rootAnsweredFirst);
 const follow1 = await store.createFollowUp({ askerId: "MC26-1001", parentQuestionId: created.question.question_id, question: "追问：插排需要自带吗？" });
 check("追问创建成功且指向父问题", follow1.question?.parent_question_id === created.question.question_id && follow1.depth === 1, follow1);
 check("追问归入同一会话", follow1.rootQuestionId === created.question.question_id, follow1.rootQuestionId);
+// 追问要能被继续追问，前提同样是"这条追问已经被回答过"
+await store.answerQuestion({ questionId: follow1.question.question_id, answer: "需要，建议自带。", answeredBy: "组委会" });
 const follow2 = await store.createFollowUp({ askerId: "MC26-1001", parentQuestionId: follow1.question.question_id, question: "再追问：有 USB 口吗？" });
 check("追问可以继续追问（depth 2）", follow2.depth === 2 && follow2.rootQuestionId === created.question.question_id, follow2);
 const threadRow = fake.dump("qa_threads").find(row => row.root_question_id === created.question.question_id);
@@ -123,24 +128,37 @@ const missingParent = await store.createFollowUp({ askerId: "MC26-1001", parentQ
 check("父问题不存在返回 404", missingParent.status === 404, missingParent);
 const noParent = await store.createFollowUp({ askerId: "MC26-1001", parentQuestionId: "", question: "没有父问题" });
 check("缺少父问题返回 400", noParent.status === 400, noParent);
+// 追问的前提是父问题已经被回答过
+const unansweredRoot = await store.createQuestion({ askerId: "MC26-1002", question: "这条还没被回答的独立问题" });
+check("准备：建一条未回答的问题", Boolean(unansweredRoot.question), unansweredRoot);
+const onUnanswered = await store.createFollowUp({ askerId: "MC26-1002", parentQuestionId: unansweredRoot.question.question_id, question: "没答案就想追问" });
+check("父问题还没回答时追问被拒(409)", onUnanswered.status === 409 && onUnanswered.error === "parent question is not answered yet", onUnanswered);
+await store.answerQuestion({ questionId: unansweredRoot.question.question_id, answer: "先给个答案", answeredBy: "组委会" });
+const afterAnswered = await store.createFollowUp({ askerId: "MC26-1002", parentQuestionId: unansweredRoot.question.question_id, question: "有答案后可以追问" });
+check("父问题回答后可以追问", !afterAnswered.error && afterAnswered.depth === 1, afterAnswered);
 const duplicatedFollow = await store.createFollowUp({ askerId: "MC26-1001", parentQuestionId: created.question.question_id, question: "追问：插排需要自带吗？" });
 check("同样内容的追问去重(409)", duplicatedFollow.status === 409, duplicatedFollow);
 
 const session = store.listSession(created.question.question_id);
-check("会话树按时间升序返回 3 条", session.length === 3 && session[0].question_id === created.question.question_id && session[2].question_id === follow2.question.question_id, session.map(row => [row.question_id, row.parent_question_id]));
+// 同一秒内 created_at/asked_at 精度相同，顺序不保证；这里校验"同会话 + 父子链正确"。
+const sessionParentOf = id => session.find(row => row.question_id === id)?.parent_question_id ?? null;
+check("会话树返回同一会话的 3 条且父子链正确", session.length === 3
+  && sessionParentOf(created.question.question_id) === null
+  && sessionParentOf(follow1.question.question_id) === created.question.question_id
+  && sessionParentOf(follow2.question.question_id) === follow1.question.question_id,
+  session.map(row => [row.question_id, row.parent_question_id]));
 check("rootOf 能定位任意追问所属会话与层级", store.rootOf(follow2.question.question_id).rootQuestionId === created.question.question_id && store.rootOf(follow2.question.question_id).depth === 2, store.rootOf(follow2.question.question_id));
-check("threadInfo / listThreads 可读会话行", store.threadInfo(created.question.question_id)?.depth === 2 && store.listThreads().length === 1, store.listThreads());
+check("threadInfo / listThreads 可读会话行", store.threadInfo(created.question.question_id)?.depth === 2 && store.listThreads().length >= 1, store.listThreads().length);
 
-// 追问独立状态：回答/隐藏只影响自己
-await store.answerQuestion({ questionId: follow1.question.question_id, answer: "需要，建议自带。", answeredBy: "组委会" });
+// 追问独立状态：隐藏只影响自己（follow1 的答案已在上面写入）
 const followAfter = store.list({ askerId: "MC26-1001" }).find(row => row.question_id === follow1.question.question_id);
 check("追问回答后自己变成 answered", followAfter.status === "answered" && followAfter.answer === "需要，建议自带。", followAfter);
 const rootRow = store.list().find(row => row.question_id === created.question.question_id);
-check("回答追问不影响原问题状态", rootRow.status === "pending" && rootRow.answer === null, rootRow);
+check("回答追问不影响原问题状态与答案", rootRow.status === "answered" && rootRow.answer === "有，建议自带插排。", rootRow);
 await store.setStatus({ questionId: follow2.question.question_id, status: "hidden" });
 check("追问可以单独隐藏", store.list().find(row => row.question_id === follow2.question.question_id).status === "hidden", "hidden");
-check("公开列表只返回会话根（追问不单独出现）", store.listPublic().length === 0, store.listPublic().map(row => row.question_id));
-check("统计区分根与追问", store.stats().roots === 1 && store.stats().followUps === 2 && store.stats().total === 3, store.stats());
+check("公开列表只返回会话根（追问不单独出现）", store.listPublic().length === 2 && store.listPublic().every(row => !row.parent_question_id), store.listPublic().map(row => row.question_id));
+check("统计区分根与追问", store.stats().followUps === 3 && store.stats().roots === store.stats().total - 3, store.stats());
 
 // --- 回答 / 置顶 / 隐藏（原有行为） ---
 const answered = await store.answerQuestion({ questionId: created.question.question_id, answer: "有，建议自带插排。", answeredBy: "组委会" });
@@ -148,13 +166,13 @@ const update = fake.calls.filter(call => /^UPDATE qa_questions SET/i.test(call.s
 check("UPDATE 语句包含答案、回答时间、回答人、状态与主键", Boolean(update) && update.params.length === 6 && update.params[3] === "answered", update);
 check("回答后内存对象同步更新", answered.question?.status === "answered" && answered.question?.answered_by === "组委会" && Boolean(Date.parse(answered.question?.answered_at)), answered.question);
 check("表模式不写 JSON 回退文件", await fs.readFile(fallbackPath, "utf8").then(() => false, () => true), fallbackPath);
-check("公开列表此时只含会话根", store.listPublic().length === 1 && store.listPublic()[0].question_id === created.question.question_id, store.listPublic().map(row => row.question_id));
+check("公开列表此时只含会话根", store.listPublic().length === 2 && store.listPublic().every(row => !row.parent_question_id), store.listPublic().map(row => row.question_id));
 
 const pinned = await store.setStatus({ questionId: created.question.question_id, status: "pinned", answeredBy: "组委会" });
 check("置顶成功且状态为 pinned", pinned.question?.status === "pinned", pinned);
 check("置顶问题仍在公开列表最前", store.listPublic()[0]?.question_id === created.question.question_id, store.listPublic().map(row => [row.question_id, row.status]));
 const hidden = await store.setStatus({ questionId: created.question.question_id, status: "hidden" });
-check("隐藏后不出现在公开列表", hidden.question?.status === "hidden" && store.listPublic().length === 0, store.stats());
+check("隐藏后不出现在公开列表", hidden.question?.status === "hidden" && !store.listPublic().some(row => row.question_id === created.question.question_id), store.listPublic().map(row => row.question_id));
 const revertFromHidden = await store.setStatus({ questionId: created.question.question_id, status: "pending" });
 check("隐藏态不能退回待回答(400)", revertFromHidden.status === 400 && revertFromHidden.error === "answered question cannot go back to pending", revertFromHidden);
 await store.setStatus({ questionId: created.question.question_id, status: "answered" });
@@ -181,7 +199,7 @@ check("已回答的问题允许再次提问（去重只针对待回答）", !dup
 // --- 表模式 hydrate：模拟服务重启后从表里读回数据 ---
 const restart = createQaStore({ query: fake.query, getPool: () => ({ fake: true }), fallbackPath, warn: message => warnings.push(message) });
 const reloaded = await restart.initialize();
-check("重启后从表 hydrate（6 条：3 条会话内 + 3 条独立）", reloaded === 6 && restart.mode() === "table", { reloaded, mode: restart.mode() });
+check("重启后从表 hydrate（8 条：3 条会话内 + 5 条独立）", reloaded === 8 && restart.mode() === "table", { reloaded, mode: restart.mode() });
 const restored = restart.list().find(row => row.question_id === created.question.question_id);
 check("hydrate 保留答案、回答人与隐藏状态", restored?.answer === "有，建议自带插排。" && restored?.status === "hidden" && restored?.answered_by === "组委会", restored);
 const restoredFollow = restart.list().find(row => row.question_id === follow2.question.question_id);
@@ -217,6 +235,7 @@ await failed.createQuestion({ askerId: "TEST-APP-01", question: "离线时能提
 const saved = JSON.parse(await fs.readFile(fallbackPath, "utf8"));
 check("回退模式写入 data 目录下的问答文件", saved.questions?.length === 1 && saved.questions[0].asker_id === "TEST-APP-01", saved.questions);
 const offlineRoot = await failed.createQuestion({ askerId: "TEST-APP-01", question: "离线时能追问吗？" });
+await failed.answerQuestion({ questionId: offlineRoot.question.question_id, answer: "离线也有答案", answeredBy: "组委会" });
 const offlineFollow = await failed.createFollowUp({ askerId: "TEST-APP-01", parentQuestionId: offlineRoot.question.question_id, question: "离线追问一条" });
 check("回退模式也能建追问（内存关系）", offlineFollow.question?.parent_question_id === offlineRoot.question.question_id && failed.listSession(offlineRoot.question.question_id).length === 2, offlineFollow);
 check("回退模式的会话行落在内存里", failed.threadInfo(offlineRoot.question.question_id)?.depth === 1, failed.threadInfo(offlineRoot.question.question_id));
