@@ -33,8 +33,10 @@
   };
   if (!els.grid) return;
 
-  const state = { publicQuestions: [], mine: [], me: null };
+  const state = { publicQuestions: [], mine: [], me: null, timer: 0, refreshing: false };
   const STATUS_LABEL = { pending: "待回答", answered: "已回答", pinned: "置顶", hidden: "已隐藏" };
+  /** 问答页自动刷新间隔：1 分钟（主办方回答后自动出现在这里）。 */
+  const REFRESH_INTERVAL_MS = 60000;
 
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const normalize = value => String(value ?? "").toLocaleLowerCase("zh-CN").replace(/\s+/g, " ").trim();
@@ -160,6 +162,36 @@
 
   els.search?.addEventListener("input", render);
 
+  /**
+   * 每 1 分钟自动刷新一次：重新拉取公开问答与自己的提问，然后只重绘内容。
+   * 重绘期间用 MinicampScroll.lock 锁住滚动位置，页面不会跳回顶部；
+   * 正在写提问（输入框有焦点）或标签页在后台时跳过这一轮。
+   */
+  function isAsking() {
+    const active = document.activeElement;
+    return Boolean(active && (active === els.askInput || els.askForm?.contains(active)) && active.tagName === "TEXTAREA");
+  }
+  async function refresh({ reason = "poll" } = {}) {
+    if (state.refreshing) return false;
+    if (reason === "poll" && (document.hidden || isAsking())) return false;
+    state.refreshing = true;
+    try {
+      await Promise.all([loadPublic(), loadMine()]);
+      // 数据驱动的内容一次性重绘：只更新内容，不改窗口显示位置。
+      if (window.MinicampScroll) window.MinicampScroll.lock(() => { renderLoginState(); render(); });
+      else { renderLoginState(); render(); }
+      return true;
+    } finally {
+      state.refreshing = false;
+    }
+  }
+  function startRefreshTimer() {
+    if (state.timer) clearInterval(state.timer);
+    state.timer = setInterval(() => { refresh({ reason: "poll" }); }, REFRESH_INTERVAL_MS);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh({ reason: "visible" }); });
+  startRefreshTimer();
+
   els.askForm?.addEventListener("submit", async event => {
     event.preventDefault();
     const text = els.askInput.value.trim();
@@ -175,9 +207,7 @@
       await api.request("/api/qa", { method: "POST", body: JSON.stringify({ question: text }) });
       els.askInput.value = "";
       window.MinicampUI?.toast("问题已提交，主办方回答后会通知你。", { tone: "success" });
-      await loadMine();
-      renderLoginState();
-      render();
+      await refresh({ reason: "submit" });
     } catch (error) {
       els.askError.textContent = error.message;
     } finally {

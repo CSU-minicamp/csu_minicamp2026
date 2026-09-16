@@ -54,6 +54,47 @@
   function toast(msg, tone = "info") { MinicampUI.toast(msg, {tone}); }
   function setHtml(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; }
 
+  /**
+   * 正在编辑的表单（通知 / 活动配置 / 主持人提示）在轮询刷新时不丢草稿：
+   * 每次重绘前用 preserveForm 把已填的值原样放回，内容继续更新、正在写的东西也不会被清掉。
+   */
+  const formDrafts = new Map();
+  const draftOf = id => formDrafts.get(id)?.draft ?? null;
+  /** 读取表单当前值（含未保存的草稿），供 preserveForm 使用。 */
+  function formDraft(form) {
+    const draft = new Map();
+    if (!form) return draft;
+    form.querySelectorAll("input, select, textarea").forEach(field => {
+      if (!field.name) return;
+      if (field.type === "checkbox" || field.type === "radio") draft.set(field.name, field.checked);
+      else draft.set(field.name, field.value);
+    });
+    return draft;
+  }
+  /** 重绘后把草稿原样放回：只更新内容，不清掉主办方正在写的东西。 */
+  function preserveForm(form, draft) {
+    if (!form || !draft || !draft.size) return form;
+    form.querySelectorAll("input, select, textarea").forEach(field => {
+      const name = field.name;
+      if (!name || !draft.has(name)) return;
+      const value = draft.get(name);
+      if (field.type === "checkbox" || field.type === "radio") field.checked = Boolean(value);
+      else field.value = String(value);
+    });
+    return form;
+  }
+  /** 绑定表单：用户改动后记录草稿，重绘时用 preserveForm 还原，标记 span 同步提示。 */
+  function bindDraft(id, form, helpId) {
+    if (!form || formDrafts.has(id)) return;
+    const entry = { draft: null };
+    formDrafts.set(id, entry);
+    ["input", "change"].forEach(type => form.addEventListener(type, () => {
+      entry.draft = formDraft(form);
+      const help = document.getElementById(helpId);
+      if (help) help.textContent = "你有未保存的修改：自动刷新会保留它们，保存或点「刷新数据」后同步最新数据。";
+    }));
+  }
+
   function showLogin() {
     if (document.getElementById("admin-login")) return;
     const box = document.createElement("section"); box.id = "admin-login"; box.className = "admin-login-card";
@@ -75,7 +116,12 @@
       }
     };
   }
-  function load() { return sync({ withQa: true, reason: "manual", notify: false }); }
+  // keepDrafts：轮询 / 面板自动刷新沿用「正在编辑」的状态；手动刷新按钮会清掉未保存草稿重新拉取。
+  // automatic：由轮询 / 切回标签页触发的刷新，正在输入时跳过；用户主动点按钮时为 false，正常刷新。
+  function load({ keepDrafts = true, withQa = true, automatic = true } = {}) {
+    if (!keepDrafts) formDrafts.forEach(entry => { entry.draft = null; });
+    return sync({ withQa, reason: "manual", notify: false, automatic });
+  }
   function bar(label, value, max) { return "<div><div class='status-bar-label'><span>" + esc(label) + "</span><b>" + value + "</b></div><div class='status-bar-track'><i style='width:" + (value / Math.max(max, 1) * 100) + "%'></i></div></div>"; }
   function stackedBar(label, value, acceptedCount, max) {
     const width = inner => Math.max(inner > 0 ? 3 : 0, inner / Math.max(max, 1) * 100);
@@ -568,19 +614,52 @@
     setHtml("vote-voters", voteRows ? voteRows : "<p class='empty-state'>暂无投票记录</p>");
   }
 
+  const NOTICE_TYPE_LABEL = { "资料复核": "资料复核", "问答": "问答回复", "项目审核": "项目审核", event: "活动公告", application: "报名进度", roadshow: "路演报名" };
+  const noticeType = value => NOTICE_TYPE_LABEL[String(value || "").trim()] || String(value || "").trim() || "通知";
+  /** 通知发给谁：所有人（ALL）还是某一位报名者（带姓名 / 报名编号）。 */
+  function noticeRecipient(notice) {
+    const target = String(notice?.target || "ALL");
+    if (target === "ALL" || !target) return { all: true, label: "所有人（所有报名者）", detail: "该通知会出现在每位报名者的通知中心。" };
+    const person = (state.applications || []).find(x => x.id === target);
+    const who = [person?.name, target].filter(Boolean).join(" · ");
+    return { all: false, label: "指定报名者：" + (who || target), detail: person ? [person.name, target, person.major].filter(Boolean).join(" · ") : "报名者 " + target };
+  }
+  /** 已发布通知：写清「发给谁」+「什么通知」（类型、标题、正文、时间、已读情况）。 */
+  function noticeItemHtml(notice) {
+    const to = noticeRecipient(notice);
+    const readCount = (notice.readBy || []).length;
+    const readText = to.all ? (state.applications || []).length + " 人收件箱 · 已读 " + readCount : (readCount ? "收件人已读" : "收件人未读");
+    return "<article class='admin-notice-item " + (to.all ? "is-broadcast" : "is-direct") + "'>" +
+      "<div class='notice-meta'><span>" + esc(noticeType(notice.type)) + "</span><time>" + esc(fmt(notice.createdAt)) + "</time></div>" +
+      "<h3>" + esc(notice.title) + "</h3>" +
+      "<div class='notice-recipient'><b>发给谁</b><span>" + esc(to.label) + "</span></div>" +
+      "<p>" + esc(notice.body) + "</p>" +
+      "<small class='notice-foot'>" + esc(readText) + "</small></article>";
+  }
   function renderNotices() {
-    setHtml("admin-notice-list", (state.notices || []).slice(0, 12).map(x => "<article class='admin-notice-item'><div class='notice-meta'><span>" + esc(x.type) + "</span><time>" + fmt(x.createdAt) + "</time></div><h3>" + esc(x.title) + "</h3><p>" + esc(x.body) + "</p></article>").join("") || "<p class='empty-state'>暂无通知</p>");
+    // 先把「发送对象」下拉按最新报名列表重建，再用草稿回填，避免自动刷新清掉已选收件人。
+    const select = document.getElementById("notice-target");
+    if (select) select.innerHTML = "<option value='ALL'>所有人（所有报名者）</option>" + (state.applications || []).map(x => "<option value='" + esc(x.id) + "'>" + esc(x.name) + " · " + esc(x.id) + "</option>").join("");
+    preserveForm(document.getElementById("notice-form"), draftOf("notice"));
+    setHtml("admin-notice-list", (state.notices || []).slice(0, 12).map(noticeItemHtml).join("") || "<p class='empty-state'>暂无通知</p>");
     const total = document.getElementById("notice-total"); if (total) total.textContent = (state.notices || []).length + " 条";
-    setHtml("notice-target", "<option value='ALL'>所有报名者</option>" + (state.applications || []).map(x => "<option value='" + esc(x.id) + "'>" + esc(x.name) + " · " + esc(x.id) + "</option>").join(""));
   }
 
   function renderConfig() {
-    const box = document.getElementById("config-editor"); if (!box) return; const c = state.config || {};
+    const box = document.getElementById("config-editor"); if (!box) return;
+    const c = state.config || {};
     const pack = JSON.stringify(c.starterPack || {}, null, 2);
-    box.innerHTML = "<div class='admin-card-head'><h2>活动配置</h2><span>保存后官网实时生效</span></div><form class='field-grid'><label>活动名称<input name='eventName' value='" + esc(c.eventName) + "'></label><label>活动日期<input name='date' value='" + esc(c.date) + "'></label><label>活动地点<input name='venue' value='" + esc(c.venue) + "'></label><label>主题揭晓<input name='themeReveal' value='" + esc(c.themeReveal) + "'></label><label>报名截止" + timeInput("applicationDeadline", "报名截止", c.applicationDeadline) + "</label><label>录取公布" + timeInput("resultDate", "录取公布", c.resultDate) + "</label><label>投票开始时间" + timeInput("voteStartAt", "投票开始时间", c.voteStartAt) + "</label><label>报名状态<select name='applicationOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>正式组队确认<select name='teamConfirmOpen'><option value='true'>开启</option><option value='false'>关闭</option></select></label><label>投票状态<select name='voteOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>参与者投票权重（%）<input name='participantWeight' type='number' min='0' max='100' value='" + Number(c.participantWeight || 60) + "'></label><label>Jury 投票权重（%）<input name='juryWeight' type='number' min='0' max='100' value='" + Number(c.juryWeight || 40) + "'></label><label class='config-pack'>Starter Pack（JSON）<textarea name='starterPack' rows='10'>" + esc(pack) + "</textarea></label><div class='config-actions'><button class='button button-dark'>保存配置</button></div></form>";
+    box.innerHTML = "<div class='admin-card-head'><h2>活动配置</h2><span id='config-form-state'>保存后官网实时生效</span></div><form class='field-grid'><label>活动名称<input name='eventName' value='" + esc(c.eventName) + "'></label><label>活动日期<input name='date' value='" + esc(c.date) + "'></label><label>活动地点<input name='venue' value='" + esc(c.venue) + "'></label><label>主题揭晓<input name='themeReveal' value='" + esc(c.themeReveal) + "'></label><label>报名截止" + timeInput("applicationDeadline", "报名截止", c.applicationDeadline) + "</label><label>录取公布" + timeInput("resultDate", "录取公布", c.resultDate) + "</label><label>投票开始时间" + timeInput("voteStartAt", "投票开始时间", c.voteStartAt) + "</label><label>报名状态<select name='applicationOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>正式组队确认<select name='teamConfirmOpen'><option value='true'>开启</option><option value='false'>关闭</option></select></label><label>投票状态<select name='voteOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>参与者投票权重（%）<input name='participantWeight' type='number' min='0' max='100' value='" + Number(c.participantWeight || 60) + "'></label><label>Jury 投票权重（%）<input name='juryWeight' type='number' min='0' max='100' value='" + Number(c.juryWeight || 40) + "'></label><label class='config-pack'>Starter Pack（JSON）<textarea name='starterPack' rows='10'>" + esc(pack) + "</textarea></label><div class='config-actions'><button class='button button-dark'>保存配置</button></div></form>";
     box.querySelector('[name="applicationOpen"]').value = String(c.applicationOpen);
     box.querySelector('[name="teamConfirmOpen"]').value = String(Boolean(c.teamConfirmOpen));
     box.querySelector('[name="voteOpen"]').value = String(c.voteOpen);
+    // 重建后把未保存的草稿放回，自动刷新不会清掉正在改的配置。
+    preserveForm(box.querySelector("form"), draftOf("config"));
+    bindDraft("config", box.querySelector("form"), "config-form-state");
+    if (draftOf("config")?.size) {
+      const stateEl = document.getElementById("config-form-state");
+      if (stateEl) stateEl.textContent = "你有未保存的修改：自动刷新会保留它们。";
+    }
     box.querySelector("form").onsubmit = async e => {
       e.preventDefault();
       const d = Object.fromEntries(new FormData(e.currentTarget));
@@ -594,7 +673,12 @@
       }
       if (d.participantWeight + d.juryWeight !== 100) return toast("参与者与 Jury 权重之和必须为 100%。", "error");
       try { d.starterPack = JSON.parse(d.starterPack); } catch { return toast("Starter Pack 必须是有效的 JSON。", "error"); }
-      try { await api.request("/api/admin/config", { method: "PATCH", body: JSON.stringify(d) }); toast("配置已保存，官网已同步", "success"); await load(); } catch (err) { toast(err.message, "error"); }
+      try {
+        await api.request("/api/admin/config", { method: "PATCH", body: JSON.stringify(d) });
+        if (formDrafts.get("config")) formDrafts.get("config").draft = null;
+        toast("配置已保存，官网已同步", "success");
+        await load();
+      } catch (err) { toast(err.message, "error"); }
     };
   }
 
@@ -619,12 +703,19 @@
   function renderStageBriefEditor() {
     const form = document.getElementById("stage-brief-form");
     if (!form || !state) return;
+    bindDraft("stage-brief", form, "stage-brief-state");
     const context = stageBriefContext();
     if (!context.item) return;
     const script = form.elements.script;
     const actions = form.elements.actions;
-    if (document.activeElement !== script) script.value = context.item.script || "";
-    if (document.activeElement !== actions) actions.value = (context.item.actions || []).join("\n");
+    const draft = draftOf("stage-brief");
+    // 有未保存的草稿就不覆盖输入框；没有草稿时按最新数据回填（正在输入的字段除外）。
+    if (draft?.size) {
+      preserveForm(form, draft);
+    } else {
+      if (document.activeElement !== script) script.value = context.item.script || "";
+      if (document.activeElement !== actions) actions.value = (context.item.actions || []).join("\n");
+    }
     form.onsubmit = async event => {
       event.preventDefault();
       const data = Object.fromEntries(new FormData(event.currentTarget));
@@ -636,6 +727,7 @@
         await api.request("/api/admin/config", { method: "PATCH", body: JSON.stringify({ stageSchedule: next }) });
         state.config.stageSchedule = next;
         context.stage?.setSchedule?.(next);
+        if (formDrafts.get("stage-brief")) formDrafts.get("stage-brief").draft = null;
         toast("主持人提示和现场动作已保存", "success");
         await load();
       } catch (error) { toast(error.message, "error"); }
@@ -673,15 +765,15 @@
     render();
   });
   document.getElementById("export-csv")?.addEventListener("click", exportCsv);
-  document.getElementById("refresh-data")?.addEventListener("click", () => { load(); toast("已刷新"); });
+  document.getElementById("refresh-data")?.addEventListener("click", () => { load({ keepDrafts: false }); toast("已刷新"); });
 
-  // ---- 轮询刷新：报名 / 队伍 / Idea / Q&A 等后台数据定时同步 ----
-  // 用户正在输入时跳过本次刷新，避免覆盖正在编辑的搜索框、通知或配置内容。
-  const POLL_KEY = "minicamp2026_admin_poll";
-  const pollState = { enabled: true, seconds: 15, timer: 0, syncing: false };
-  const pollToggle = document.getElementById("admin-poll-toggle");
-  const pollInterval = document.getElementById("admin-poll-interval");
+  // ---- 轮询刷新：报名 / 队伍 / Idea / Q&A 等后台数据每 15 秒同步一次 ----
+  // 间隔固定为 15 秒（不再提供开关与间隔选择）；轮询只更新内容，
+  // 通过 MinicampScroll.lock 保持窗口显示位置不变。
+  const POLL_INTERVAL_MS = 15000;
+  const pollState = { timer: 0, syncing: false };
   const pollTime = document.getElementById("admin-poll-time");
+  const pollBox = document.getElementById("admin-sync");
 
   /** 有输入焦点时暂停覆盖式刷新（登录框也算）。 */
   function isTyping() {
@@ -690,18 +782,6 @@
     const tag = active.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
     return Boolean(active.isContentEditable);
-  }
-  function readPollSettings() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(POLL_KEY) || "null");
-      if (saved && typeof saved === "object") {
-        if (typeof saved.enabled === "boolean") pollState.enabled = saved.enabled;
-        if (Number(saved.seconds) > 0) pollState.seconds = Number(saved.seconds);
-      }
-    } catch { /* 忽略损坏的本地设置 */ }
-  }
-  function savePollSettings() {
-    try { localStorage.setItem(POLL_KEY, JSON.stringify({ enabled: pollState.enabled, seconds: pollState.seconds })); } catch { /* 隐私模式下忽略 */ }
   }
   function markSynced(reason) {
     if (!pollTime) return;
@@ -714,16 +794,25 @@
     return /admin required|login required|invalid admin/i.test(message);
   }
   /** 拉取后台数据；withQa 时同时刷新 Q&A 面板（qa-admin.js 提供）。 */
-  async function sync({ withQa = false, reason = "poll", notify = true } = {}) {
+  async function sync({ withQa = false, reason = "poll", notify = true, automatic = false } = {}) {
     if (pollState.syncing) return false;
-    if (reason === "poll" && isTyping()) return false;
+    // 用户正在输入时跳过自动刷新（轮询与「切回标签页」），手动点按钮的刷新不受影响。
+    if (isTyping() && (reason === "poll" || automatic)) return false;
     if (!api.getAdminToken()) { showLogin(); return false; }
     pollState.syncing = true;
+    pollBox?.classList.add("is-syncing");
+    const guard = reason !== "poll";
+    const scroll = window.MinicampScroll;
     try {
       state = await api.request("/api/admin/summary");
       document.getElementById("admin-login")?.remove();
-      render();
-      if (withQa) await window.MinicampQAAdmin?.reload?.();
+      // 数据驱动的内容一次性重绘，期间锁住滚动位置，刷新完仍停在原来的地方。
+      if (scroll) scroll.lock(() => render(), { guard }); else render();
+      // Q&A 面板是异步重绘（先清空、拿到数据再填回来），整段过程都盯住位置，别让文档变矮把页面夹到顶部。
+      if (withQa) {
+        const reload = window.MinicampQAAdmin?.reload;
+        if (reload) { if (scroll) await scroll.lockUntil(() => reload(), { guard }); else await reload(); }
+      }
       markSynced(reason);
       return true;
     } catch (error) {
@@ -731,7 +820,10 @@
       if (needsLogin(error)) showLogin();
       else if (reason === "manual" && notify) toast(error.message, "error");
       return false;
-    } finally { pollState.syncing = false; }
+    } finally {
+      pollState.syncing = false;
+      pollBox?.classList.remove("is-syncing");
+    }
   }
   function stopPolling() {
     if (pollState.timer) clearInterval(pollState.timer);
@@ -739,19 +831,14 @@
   }
   function startPolling() {
     stopPolling();
-    if (!pollState.enabled) return;
-    pollState.timer = setInterval(() => { if (!document.hidden) sync({ withQa: true, reason: "poll" }); }, Math.max(5, pollState.seconds) * 1000);
+    pollState.timer = setInterval(() => { if (!document.hidden) sync({ withQa: true, reason: "poll" }); }, POLL_INTERVAL_MS);
   }
-  readPollSettings();
   readFilterSettings();
   renderFilterDimensions();
-  if (pollToggle) pollToggle.checked = pollState.enabled;
-  if (pollInterval) pollInterval.value = String(pollState.seconds);
-  pollToggle?.addEventListener("change", () => { pollState.enabled = pollToggle.checked; savePollSettings(); startPolling(); toast(pollState.enabled ? "已开启自动刷新" : "已关闭自动刷新"); });
-  pollInterval?.addEventListener("change", () => { pollState.seconds = Number(pollInterval.value) || 15; savePollSettings(); startPolling(); toast("自动刷新间隔：" + pollState.seconds + " 秒"); });
-  document.getElementById("admin-poll-now")?.addEventListener("click", async () => { const ok = await sync({ withQa: true, reason: "manual" }); if (ok) toast("已刷新最新数据", "success"); });
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && pollState.enabled) sync({ withQa: true, reason: "poll" }); });
   startPolling();
+  // 通知表单：改动后记住草稿，自动刷新会保留它（见 preserveForm）。
+  bindDraft("notice", document.getElementById("notice-form"), "notice-form-state");
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) load({ automatic: true }); });
   document.getElementById("notice-form")?.addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -759,6 +846,7 @@
     try {
       await api.request("/api/admin/notices", { method: "POST", body: JSON.stringify(d) });
       form.reset();
+      if (formDrafts.get("notice")) formDrafts.get("notice").draft = null;
       toast("通知已发布", "success");
       await load();
     } catch (err) { toast(err.message, "error"); }

@@ -33,16 +33,10 @@
       <div class="admin-topbar">
         <div><h1 id="admin-title">报名总览</h1><p id="admin-subtitle">集中管理报名、审核、录取与通知。</p></div>
         <div class="admin-topbar-side">
-          <div class="admin-poll" id="admin-poll">
-            <label class="admin-poll-toggle"><input type="checkbox" id="admin-poll-toggle" checked><span>自动刷新</span></label>
-            <select class="admin-select admin-poll-interval" id="admin-poll-interval" aria-label="自动刷新间隔">
-              <option value="10">每 10 秒</option>
-              <option value="15" selected>每 15 秒</option>
-              <option value="30">每 30 秒</option>
-              <option value="60">每 60 秒</option>
-            </select>
-            <span class="admin-poll-time" id="admin-poll-time">尚未刷新</span>
-            <button class="outline-button" id="admin-poll-now" type="button">立即刷新</button>
+          <div class="admin-sync" id="admin-sync" role="status" aria-live="polite">
+            <i class="admin-sync-dot" aria-hidden="true"></i>
+            <span>自动刷新 · 每 15 秒</span>
+            <span class="admin-sync-time" id="admin-poll-time">尚未刷新</span>
           </div>
           <span class="prototype-pill">主办方工作台</span>
         </div>
@@ -121,14 +115,15 @@
       <section class="admin-panel" id="panel-notices">
         <div class="notice-admin-layout">
           <form class="admin-card notice-compose" id="notice-form">
-            <div class="admin-card-head"><h2>发送通知 / 录取结果</h2><span>写入报名者收件箱</span></div>
-            <label>通知类型<select name="type"><option>活动公告</option><option>报名进度</option><option>录取结果</option><option>资料复核</option><option>现场提醒</option></select></label>
-            <label>发送对象<select name="target" id="notice-target"><option value="ALL">所有报名者</option></select></label>
+            <div class="admin-card-head"><h2>发送通知 / 录取结果</h2><span id="notice-form-state">写入报名者收件箱</span></div>
+            <p class="notice-compose-note">先选「通知类型」（这是什么通知）与「发送对象」（发给谁：所有人，或某一位报名者），再写标题和正文。发布后右侧列表会标明每条通知发给了谁。</p>
+            <label>通知类型 <small class="field-help">这是什么通知，会显示在报名者通知中心</small><select name="type"><option>活动公告</option><option>报名进度</option><option>录取结果</option><option>资料复核</option><option>现场提醒</option><option>项目审核</option><option>问答回复</option></select></label>
+            <label>发送对象 <small class="field-help">发给谁：所有人，或指定报名者（会带上姓名与报名编号）</small><select name="target" id="notice-target"><option value="ALL">所有人（所有报名者）</option></select></label>
             <label>标题<input name="title" required placeholder="例如：minicamp 2026 录取结果通知"></label>
-            <label>内容<textarea name="body" required rows="6" placeholder="写下报名者需要知道的事情"></textarea></label>
+            <label>内容<textarea name="body" required rows="6" placeholder="写清楚给谁、因为什么、需要对方做什么，例如：你提交的能力与经历已更新，主办方会在 2 个工作日内重新审核。"></textarea></label>
             <button class="button button-dark" type="submit">发布通知 <span>↗</span></button>
           </form>
-          <div class="admin-card"><div class="admin-card-head"><h2>已发布通知</h2><span id="notice-total">0 条</span></div><div class="admin-notice-list" id="admin-notice-list"></div></div>
+          <div class="admin-card"><div class="admin-card-head"><h2>已发布通知</h2><span id="notice-total">0 条</span></div><p class="notice-list-note">每条通知都写明「发给谁」和通知类型；点「发送对象」下拉里的报名者视为定向通知。</p><div class="admin-notice-list" id="admin-notice-list"></div></div>
         </div>
       </section>
 
@@ -181,6 +176,7 @@
             <div class="stage-preview-frame" id="stage-preview-frame"><iframe id="stage-preview" src="stage.html?embed=1" title="现场大屏预览"></iframe></div>
             <aside class="stage-brief stage-brief-editor" aria-label="演讲者模式编辑">
               <form id="stage-brief-form">
+                <p class="stage-brief-state" id="stage-brief-state">保存后同步到现场大屏；自动刷新会保留未保存的修改。</p>
                 <label class="stage-brief-field"><span>主持人提示</span><textarea id="stage-script" name="script" rows="8" maxlength="1200" placeholder="输入主持人提示"></textarea></label>
                 <label class="stage-brief-field"><span>现场动作</span><textarea id="stage-actions" name="actions" rows="8" maxlength="1200" placeholder="每行输入一条现场动作"></textarea></label>
                 <button class="button button-dark" type="submit">保存主持人提示和现场动作</button>
@@ -205,7 +201,7 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" integrity="sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC" crossorigin="anonymous"><\/script>');
     }
   </script>
-  <script src="api.js"></script><script src="stage.js"></script><script src="ui.js"></script><script src="admin.js"></script><script src="qa-admin.js"></script>
+  <script src="api.js"></script><script src="stage.js"></script><script src="ui.js"></script><script src="scroll.js"></script><script src="admin.js"></script><script src="qa-admin.js"></script>
   <div id="participant-fab-root"></div>
   <script src="api.js"></script><script src="participant-fab.js"></script>
 </body>
