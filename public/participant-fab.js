@@ -2,7 +2,7 @@
   const root = document.getElementById("participant-fab-root");
   const api = window.MinicampAPI;
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, character => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character]));
-  if (!root || !api || document.body.dataset.page === "profile" || document.body.dataset.page === "profile-dashboard") return;
+  if (!root || !api || ["profile", "profile-dashboard", "admin"].includes(document.body.dataset.page)) return;
   const render = ({ participant } = {}) => {
     if (participant) {
       const name = participant.name || "参与者", id = participant.id || "已报名";
@@ -14,6 +14,15 @@
     const button = root.querySelector(".participant-fab-joined"), panel = root.querySelector(".participant-fab-panel");
     button?.addEventListener("click", () => { const open = panel.hidden; panel.hidden = !open; button.setAttribute("aria-expanded", String(open)); });
   };
-  render();
-  if (api.getToken() || api.isLocalPreview()) api.request("/api/me").then(render).catch(() => {});
+  // 报名截止（含通道关闭）后不再提供报名入口；未报名时才显示「立即报名」。
+  const finish = registration => {
+    api.request("/api/me").then(data => render(data)).catch(() => {
+      if (registration.open) render();
+    });
+  };
+  api.request("/api/config").then(({ config }) => {
+    const deadline = config?.applicationDeadline ? Date.parse(config.applicationDeadline) : NaN;
+    const closed = config?.applicationOpen === false || (Number.isFinite(deadline) && Date.now() > deadline);
+    finish({ open: !closed });
+  }).catch(() => finish({ open: true }));
 })();

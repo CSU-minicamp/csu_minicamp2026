@@ -128,7 +128,7 @@
           <p class="section-kicker light-kicker">AI CODING</p>
           <h2>用 AI 把想法更快变成 Demo。</h2>
           <p>作品不必包含 AI 功能。网站、App、游戏、硬件、数据产品都可以，关键是在开发过程中用上 AI Coding。</p>
-          <div class="tool-row"><span>Codex</span><span>Claude Code</span><span>Cursor</span><span>Copilot</span><span>Gemini CLI</span></div>
+          <div class="tool-row"><span>Codex</span><span>Claude Code</span><span>Cursor</span><span>Copilot</span><span>Gemini CLI</span><span>...</span></div>
         </div>
         <div class="ai-rules">
           <div><span>✓</span><p><a class="dark-link" href="starter-pack.html"><strong>赛前准备资料包</strong></a> 包含工具安装、登录、基础 Prompt 和常见报错处理。</p></div>
@@ -193,12 +193,12 @@
             <p class="section-kicker">ROADSHOW / REGISTER</p><h3 id="roadshow-modal-title">填写路演报名信息</h3>
             <p class="form-caption">提交后自动通过，并生成独立的路演报名码。</p>
             <div class="field-grid">
-              <label>姓名<input name="name" required autocomplete="name"></label>
-              <label>手机号<input name="phone" required inputmode="numeric" pattern="[0-9]{11}" maxlength="11"></label>
-              <label>邮箱<input name="email" required type="email"></label>
-              <label>身份类型<select name="identity_type" required><option value="">请选择</option><option>大一学生</option><option>大二学生</option><option>大三学生</option><option>大四学生</option><option>研究生</option><option>其他在校生</option><option>教职工</option><option>校友</option><option>校外人员</option><option>企业人士</option></select></label>
-              <label>学校 / 单位<input name="school_or_company" required></label>
-              <label>年级 / 职位<input name="grade_or_position" required></label>
+              <label>姓名<input name="name" required autocomplete="name" placeholder="你的姓名"></label>
+              <label>手机号<input name="phone" required inputmode="numeric" pattern="[0-9]{11}" maxlength="11" placeholder="用于活动通知"><small class="field-help">请输入 11 位手机号</small></label>
+              <label>邮箱<input name="email" required type="email" placeholder="name@example.com"><small class="field-help">用于发送报名码与活动通知</small></label>
+              <label>身份类型<select name="identity_type" required><option value="">请选择</option><option>大一学生</option><option>大二学生</option><option>大三学生</option><option>大四学生</option><option>研究生</option><option>其他在校生</option><option>教职工</option><option>校友</option><option>校外人员</option><option>企业人士</option></select><small class="field-help">用于统计到场人群构成</small></label>
+              <label>学校 / 单位<input name="school_or_company" required placeholder="例如：中南大学"><small class="field-help">在校生填学校，校外朋友填所在单位</small></label>
+              <label>年级 / 职位<input name="grade_or_position" required placeholder="例如：大二 / 产品经理"><small class="field-help">在校生填年级，其他身份填职位或身份</small></label>
             </div>
             <fieldset class="choice-fieldset"><legend>活动选择</legend><label class="consent"><input type="checkbox" name="attend_roadshow" value="true" checked><span>参加现场路演</span></label><label class="consent"><input type="checkbox" name="receive_notifications" value="true" checked><span>接收活动通知</span></label></fieldset>
             <p class="form-error" id="roadshow-error" role="alert"></p><div class="form-actions"><button class="button button-primary" type="submit">提交路演报名 <span>↗</span></button></div>

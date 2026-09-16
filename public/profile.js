@@ -29,12 +29,7 @@
       "<div class='profile-intended-captain-card'><span class='profile-intended-role'>队长</span><div><strong>" + escapeHtml(captain?.name || "待确认") + "</strong><span>报名编号 " + escapeHtml(captain?.id || "待确认") + " · " + escapeHtml(statusLabel(captain || {})) + "</span></div><em>已建立意向</em></div>" +
       "<div class='profile-intended-subhead'><span>意向队友</span><small>" + otherMembers.length + " 位意向队友</small></div><ul class='profile-intended-list'>" + otherMembers.map((member, index) => "<li><span class='profile-intended-index'>" + String(index + 1).padStart(2, "0") + "</span><div><strong>" + escapeHtml(member.name) + "</strong><span>报名编号 " + escapeHtml(member.id) + "</span></div><em>" + escapeHtml(statusLabel(member)) + "</em></li>").join("") + "</ul>";
   };
-  const splitLegacyMajor = participant => {
-    const major = String(participant?.major || "");
-    if (participant?.grade || !major) return {major, grade: String(participant?.grade || "")};
-    const match = major.match(/^\s*(.*?)\s*·\s*(大一|大二|大三|大四|研究生)\s*$/);
-    return match ? {major: match[1], grade: match[2]} : {major, grade: ""};
-  };
+  const splitLegacyMajor = participant => { const normalized = api.normalizeProfile(participant); return {major: normalized.major || "", grade: normalized.grade || ""}; };
   const setBasicFieldsEditable = (form, editable) => {
     form.querySelector("#profile-basic-block")?.classList.toggle("profile-basic-readonly", !editable);
     contestantBasicFields.forEach(name => {

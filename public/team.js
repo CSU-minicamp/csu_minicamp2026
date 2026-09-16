@@ -13,7 +13,13 @@
     feedback.textContent = message;
     feedback.className = "team-feedback" + (type ? " is-" + type : "");
   };
-  const readableError = error => ({
+  const readableError = error => {
+    const message = String(error?.message || "");
+    if (message.startsWith("member profile incomplete")) {
+      const detail = message.includes(":") ? message.slice(message.indexOf(":") + 1).trim() : "";
+      return "有成员的报名资料不完整" + (detail ? "：" + detail : "") + "。请让对方先在个人主页补全资料，再重新邀请。";
+    }
+    return ({
     "already belongs to a team": "你已经加入了一支队伍。",
     "team is locked or full": "这支队伍已锁定或已满员。",
     "leave current team first": "请先离开当前未锁定的队伍。",
@@ -30,7 +36,8 @@
     "cannot include yourself": "队员编号中不能填写队长本人的报名编号。",
     "locked team cannot be changed": "队伍已锁定，不能再调整成员。",
     "submitter must keep the project team": "该队伍已有项目提交，不能直接解散。请联系主办方处理。"
-  }[error.message] || error.message || "操作未完成，请稍后重试。");
+  }[message] || message || "操作未完成，请稍后重试。");
+  };
   const memberLabel = member => {
     const skills = (member.skills || []).filter(Boolean).join(" / ");
     return "<li><strong>" + escapeHtml(member.name) + "</strong>" + (skills ? "<span>" + escapeHtml(skills) + "</span>" : "") + "</li>";

@@ -37,7 +37,32 @@
     field.addEventListener("input", drop);
     field.addEventListener("change", drop);
   });
+  // 报名时间状态：通道是否开放 + 截止时间，用于在开始填写、继续、提交三个节点拦截。
+  const registration = { open: null, deadline: null, deadlineLabel: "" };
+  const deadlineTime = () => {
+    const value = registration.deadline;
+    if (!value) return null;
+    const time = Date.parse(value);
+    return Number.isFinite(time) ? time : null;
+  };
+  const deadlinePassed = () => { const time = deadlineTime(); return time !== null && Date.now() > time; };
+  const registrationClosed = () => registration.open === false || deadlinePassed();
+  const closedMessage = () => deadlinePassed()
+    ? "报名已于 " + registration.deadlineLabel + " 截止，无法继续填写或提交。已经填写的内容不会生效，如需补报请联系主办方。"
+    : "报名通道尚未开放或已关闭，无法继续填写或提交。";
+  const blockWhenClosed = errorNode => {
+    if (!registrationClosed()) return false;
+    if (errorNode) errorNode.textContent = closedMessage();
+    const submitButton = document.getElementById("submit-application");
+    if (submitButton) { submitButton.disabled = true; submitButton.textContent = "报名已截止"; }
+    const nextButton = document.getElementById("next-step");
+    if (nextButton) nextButton.disabled = true;
+    return true;
+  };
   const configPromise = api.request("/api/config").then(({config}) => {
+    registration.open = config.applicationOpen !== false;
+    registration.deadline = config.applicationDeadline || null;
+    registration.deadlineLabel = registration.deadline ? new Date(registration.deadline).toLocaleString("zh-CN", {hour12: false}) : "";
     document.querySelectorAll("[data-config-date]").forEach(el => el.textContent = config.date);
     document.querySelectorAll("[data-voting-entry]").forEach(el => {
       if (config.voteOpen) {
@@ -56,10 +81,18 @@
     });
     document.querySelectorAll("[data-config-venue]").forEach(el => el.textContent = config.venue);
     const intro = document.querySelector(".apply-intro > p:nth-of-type(2)");
-    if (intro) intro.textContent = config.applicationOpen ? "仅面向中南大学在校学生。请如实填写每一项，提交后可凭申请编号和联系方式登录个人主页，查看审核状态与通知。" : "报名通道暂未开放，主办方确定时间后会在官网和主办方 QQ 群同步公布。";
-    if (!config.applicationOpen) {
+    if (intro) intro.textContent = registrationClosed()
+      ? (deadlinePassed() ? "本届报名已于 " + registration.deadlineLabel + " 截止。已经报名的同学可以凭申请编号和联系方式登录个人主页，查看审核状态与通知。" : "报名通道暂未开放，主办方确定时间后会在官网和主办方 QQ 群同步公布。")
+      : "仅面向中南大学在校学生。请如实填写每一项，提交后可凭申请编号和联系方式登录个人主页，查看审核状态与通知。";
+    const caption = document.querySelector("#application-form .application-start-step .form-caption");
+    if (caption && registration.deadlineLabel && !registrationClosed()) caption.textContent = "先填写基本资料，再告诉我们你的兴趣、经历和期待。报名截止时间：" + registration.deadlineLabel + "，请预留足够时间完成填写。";
+    if (registrationClosed()) {
       const launcher = document.querySelector(".application-choice-column, .application-launcher");
-      if (launcher) launcher.innerHTML = "<div class='form-head'><div><span class='status-dot' style='background:var(--coral)'></span>报名通道</div><span>CLOSED</span></div><div class='application-launcher-body'><p class='section-kicker'>APPLICATION / CLOSED</p><h3>报名通道<br>暂未开放。</h3><p>报名开放与截止时间确定后，会第一时间在官网和主办方 QQ 群公布。已经报名的同学可以进入个人主页查看审核状态与通知。</p><a class='button button-dark' href='profile.html'>进入个人主页 <span>↗</span></a></div>";
+      const heading = deadlinePassed() ? "报名已<br>截止。" : "报名通道<br>暂未开放。";
+      const body = deadlinePassed()
+        ? "本届报名已于 " + registration.deadlineLabel + " 截止。已经报名的同学可以进入个人主页查看审核状态与通知。"
+        : "报名开放与截止时间确定后，会第一时间在官网和主办方 QQ 群公布。已经报名的同学可以进入个人主页查看审核状态与通知。";
+      if (launcher) launcher.innerHTML = "<div class='form-head'><div><span class='status-dot' style='background:var(--coral)'></span>报名通道</div><span>CLOSED</span></div><div class='application-launcher-body'><p class='section-kicker'>APPLICATION / CLOSED</p><h3>" + heading + "</h3><p>" + body + "</p><a class='button button-dark' href='profile.html'>进入个人主页 <span>↗</span></a></div>";
     }
   }).catch(() => {});
   document.querySelectorAll(".day-tab").forEach(tab => tab.addEventListener("click", () => {
@@ -111,9 +144,12 @@
   const openApplication = document.getElementById("open-application");
   const closeApplication = document.getElementById("close-application");
   openApplication?.addEventListener("click", () => {
+    const errorNode = document.getElementById("form-error");
+    if (errorNode) errorNode.textContent = "";
     applicationModal?.showModal();
     const nextButton = document.getElementById("next-step");
     if (nextButton) nextButton.textContent = "开始填写";
+    blockWhenClosed(errorNode);
   });
   closeApplication?.addEventListener("click", () => applicationModal?.close());
   applicationModal?.addEventListener("click", event => { if (event.target === applicationModal) applicationModal.close(); });
@@ -161,13 +197,13 @@
     return true;
   };
   clearOnEdit(form);
-  next.addEventListener("click", () => validate(current) && showStep(current + 1));
+  next.addEventListener("click", () => { if (blockWhenClosed(error)) return; if (validate(current)) showStep(current + 1); });
   prev.addEventListener("click", () => showStep(current - 1));
   gradeField?.addEventListener("change", updateGradeHelp);
   updateGradeHelp();
   form.querySelectorAll('input[name="skills"]').forEach(input => input.addEventListener("change", () => { const checked = form.querySelectorAll('input[name="skills"]:checked'); if (checked.length > 2) input.checked = false; }));
   form.addEventListener("submit", async event => {
-    event.preventDefault(); if (!validate(3)) return;
+    event.preventDefault(); if (blockWhenClosed(error)) return; if (!validate(3)) return;
     const data = new FormData(form), payload = Object.fromEntries(data.entries()); payload.entryType = "个人报名"; payload.skills = data.getAll("skills"); payload.participationMode = isFreshman(payload.grade) ? "仅参与路演及后续投票等阶段，不参与开发环节" : "可参与完整活动流程"; delete payload.consent;
     submit.disabled = true; error.textContent = "";
     try {

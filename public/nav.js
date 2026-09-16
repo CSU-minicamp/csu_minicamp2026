@@ -56,20 +56,35 @@
     if (event.key === "Escape") closeMenu();
   });
 
-  window.MinicampAPI?.request("/api/me").then(({participant}) => {
+  // 个人主页入口同时充当登录入口：未登录显示「登录」，登录后显示参与者姓名并隐藏报名按钮。
+  const profileLink = header.querySelector('a[href="profile.html"]');
+  const signOut = () => { if (profileLink) profileLink.textContent = "登录"; };
+  const signIn = participant => {
+    if (!profileLink) return;
+    const name = String(participant.name || "").trim();
+    profileLink.textContent = name ? (name.length > 8 ? name.slice(0, 8) + "…" : name) : "个人主页";
+    profileLink.setAttribute("href", "profile-dashboard.html");
+    profileLink.classList.add("is-signed-in");
+    profileLink.title = name;
+    header.querySelector(".button-small")?.remove();
+  };
+  if (profileLink) profileLink.classList.add("nav-account");
+  if (!window.MinicampAPI?.getToken()) signOut();
+  else window.MinicampAPI.request("/api/me").then(({participant}) => {
     const type = participant.registration_type || participant.registrationType || "contestant";
     const pending = participant.status === "待审核";
+    signIn(participant);
     if (type === "roadshow") {
       header.querySelectorAll('a[href="team.html"],a[href="gallery.html"],a[href="voting.html"],a[data-voting-entry]').forEach(link => link.remove());
     }
     if (pending) {
       header.querySelectorAll('a[href="gallery.html"],a[href="voting.html"],a[data-voting-entry]').forEach(link => link.remove());
     }
-    if (type === "roadshow") {
-      header.querySelector(".button-small")?.setAttribute("href", page === "home" ? "#apply" : "index.html#apply");
-    }
-  }).catch(() => {});
+  }).catch(signOut);
   window.MinicampAPI?.request("/api/config").then(({ config }) => {
+    const deadline = config.applicationDeadline ? Date.parse(config.applicationDeadline) : NaN;
+    const registrationClosed = config.applicationOpen === false || (Number.isFinite(deadline) && Date.now() > deadline);
+    if (registrationClosed) header.querySelector(".button-small")?.remove();
     if (config.voteOpen) return;
     header.querySelectorAll("[data-voting-entry]").forEach(link => {
       link.textContent = "投票未开放";
