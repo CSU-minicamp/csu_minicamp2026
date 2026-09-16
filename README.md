@@ -6,9 +6,17 @@
 
 请确保已安装 Node.js，然后在项目目录执行：
 
+    npm install
     node server.mjs
 
 在浏览器打开 http://localhost:4173/。
+
+`npm install` 会装好两个依赖：`mysql2`（数据层）和 `chart.js`（主办方后台「分类查看」柱状图）。**没有构建步骤**——
+Chart.js 不需要打包：`server.mjs` 把 `admin.html` 引用的 `/vendor/chart.umd.min.js` 直接映射到
+`node_modules/chart.js/dist/chart.umd.js`（npm 包里只有官方未压缩的 UMD，没有 `.min.js`）。
+所以正常情况下不依赖外网；万一本路径取不到（例如部署时漏了 `npm install`），页面会回退到 CDN 的
+Chart.js（jsDelivr，带 SRI 校验），两个源都不可用时后台图表退化为数字列表，不会白屏。
+前端页面仍然在 `public/` 下由 Node 静态托管。
 
 主办方默认本地密码为 123456，正式运行时请设置环境变量：
 
@@ -78,6 +86,14 @@
 
 正式运行时请用 pm2 / systemd / nssm 让 Node 常驻，并启用 HTTPS。
 
+> 部署机需要先执行 `npm install`（或 `npm ci`）：`/vendor/chart.umd.min.js` 由 Node 从 `node_modules` 读取，
+> 仓库里不再保存前端库副本。若采用上面的「方案 B」（Nginx 直接托管 `public/`、只反代 `/api`），
+> 需要额外加一段映射，否则后台图表会退化：
+>
+>     location = /vendor/chart.umd.min.js {
+>         alias /var/www/csu_minicamp2026/node_modules/chart.js/dist/chart.umd.js;
+>     }
+
 > 本地开发若用 VS Code Live Server（5500 端口），静态可打开但 `/api` 会 404。直接用 `http://localhost:4173/` 访问 Node 服务即可，无需反代；或在 Live Server 设置中把 `/api` 代理到 `http://127.0.0.1:4173`。
 
 ## 页面入口
@@ -110,4 +126,4 @@
 
 ## 技术栈
 
-HTML、CSS、原生 JavaScript、Node.js。
+HTML、CSS、原生 JavaScript、Node.js、MySQL（不可用时回退 JSON）。前端唯一的第三方库是 Chart.js（仅主办方后台使用），随 npm 依赖安装。

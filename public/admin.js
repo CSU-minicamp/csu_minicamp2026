@@ -82,6 +82,72 @@
     return "<div class='status-bar-stack'><div class='status-bar-label'><span>" + esc(label) + "</span><b>" + acceptedCount + " / " + value + "</b></div><div class='status-bar-track'><i class='is-total' style='width:" + width(value) + "%'></i><i class='is-accepted' style='width:" + width(acceptedCount) + "%'></i></div></div>";
   }
 
+  /**
+   * 报名筛选（advance search 风格）：一条条件 = 一个维度 + 一个取值，
+   * 同一维度可以同时选中多个取值（维度内并集，例如「专业=软件工程 或 计算机」），
+   * 不同维度之间为「同时满足」。统计范围可选「全部报名」或「筛选结果」。
+   */
+  const FILTER_DIMENSIONS = [
+    { key: "status", label: "状态" },
+    { key: "registration_type", label: "报名类型" },
+    { key: "grade", label: "年级" },
+    { key: "major", label: "专业" },
+    { key: "college", label: "学院" }
+  ];
+  const DIMENSION_LABEL = Object.fromEntries(FILTER_DIMENSIONS.map(item => [item.key, item.label]));
+  /** 维度下拉由 FILTER_DIMENSIONS 生成，避免两处定义走样。 */
+  function renderFilterDimensions() {
+    const select = document.getElementById("filter-dimension");
+    if (!select) return;
+    const previous = select.value;
+    select.innerHTML = FILTER_DIMENSIONS.map(item => "<option value='" + item.key + "'>" + esc(item.label) + "</option>").join("");
+    if (FILTER_DIMENSIONS.some(item => item.key === previous)) select.value = previous;
+  }
+  const FILTER_STORAGE_KEY = "minicamp2026_admin_filters";
+  /** chips 里保存的是「单个取值」的条件，上限防止多选后条件过多（存 localStorage 也够小）。 */
+  const FILTER_CHIP_LIMIT = 24;
+  const filterState = { active: false, chips: [] };
+  const appValue = (app, key) => key === "registration_type" ? (isRoadshow(app) ? "roadshow" : "contestant") : String(app[key] ?? "").trim();
+  const displayValue = (key, value) => {
+    if (key === "registration_type") return value === "roadshow" ? "路演报名" : "参赛报名";
+    return value || "未填写";
+  };
+  /** 按维度归并条件：维度内多选 → 并集；维度之间 → 交集。 */
+  function groupChips(chips) {
+    const groups = new Map();
+    chips.forEach(chip => {
+      if (!groups.has(chip.key)) groups.set(chip.key, []);
+      groups.get(chip.key).push(chip.value);
+    });
+    return groups;
+  }
+  /**
+   * 条件匹配：同一维度内多个取值取并集（年级=大三 或 大四），
+   * 不同维度之间取交集（状态=已通过 且 专业=软件工程）。
+   */
+  function matchesChips(app, chips) {
+    for (const [key, values] of groupChips(chips)) {
+      if (!values.includes(appValue(app, key))) return false;
+    }
+    return true;
+  }
+  /**
+   * 筛选只作用于「分类查看」与「能力结构」两块，其它统计（指标卡、报名状态、最近报名、
+   * 已录取来源、报名审核表）始终看全部报名。返回是否启用筛选 + 命中数量 + 判定函数。
+   */
+  function overviewFilter() {
+    const active = filterState.active && filterState.chips.length > 0;
+    return {
+      active,
+      matches: app => !active || matchesChips(app, filterState.chips),
+      count: active ? (state.applications || []).filter(app => matchesChips(app, filterState.chips)).length : (state.applications || []).length
+    };
+  }
+  /** 需要跟随筛选的两块统计所用的数据集。 */
+  function filteredApps() {
+    const filter = overviewFilter();
+    return (state.applications || []).filter(filter.matches);
+  }
   /** 分类统计 */
   const CATEGORY_LABEL = { grade: "年级", major: "专业", college: "学院", type: "报名类型" };
   let categoryKey = "grade";
@@ -95,7 +161,8 @@
     if (coverage("grade") >= Math.max(coverage("major"), coverage("college"))) return;
     categoryKey = coverage("major") >= coverage("college") ? "major" : "college";
   }
-  const appsOfType = type => (state.applications || []).filter(a => type === "全部" || (isRoadshow(a) ? "roadshow" : "contestant") === type);
+  /** 分类查看的数据集：跟随筛选 + 报名类型筛选。 */
+  const appsOfType = type => filteredApps().filter(a => type === "全部" || (isRoadshow(a) ? "roadshow" : "contestant") === type);
   const currentTypeFilter = () => document.getElementById("applicant-type")?.value || "全部";
   function categoryCounts(key) {
     const counts = new Map();
@@ -109,93 +176,117 @@
     });
     return [...counts.values()].sort((a, b) => (b.total - a.total) || a.label.localeCompare(b.label, "zh-CN"));
   }
-  /** 分类柱状图：纯 SVG 绘制（零依赖）。宽度随列数自适应，高度固定。 */
-  const CHART = { top: 26, bottom: 48, left: 40, right: 16 };
-  function niceTicks(max) {
-    const ticks = [];
-    for (let value = 0; value <= max; value += 1) ticks.push(value);
-    if (ticks.length > 7) {
-      const step = Math.ceil(max / 6);
-      ticks.length = 0;
-      for (let value = 0; value <= max; value += step) ticks.push(value);
-      if (ticks[ticks.length - 1] !== max) ticks.push(max);
-    }
-    return ticks;
-  }
+  // 图表交给 Chart.js（本地 vendor/chart.umd.min.js），标签冲突由它自动换行/旋转处理。
+  let categoryChart = null;
+  const CHART_COLORS = { total: "#dfe3dc", accepted: "#247b63", axis: "#a2a29a", grid: "#ececE5" };
   function renderCategoryChart() {
     pickDefaultCategory();
     const rows = categoryCounts(categoryKey);
-    const total = appsOfType(currentTypeFilter()).length;
-    const typeLabel = currentTypeFilter() === "roadshow" ? "路演报名" : currentTypeFilter() === "contestant" ? "参赛报名" : "全部报名类型";
-    setHtml("category-chart", (rows.length
-      ? categoryChartSvg(rows)
-      : "<p class='empty-state'>当前筛选下没有报名</p>") + "<p class='chart-foot'>" + esc(CATEGORY_LABEL[categoryKey]) + "维度 · " + esc(typeLabel) + " · 共 " + total + " 条" + (rows.some(row => row.accepted) ? " · 深色段为已录取" : "") + "</p>");
+    const filter = overviewFilter();
+    const typeFilter = currentTypeFilter();
+    const typeLabel = typeFilter === "roadshow" ? "路演报名" : typeFilter === "contestant" ? "参赛报名" : "";
+    const scopeLabel = filter.active ? "筛选结果 " + appsOfType(typeFilter).length + " 条" : "全部报名 " + appsOfType(typeFilter).length + " 条";
+    const wrap = document.getElementById("category-canvas-wrap");
+    const canvas = document.getElementById("category-canvas");
+    if (!canvas || !wrap) return;
+    const foot = document.getElementById("chart-foot");
+    if (foot) foot.textContent = CATEGORY_LABEL[categoryKey] + "维度 · " + (typeLabel ? typeLabel + " · " : "") + scopeLabel + (rows.some(row => row.accepted) ? " · 深色为已录取" : "");
     document.querySelectorAll("#category-switch [data-category]").forEach(button => {
       button.classList.toggle("active", button.dataset.category === categoryKey);
       button.setAttribute("aria-selected", String(button.dataset.category === categoryKey));
     });
-  }
-  function categoryChartSvg(rows) {
-    const max = Math.max(1, ...rows.map(row => row.total));
-    // 宽度随列数走：类别少就画窄一点并居中，类别多才铺满并允许横向滚动。
-    const width = Math.round(Math.max(400, Math.min(700, 64 + rows.length * 86)));
-    const height = 300;
-    const plotWidth = width - CHART.left - CHART.right;
-    const plotHeight = height - CHART.top - CHART.bottom;
-    const baseY = CHART.top + plotHeight;
-    const scale = value => value / max * plotHeight;
-    const slot = plotWidth / rows.length;
-    const longest = Math.max(1, ...rows.map(row => row.label.length));
-    const barWidth = Math.max(10, Math.min(46, slot * 0.56, (slot * 1.6) / longest * 4.4));
-
-    const ticks = niceTicks(max);
-    const grid = ticks.map(value => {
-      const y = baseY - scale(value);
-      return "<line class='chart-grid' x1='" + CHART.left + "' y1='" + y.toFixed(1) + "' x2='" + (width - CHART.right) + "' y2='" + y.toFixed(1) + "'></line>" +
-        "<text class='chart-tick' x='" + (CHART.left - 8) + "' y='" + (y + 3.5).toFixed(1) + "' text-anchor='end'>" + value + "</text>";
-    }).join("");
-
-    const bars = rows.map((row, index) => {
-      const x = CHART.left + slot * index + (slot - barWidth) / 2;
-      const totalHeight = row.total > 0 ? Math.max(3, scale(row.total)) : 0;
-      const acceptedHeight = row.accepted > 0 ? Math.max(2, scale(row.accepted)) : 0;
-      const acceptedText = row.accepted > 0 ? " · 已录取 " + row.accepted : "";
-      return "<title>" + esc(row.label) + "：报名 " + row.total + acceptedText + "</title>" +
-        "<rect class='chart-bar is-total' x='" + x.toFixed(1) + "' y='" + (baseY - totalHeight).toFixed(1) + "' width='" + barWidth.toFixed(1) + "' height='" + totalHeight.toFixed(1) + "' rx='3'></rect>" +
-        (acceptedHeight ? "<rect class='chart-bar is-accepted' x='" + x.toFixed(1) + "' y='" + (baseY - acceptedHeight).toFixed(1) + "' width='" + barWidth.toFixed(1) + "' height='" + acceptedHeight.toFixed(1) + "' rx='3'></rect>" : "") +
-        "<text class='chart-value' x='" + (x + barWidth / 2).toFixed(1) + "' y='" + (baseY - totalHeight - 7).toFixed(1) + "' text-anchor='middle'>" + row.total + "</text>";
-    }).join("");
-
-    const labels = rows.map((row, index) => {
-      const x = CHART.left + slot * index + (slot - barWidth) / 2;
-      return "<foreignObject class='chart-label-box' x='" + (x - 6).toFixed(1) + "' y='" + (baseY + 6) + "' width='" + (barWidth + 12).toFixed(1) + "' height='" + (CHART.bottom - 10) + "'>" +
-        "<div xmlns='http://www.w3.org/1999/xhtml' class='chart-label'>" + esc(row.label) + "</div></foreignObject>";
-    }).join("");
-
-    return "<div class='chart-scroll'><svg class='bar-chart' viewBox='0 0 " + width + " " + height + "' width='" + width + "' height='" + height + "' role='img' aria-label='" + esc(CATEGORY_LABEL[categoryKey]) + "分类报名人数柱状图' preserveAspectRatio='xMidYMid meet'>" +
-      grid +
-      "<line class='chart-axis' x1='" + CHART.left + "' y1='" + baseY + "' x2='" + (width - CHART.right) + "' y2='" + baseY + "'></line>" +
-      bars +
-      labels +
-      "</svg></div>";
+    if (categoryChart) { categoryChart.destroy(); categoryChart = null; }
+    if (!rows.length) { wrap.innerHTML = "<p class='empty-state'>当前条件下没有报名</p>"; wrap.style.height = ""; wrap.style.width = ""; return; }
+    if (!wrap.querySelector("canvas")) wrap.innerHTML = "<canvas id='category-canvas' aria-label='分类报名人数柱状图' role='img'></canvas>";
+    const target = wrap.querySelector("canvas");
+    /*
+     * 横向条（indexAxis: "y"）：类别名在左侧一行一个，天然不会互相压字，
+     * 也省掉斜排标签；容器高度随类别数增长，保证每个类别都有足够的行高。
+     * 同时锁定宽度，避免 height 变化时 Chart.js 按宽高比把画布撑宽而造成横向溢出。
+     */
+    const wrapWidth = Math.max(320, Math.round(wrap.clientWidth || wrap.getBoundingClientRect().width || 600));
+    wrap.style.height = Math.max(260, Math.min(900, 44 + rows.length * 30)) + "px";
+    wrap.style.width = wrapWidth + "px";
+    if (typeof window.Chart !== "function") {
+      wrap.style.height = "";
+      wrap.innerHTML = "<p class='empty-state'>图表库未加载，以下为数字列表：</p><div class='status-bars'>" + rows.map(row => stackedBar(row.label, row.total, row.accepted, Math.max(1, ...rows.map(item => item.total)))).join("") + "</div>";
+      return;
+    }
+    const maxValue = Math.max(1, ...rows.map(row => row.total));
+    categoryChart = new window.Chart(target, {
+      type: "bar",
+      data: {
+        labels: rows.map(row => row.label),
+        datasets: [
+          { label: "报名人数", data: rows.map(row => row.total), backgroundColor: CHART_COLORS.total, borderRadius: 4, maxBarThickness: 24 },
+          { label: "已录取", data: rows.map(row => row.accepted), backgroundColor: CHART_COLORS.accepted, borderRadius: 4, maxBarThickness: 24 }
+        ]
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 220 },
+        layout: { padding: { right: 5 } },
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: {
+            position: "top",
+            align: "end",
+            labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rectRounded", font: { size: 11, weight: "700" }, color: "#3f3f39" }
+          },
+          tooltip: {
+            backgroundColor: "#111111",
+            padding: 10,
+            displayColors: false,
+            titleFont: { size: 12, weight: "800" },
+            bodyFont: { size: 12 },
+            callbacks: {
+              title: items => rows[items[0]?.dataIndex]?.label ?? "",
+              label: item => item.dataset.label + "：" + item.parsed.x + " 人"
+            }
+          }
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            suggestedMax: maxValue * 1.08,
+            grid: { color: CHART_COLORS.grid },
+            border: { display: false },
+            ticks: { color: CHART_COLORS.axis, font: { size: 10, family: "Consolas, monospace" }, precision: 0, maxTicksLimit: 8 }
+          },
+          y: {
+            grid: { display: false },
+            border: { color: "#c8c8c1" },
+            ticks: { color: "#6e6e66", font: { size: 11 }, autoSkip: false, padding: 8 }
+          }
+        }
+      }
+    });
   }
 
   function render() {
+    // 全局统计始终基于全部报名；只有「分类查看」与「能力结构」跟随筛选。
     const apps = state.applications || [];
+    const facetApps = filteredApps();
+    const filter = overviewFilter();
     const count = s => apps.filter(x => x.status === s).length;
     const contestants = apps.filter(x => !isRoadshow(x)).length;
     const roadshows = apps.length - contestants;
     const acceptedApps = apps.filter(x => x.status === "已录取");
+    const facetAccepted = facetApps.filter(x => x.status === "已录取");
     const total = apps.length;
     setHtml("metrics-grid", [["报名总数", total + "<em>（MC " + contestants + " / RO " + roadshows + "）</em>", "报名 / 路演"], ["待审核", count("待审核"), "需处理"], ["已录取", acceptedApps.length, "正式名额"], ["候补", count("候补"), "备选名单"]].map(x => "<div class='metric-card'><span>" + x[0] + "</span><strong>" + x[1] + "</strong><small>" + x[2] + "</small></div>").join(""));
     setHtml("status-bars", STATUSES.map(s => bar(s, count(s), total)).join(""));
     const skillRows = SKILLS.map(s => {
-      const all = apps.filter(a => (a.skills || []).includes(s)).length;
-      const acceptedCount = acceptedApps.filter(a => (a.skills || []).includes(s)).length;
+      const all = facetApps.filter(a => (a.skills || []).includes(s)).length;
+      const acceptedCount = facetAccepted.filter(a => (a.skills || []).includes(s)).length;
       return {label: s, all, accepted: acceptedCount};
     });
     const skillMax = Math.max(1, ...skillRows.map(row => row.all));
     setHtml("skill-bars", skillRows.map(row => stackedBar(row.label, row.all, row.accepted, skillMax)).join(""));
+    const skillScope = document.getElementById("skill-scope");
+    if (skillScope) skillScope.textContent = filter.active ? "筛选结果 " + facetApps.length + " 条 · 深色为已录取" : "浅色为报名人数 · 深色为已录取";
     setHtml("accepted-major-bars", (() => {
       const counts = new Map();
       acceptedApps.forEach(a => {
@@ -207,6 +298,8 @@
       return rows.map(row => bar(row[0], row[1], max)).join("") || "<p class='empty-state'>暂无已录取报名</p>";
     })());
     renderCategoryChart();
+    renderFilterBuilder();
+    renderFilterChips();
     setHtml("activity-list", apps.slice(0, 6).map(x => "<div class='activity-item'><span class='activity-dot'>" + esc((x.name || "?").slice(0, 1)) + "</span><p><strong>" + esc(x.name) + "</strong> · " + esc(x.id) + "<br><time>" + fmt(x.createdAt) + "</time></p></div>").join("") || "<p class='empty-state'>暂无报名</p>");
     renderReminders();
     renderApps();
@@ -217,6 +310,144 @@
     renderNotices();
     renderConfig();
     renderStageBriefEditor();
+  }
+
+  /**
+   * 条件取值列表：复选框，支持一个维度同时勾选多个取值。
+   * 每个取值后面标注「加上该条件后」的命中人数（其余维度的已选条件仍然生效）。
+   * 维度内已添加过的取值保持勾选并禁用，避免重复条件。
+   */
+  let stagedValues = [];
+  function renderFilterBuilder() {
+    const dimension = document.getElementById("filter-dimension");
+    const valueList = document.getElementById("filter-value");
+    if (!dimension || !valueList) return;
+    const key = dimension.value || "status";
+    const others = filterState.chips.filter(chip => chip.key !== key);
+    const added = new Set(filterState.chips.filter(chip => chip.key === key).map(chip => chip.value));
+    const counts = new Map();
+    (state.applications || []).filter(app => matchesChips(app, others)).forEach(app => {
+      const value = appValue(app, key);
+      counts.set(value, (counts.get(value) || 0) + 1);
+    });
+    const rows = [...counts.entries()].sort((a, b) => (b[1] - a[1]) || displayValue(key, a[0]).localeCompare(displayValue(key, b[0]), "zh-CN"));
+    valueList.innerHTML = rows.length
+      ? rows.map(([value, num]) => {
+          const isAdded = added.has(value);
+          return "<label class='filter-option" + (isAdded ? " is-added" : "") + "'><input type='checkbox' value='" + esc(value) + "'" + (isAdded ? " checked disabled" : "") + "><span class='filter-option-label'>" + esc(displayValue(key, value)) + "</span><b>" + num + "</b></label>";
+        }).join("")
+      : "<p class='filter-empty'>没有可选值</p>";
+    // 每次重绘都清空暂存勾选：已添加的取值由上面的 checked/disabled 表示。
+    stagedValues = [];
+    setFilterValueChecks([]);
+    updateFilterValueHint();
+    const button = document.getElementById("filter-add");
+    if (button) button.disabled = !rows.length;
+  }
+
+  /** 当前列表里可勾选（尚未添加）的取值。 */
+  function checkedFilterValues() {
+    const valueList = document.getElementById("filter-value");
+    if (!valueList) return [];
+    return [...valueList.querySelectorAll("input[type='checkbox']:checked")].filter(box => !box.disabled).map(box => box.value);
+  }
+  /** 回填勾选状态（不触发 change 事件；调用方负责随后刷新提示文案）。 */
+  function setFilterValueChecks(values) {
+    const wanted = new Set(values);
+    document.querySelectorAll("#filter-value input[type='checkbox']").forEach(box => {
+      if (!box.disabled) box.checked = wanted.has(box.value);
+    });
+  }
+  /** 列表右上角的小字：提示当前勾选了几个 / 若添加会命中多少条。 */
+  function updateFilterValueHint() {
+    const hint = document.getElementById("filter-values-hint");
+    if (!hint) return;
+    if (!stagedValues.length) { hint.textContent = "勾选一个或多个"; return; }
+    const next = filterState.chips.concat(stagedValues.map(value => ({key: document.getElementById("filter-dimension")?.value || "", value})));
+    const hits = (state.applications || []).filter(app => matchesChips(app, next)).length;
+    hint.textContent = "已选 " + stagedValues.length + " 项 · 添加后命中 " + hits + " 条";
+  }
+
+  function renderFilterChips() {
+    const filter = overviewFilter();
+    const box = document.getElementById("filter-chips");
+    if (box) {
+      if (!filterState.chips.length) {
+        box.innerHTML = "<span class='filter-empty'>未添加条件：下面「分类查看」与「能力结构」都按全部报名统计。</span>";
+      } else {
+        box.innerHTML = [...groupChips(filterState.chips)].map(([key, values]) => "<div class='filter-chip-group'><span class='filter-chip-head'><b>" + esc(DIMENSION_LABEL[key] || key) + "</b>" + (values.length > 1 ? "<em>" + values.length + " 项任一</em>" : "<em>是</em>") + "</span>" + values.map(value => "<span class='filter-chip'>" + esc(displayValue(key, value)) + "<button type='button' data-chip-key='" + esc(key) + "' data-chip-value='" + esc(value) + "' aria-label='移除该条件'>×</button></span>").join("") + "</div>").join("") + "<span class='filter-empty'>共 " + filterState.chips.length + " 个取值，维度内任一满足 · 维度之间同时满足</span>";
+      }
+      box.querySelectorAll("[data-chip-key]").forEach(button => button.onclick = () => {
+        const { chipKey, chipValue } = button.dataset;
+        cropFilterChips(item => item.key === chipKey && item.value === chipValue);
+        saveFilterSettings();
+        stagedValues = [];
+        render();
+      });
+    }
+    const scope = document.getElementById("overview-scope");
+    if (scope) {
+      const usable = filterState.chips.length > 0;
+      if (!usable) filterState.active = false;
+      scope.querySelectorAll("[data-scope]").forEach(button => {
+        const isActive = usable && button.dataset.scope === (filterState.active ? "filtered" : "all");
+        button.classList.toggle("active", isActive || (!usable && button.dataset.scope === "all"));
+        button.disabled = !usable && button.dataset.scope === "filtered";
+      });
+    }
+    const summary = document.getElementById("filter-summary");
+    if (summary) {
+      const allTotal = (state.applications || []).length;
+      summary.innerHTML = filterState.chips.length
+        ? "命中 <b>" + filter.count + "</b> / " + allTotal + " 条 · 影响范围：" + (filter.active ? "分类查看 · 能力结构" : "未启用（点右上角切到筛选结果）")
+        : "全部报名 <b>" + allTotal + "</b> 条";
+    }
+  }
+
+  /** 原地裁剪条件数组（remove = 返回 true 表示该条件要移除）。 */
+  function cropFilterChips(remove) {
+    filterState.chips = filterState.chips.filter(chip => !remove(chip));
+    if (!filterState.chips.length) filterState.active = false;
+  }
+
+  /** 添加条件：把当前勾选的所有取值一次性加入该维度（已添加过的自动跳过）。 */
+  function addFilterChip() {
+    const dimension = document.getElementById("filter-dimension");
+    const key = dimension?.value || "";
+    const picked = checkedFilterValues();
+    if (!key) return;
+    if (!picked.length) { toast("先勾选一个或多个取值"); return; }
+    const exists = value => filterState.chips.some(chip => chip.key === key && chip.value === value);
+    const room = Math.max(0, FILTER_CHIP_LIMIT - filterState.chips.length);
+    const added = picked.filter(value => !exists(value)).slice(0, room);
+    if (!added.length) {
+      toast(picked.every(exists) ? "这些取值已经加过了" : "条件数量已达上限（" + FILTER_CHIP_LIMIT + " 个）", "info");
+      return;
+    }
+    filterState.chips.push(...added.map(value => ({ key, value })));
+    filterState.active = true;
+    saveFilterSettings();
+    stagedValues = [];
+    render();
+    const label = DIMENSION_LABEL[key] || key;
+    toast(added.length > 1 ? "已添加 " + label + " " + added.length + " 个取值（满足任一）" : "已添加条件：" + label + " = " + displayValue(key, added[0]), "success");
+  }
+
+  function saveFilterSettings() {
+    try { localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ chips: filterState.chips, active: filterState.active })); } catch { /* 隐私模式忽略 */ }
+  }
+  function readFilterSettings() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || "null");
+      if (saved && Array.isArray(saved.chips)) {
+        const seen = new Set();
+        filterState.chips = saved.chips
+          .filter(chip => chip && DIMENSION_LABEL[chip.key] && typeof chip.value === "string")
+          .filter(chip => { const id = chip.key + "\u0000" + chip.value; if (seen.has(id)) return false; seen.add(id); return true; })
+          .slice(0, FILTER_CHIP_LIMIT);
+        filterState.active = Boolean(saved.active) && filterState.chips.length > 0;
+      }
+    } catch { /* 忽略损坏的本地设置 */ }
   }
 
   function renderReminders() {
@@ -426,7 +657,21 @@
   document.getElementById("applicant-search")?.addEventListener("input", applyFilters);
   document.getElementById("applicant-status")?.addEventListener("change", applyFilters);
   document.getElementById("applicant-type")?.addEventListener("change", () => { applyFilters(); renderCategoryChart(); });
-  document.querySelectorAll("#category-switch [data-category]").forEach(button => button.onclick = () => { categoryKey = button.dataset.category; renderCategoryChart(); });
+  document.querySelectorAll("#category-switch [data-category]").forEach(button => button.onclick = () => { categoryKey = button.dataset.category; categoryPicked = true; renderCategoryChart(); });
+  // 多条件筛选：勾选取值 / 添加 / 清空 / 切换统计范围
+  document.getElementById("filter-add")?.addEventListener("click", addFilterChip);
+  document.getElementById("filter-dimension")?.addEventListener("change", renderFilterBuilder);
+  document.getElementById("filter-value")?.addEventListener("change", () => {
+    stagedValues = checkedFilterValues();
+    updateFilterValueHint();
+  });
+  document.getElementById("filter-clear")?.addEventListener("click", () => { filterState.chips = []; filterState.active = false; stagedValues = []; saveFilterSettings(); render(); });
+  document.querySelectorAll("#overview-scope [data-scope]").forEach(button => button.onclick = () => {
+    if (!filterState.chips.length) { toast("先添加一个筛选条件"); return; }
+    filterState.active = button.dataset.scope === "filtered";
+    saveFilterSettings();
+    render();
+  });
   document.getElementById("export-csv")?.addEventListener("click", exportCsv);
   document.getElementById("refresh-data")?.addEventListener("click", () => { load(); toast("已刷新"); });
 
@@ -498,6 +743,8 @@
     pollState.timer = setInterval(() => { if (!document.hidden) sync({ withQa: true, reason: "poll" }); }, Math.max(5, pollState.seconds) * 1000);
   }
   readPollSettings();
+  readFilterSettings();
+  renderFilterDimensions();
   if (pollToggle) pollToggle.checked = pollState.enabled;
   if (pollInterval) pollInterval.value = String(pollState.seconds);
   pollToggle?.addEventListener("change", () => { pollState.enabled = pollToggle.checked; savePollSettings(); startPolling(); toast(pollState.enabled ? "已开启自动刷新" : "已关闭自动刷新"); });

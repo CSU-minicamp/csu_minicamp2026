@@ -11,6 +11,7 @@
     "qa-import": "node scripts/qa-import.mjs"
   },
   "dependencies": {
+    "chart.js": "4.4.7",
     "mysql2": "^3.14.4"
   }
 }

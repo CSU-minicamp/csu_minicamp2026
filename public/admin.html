@@ -54,12 +54,37 @@
           <div class="admin-card"><div class="admin-card-head"><h2>报名状态</h2><button data-switch="applicants">查看全部 →</button></div><div class="status-bars" id="status-bars"></div></div>
           <div class="admin-card"><div class="admin-card-head"><h2>最近报名</h2><span>实时</span></div><div class="activity-list" id="activity-list"></div></div>
         </div>
+        <div class="overview-filter" id="overview-filter">
+          <div class="overview-filter-head">
+            <div class="overview-filter-title"><strong>报名筛选</strong><span>同一维度可多选（维度内取并集，例如「专业=软件工程 或 计算机」），不同维度之间为「同时满足」。只作用于下面「分类查看」与「能力结构」两块，其它统计始终看全部报名。</span></div>
+            <div class="overview-filter-actions">
+              <span class="filter-scope-hint">作用于「分类查看 / 能力结构」</span>
+              <div class="chart-switch" id="overview-scope" role="tablist" aria-label="分类查看与能力结构的统计范围">
+                <button type="button" data-scope="all" role="tab">全部报名</button>
+                <button type="button" data-scope="filtered" role="tab">筛选结果</button>
+              </div>
+              <button class="outline-button" id="filter-clear" type="button">清空条件</button>
+            </div>
+          </div>
+          <div class="filter-builder">
+            <div class="filter-builder-head">
+              <select class="admin-select" id="filter-dimension" aria-label="选择条件维度"><option value="status">状态</option><option value="registration_type">报名类型</option><option value="grade">年级</option><option value="major">专业</option><option value="college">学院</option></select>
+              <button class="outline-button primary" id="filter-add" type="button">添加条件</button>
+              <span class="filter-summary" id="filter-summary"></span>
+            </div>
+            <div class="filter-values" id="filter-values">
+              <div class="filter-values-head"><span>取值（可多选）</span><span class="filter-values-hint" id="filter-values-hint">勾选一个或多个</span></div>
+              <div class="filter-values-list" id="filter-value" role="listbox" aria-multiselectable="true" aria-label="选择条件取值（可多选）"></div>
+            </div>
+          </div>
+          <div class="filter-chips" id="filter-chips"></div>
+        </div>
         <div class="dashboard-grid">
           <div class="admin-card">
             <div class="admin-card-head"><h2>分类查看</h2><div class="chart-switch" id="category-switch" role="tablist" aria-label="分类维度"><button class="active" type="button" data-category="grade" role="tab">年级</button><button type="button" data-category="major" role="tab">专业</button><button type="button" data-category="college" role="tab">学院</button><button type="button" data-category="type" role="tab">报名类型</button></div></div>
-            <div class="category-chart" id="category-chart"></div>
+            <div class="category-chart" id="category-chart"><div class="chart-canvas-wrap" id="category-canvas-wrap"><canvas id="category-canvas" aria-label="分类报名人数柱状图" role="img"></canvas></div><p class="chart-foot" id="chart-foot"></p></div>
           </div>
-          <div class="admin-card"><div class="admin-card-head"><h2>能力结构</h2><span>浅色为报名人数 · 深色为已录取</span></div><div class="status-bars" id="skill-bars"></div></div>
+          <div class="admin-card"><div class="admin-card-head"><h2>能力结构</h2><span id="skill-scope">浅色为报名人数 · 深色为已录取</span></div><div class="status-bars" id="skill-bars"></div></div>
         </div>
         <div class="dashboard-grid">
           <div class="admin-card"><div class="admin-card-head"><h2>关键节点</h2><span>来自活动配置</span></div><div class="activity-list" id="event-reminders"></div></div>
@@ -172,6 +197,14 @@
     <div id="applicant-detail"></div>
   </dialog>
 
+  <!-- Chart.js：主源是 server.mjs 从 node_modules/chart.js 读出的本地文件（版本见 package.json），
+       本地取不到时回退到 CDN（jsDelivr + SRI），两个源都不可用时 admin.js 会退化为数字列表。 -->
+  <script src="vendor/chart.umd.min.js" onerror="window.__chartLocalFailed=1"></script>
+  <script>
+    if (!window.Chart) {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" integrity="sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC" crossorigin="anonymous"><\/script>');
+    }
+  </script>
   <script src="api.js"></script><script src="stage.js"></script><script src="ui.js"></script><script src="admin.js"></script><script src="qa-admin.js"></script>
   <div id="participant-fab-root"></div>
   <script src="api.js"></script><script src="participant-fab.js"></script>
