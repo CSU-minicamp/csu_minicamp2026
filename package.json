@@ -6,7 +6,9 @@
     "start": "node --env-file-if-exists=.env server.mjs",
     "check": "node --check server.mjs",
     "test-data": "node scripts/test-data.mjs seed",
-    "clear-test-data": "node scripts/test-data.mjs clear"
+    "clear-test-data": "node scripts/test-data.mjs clear",
+    "qa-store-test": "node scripts/qa-store-test.mjs",
+    "qa-import": "node scripts/qa-import.mjs"
   },
   "dependencies": {
     "mysql2": "^3.14.4"

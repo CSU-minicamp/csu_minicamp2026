@@ -307,5 +307,7 @@
   document.querySelectorAll("[data-switch]").forEach(b => b.onclick = () => activate(b.dataset.switch));
 
   window.MinicampStage?.subscribe(() => { if (state) renderStageBriefEditor(); });
+  // 其它后台脚本（例如 qa-admin.js）需要读取当前后台数据用于展示。
+  window.MinicampAdmin = { getState: () => state, reload: load };
   load();
 })();

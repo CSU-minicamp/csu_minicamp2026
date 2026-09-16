@@ -14,13 +14,14 @@
       <nav class="admin-nav" aria-label="后台导航">
         <button class="active" type="button" data-panel="overview"><span>01</span><b>报名总览</b></button>
         <button type="button" data-panel="applicants"><span>02</span><b>报名审核</b></button>
-        <button type="button" data-panel="teams"><span>03</span><b>队伍管理</b></button>
-        <button type="button" data-panel="ideas"><span>04</span><b>Idea 管理</b></button>
-        <button type="button" data-panel="projects"><span>05</span><b>项目审核</b></button>
-        <button type="button" data-panel="voting"><span>06</span><b>投票与结果</b></button>
-        <button type="button" data-panel="notices"><span>07</span><b>通知与录取</b></button>
-        <button type="button" data-panel="config"><span>08</span><b>活动配置</b></button>
-        <button type="button" data-panel="stage"><span>09</span><b>现场大屏</b></button>
+        <button type="button" data-panel="qa"><span>03</span><b>Q&amp;A 问答</b></button>
+        <button type="button" data-panel="teams"><span>04</span><b>队伍管理</b></button>
+        <button type="button" data-panel="ideas"><span>05</span><b>Idea 管理</b></button>
+        <button type="button" data-panel="projects"><span>06</span><b>项目审核</b></button>
+        <button type="button" data-panel="voting"><span>07</span><b>投票与结果</b></button>
+        <button type="button" data-panel="notices"><span>08</span><b>通知与录取</b></button>
+        <button type="button" data-panel="config"><span>09</span><b>活动配置</b></button>
+        <button type="button" data-panel="stage"><span>10</span><b>现场大屏</b></button>
       </nav>
       <div class="admin-sidebar-footer">
         <a href="index.html">← 返回官网</a>
@@ -49,6 +50,27 @@
       <section class="admin-panel" id="panel-applicants">
         <div class="panel-toolbar"><div class="toolbar-left"><input class="admin-search" id="applicant-search" placeholder="搜索姓名 / 学院 / 专业 / 申请编号 / 联系方式"><select class="admin-select" id="applicant-type"><option value="全部">全部报名类型</option><option value="roadshow">路演报名</option><option value="contestant">参赛报名</option></select><select class="admin-select" id="applicant-status"><option value="全部">全部状态</option><option value="待审核">待审核</option><option value="已录取">已录取</option><option value="候补">候补</option><option value="待复审">待复审</option><option value="已通过">已通过</option><option value="未通过">未通过</option></select></div><div class="toolbar-right"><button class="outline-button" id="export-csv">导出 CSV</button><button class="outline-button primary" id="refresh-data">刷新数据</button></div></div>
         <div class="table-wrap"><table class="data-table"><thead><tr><th>申请人</th><th>报名类型</th><th>报名码</th><th>联系方式</th><th>能力标签</th><th>提交时间</th><th>状态</th><th>操作</th></tr></thead><tbody id="applicants-table"></tbody></table></div>
+      </section>
+
+      <section class="admin-panel" id="panel-qa">
+        <div class="panel-toolbar">
+          <div class="toolbar-left">
+            <input class="admin-search" id="qa-admin-search" placeholder="搜索问题 / 答案 / 提问人">
+            <select class="admin-select" id="qa-admin-filter">
+              <option value="">全部问答</option>
+              <option value="pending">待回答</option>
+              <option value="answered">已回答</option>
+              <option value="pinned">已置顶</option>
+              <option value="hidden">已隐藏</option>
+            </select>
+          </div>
+          <div class="toolbar-right">
+            <span class="qa-admin-storage" id="qa-admin-storage"></span>
+            <button class="outline-button primary" id="qa-admin-refresh" type="button">刷新</button>
+          </div>
+        </div>
+        <p class="qa-admin-note">卡片左侧是问题与答案，右侧是「状态」下拉框与「更改答案 / 回答问题」。点右侧按钮后进入编辑态：只显示更大的答案文本框，确认后提问者会收到站内通知。状态：待回答（不公开）· 已回答（公开）· 置顶（公开且排最前）· 隐藏（不公开，不删除记录）。没有答案的问题不能设为公开。</p>
+        <div class="qa-list qa-admin-list" id="qa-admin-list"></div>
       </section>
 
       <section class="admin-panel" id="panel-notices">
@@ -129,7 +151,7 @@
     <div id="applicant-detail"></div>
   </dialog>
 
-  <script src="api.js"></script><script src="stage.js"></script><script src="ui.js"></script><script src="admin.js"></script>
+  <script src="api.js"></script><script src="stage.js"></script><script src="ui.js"></script><script src="admin.js"></script><script src="qa-admin.js"></script>
   <div id="participant-fab-root"></div>
   <script src="api.js"></script><script src="participant-fab.js"></script>
 </body>

@@ -5,6 +5,7 @@
   const page = document.body.dataset.page || "home";
   const items = [
     { id: "about", label: "活动介绍", href: "index.html#about", current: ["home", "starter-pack"] },
+    { id: "qa", label: "Q&A", href: "qa.html", current: ["qa"] },
     { id: "team", label: "组队工作区", href: "team.html", current: ["team"] },
     { id: "gallery", label: "项目 Gallery", href: "gallery.html", current: ["gallery", "submission"] },
     { id: "voting", label: "现场投票", href: "voting.html", current: ["voting", "vote"], voting: true },

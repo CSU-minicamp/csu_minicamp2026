@@ -17,6 +17,29 @@
 
 默认优先使用 MySQL 持久化；如果本地 MySQL 不可用，服务会自动回退到 `data/minicamp.json`，该文件不提交到 Git。可通过 `.env.example` 配置数据库连接。
 
+### 本机 MySQL（Windows）
+
+本项目已在 **MySQL 9.7 + mysql2** 上验证通过。安装好 MySQL Community Server 并启动服务（Windows 服务名形如 `MySQL97`，监听 `127.0.0.1:3306`）后：
+
+1. 复制 `.env.example` 为 `.env`（`.env` 已在 `.gitignore` 中，不会提交），填入本机账号，例如：
+
+       MINICAMP_PORT=4173
+       MINICAMP_ADMIN_PASSWORD=你的主办方密码
+       MYSQL_HOST=127.0.0.1
+       MYSQL_PORT=3306
+       MYSQL_USER=user
+       MYSQL_PASSWORD=123456
+       MYSQL_DATABASE=minicamp2026
+
+2. 用 `npm start`（会加载 `.env`）或先设环境变量再 `node server.mjs` 启动。**数据库 `minicamp2026` 与两张表（`app_state`、`qa_questions`）都会自动创建**，不需要手工执行 SQL。
+3. 启动日志出现 `(qa storage: table)` 表示问答已写入 MySQL 表；出现 `(qa storage: json)` 说明连不上数据库，这时问答会落到 `data/qa.json`，请检查账号密码与服务状态。
+
+常用排错：
+
+- `ER_ACCESS_DENIED_ERROR`：账号/密码不对，或该用户没有从 `localhost` 连接的权限。
+- `EADDRINUSE 127.0.0.1:4173`：已经有一个服务在跑（可能就是你之前启动的那个）。要么停掉它，要么换个端口：`$env:MINICAMP_PORT="4200"; node server.mjs`。
+- 服务只在启动时建表/连库，改完 `.env` 需要重启才生效。
+
 ## 测试数据
 
 先停止正在运行的本地服务，再生成数据，随后重新启动服务：
@@ -60,6 +83,7 @@
 ## 页面入口
 
 - 官网首页：/
+- Q&A 问答：/qa.html
 - 个人主页：/profile.html
 - 组队与 Idea：/team.html
 - 项目提交：/submission.html
@@ -79,6 +103,7 @@
 - Idea 发布、项目草稿提交、主办方审核发布、动态 Gallery。
 - 参与者投票、Jury 投票、参与者/Jury 权重统计。
 - 活动日期、报名状态、投票权重和 Starter Pack 可在后台配置。
+- 问答信息独立存储于 `qa_questions` 表，前台 `/qa.html` 支持搜索、折叠展开、置顶、我的提问分段展示，后台可回答与置顶/隐藏，回答后自动通知提问者（见上文）。
 - 统一的通知与确认模块 `public/ui.js`（`MinicampUI.toast / confirm / alert`）：页面不再使用 `window.confirm` 等浏览器默认弹窗，需要时在页面里加一行 `<script src="ui.js"></script>` 即可。
 
 正式部署前仍应配置生产 MySQL，接入 HTTPS、统一身份认证、限流、CSRF 防护、审计日志和备份机制。
