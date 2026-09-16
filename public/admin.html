@@ -32,7 +32,20 @@
     <main class="admin-main">
       <div class="admin-topbar">
         <div><h1 id="admin-title">报名总览</h1><p id="admin-subtitle">集中管理报名、审核、录取与通知。</p></div>
-        <span class="prototype-pill">主办方工作台</span>
+        <div class="admin-topbar-side">
+          <div class="admin-poll" id="admin-poll">
+            <label class="admin-poll-toggle"><input type="checkbox" id="admin-poll-toggle" checked><span>自动刷新</span></label>
+            <select class="admin-select admin-poll-interval" id="admin-poll-interval" aria-label="自动刷新间隔">
+              <option value="10">每 10 秒</option>
+              <option value="15" selected>每 15 秒</option>
+              <option value="30">每 30 秒</option>
+              <option value="60">每 60 秒</option>
+            </select>
+            <span class="admin-poll-time" id="admin-poll-time">尚未刷新</span>
+            <button class="outline-button" id="admin-poll-now" type="button">立即刷新</button>
+          </div>
+          <span class="prototype-pill">主办方工作台</span>
+        </div>
       </div>
 
       <section class="admin-panel active" id="panel-overview">
@@ -42,8 +55,15 @@
           <div class="admin-card"><div class="admin-card-head"><h2>最近报名</h2><span>实时</span></div><div class="activity-list" id="activity-list"></div></div>
         </div>
         <div class="dashboard-grid">
-          <div class="admin-card"><div class="admin-card-head"><h2>能力结构</h2><span>报名者自选标签</span></div><div class="status-bars" id="skill-bars"></div></div>
+          <div class="admin-card">
+            <div class="admin-card-head"><h2>分类查看</h2><div class="chart-switch" id="category-switch" role="tablist" aria-label="分类维度"><button class="active" type="button" data-category="grade" role="tab">年级</button><button type="button" data-category="major" role="tab">专业</button><button type="button" data-category="college" role="tab">学院</button><button type="button" data-category="type" role="tab">报名类型</button></div></div>
+            <div class="category-chart" id="category-chart"></div>
+          </div>
+          <div class="admin-card"><div class="admin-card-head"><h2>能力结构</h2><span>浅色为报名人数 · 深色为已录取</span></div><div class="status-bars" id="skill-bars"></div></div>
+        </div>
+        <div class="dashboard-grid">
           <div class="admin-card"><div class="admin-card-head"><h2>关键节点</h2><span>来自活动配置</span></div><div class="activity-list" id="event-reminders"></div></div>
+          <div class="admin-card"><div class="admin-card-head"><h2>已录取来源</h2><span>人数最多的前 5 个专业</span></div><div class="status-bars" id="accepted-major-bars"></div></div>
         </div>
       </section>
 
@@ -102,6 +122,7 @@
       <section class="admin-panel" id="panel-voting">
         <div class="vote-summary" id="vote-summary"></div>
         <div class="admin-card"><div class="admin-card-head"><h2>奖项结果</h2><span>参与者与 Jury 权重合并</span></div><div class="vote-list" id="vote-results"></div></div>
+        <div class="admin-card"><div class="admin-card-head"><h2>投票人名单</h2><span>按报名编号 · 姓名区分</span></div><div class="vote-voter-list" id="vote-voters"></div></div>
       </section>
 
       <section class="admin-panel" id="panel-config">

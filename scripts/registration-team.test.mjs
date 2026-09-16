@@ -26,9 +26,20 @@ function fixture() {
     sessions: Object.fromEntries(["A", "B", "C", "D"].map(id => [id, { role: "participant", userId: id }])),
     notices: [], projects: [], votes: [], ideas: []
   };
+  // 问答存储独立成表，本套测试只覆盖报名 / 组队 / 投票路由，这里注入内存替身。
+  const qaStub = {
+    initialize: async () => {},
+    list: () => [],
+    listPublic: () => [],
+    stats: () => ({ total: 0, pending: 0, answered: 0, pinned: 0, hidden: 0 }),
+    mode: () => "memory",
+    createQuestion: async () => ({ error: "qa store disabled in this test", status: 500 }),
+    answerQuestion: async () => ({ error: "qa store disabled in this test", status: 500 }),
+    setStatus: async () => ({ error: "qa store disabled in this test", status: 500 })
+  };
   // Execute the real routes without starting HTTP or loading/saving either database.
-  const context = vm.createContext({ crypto, console, fixtureDb: db });
-  vm.runInContext(source.slice(source.indexOf("const seed ="), source.indexOf("async function serve(")) +
+  const context = vm.createContext({ crypto, console, process, fixtureDb: db, qaPath: "/tmp/minicamp-qa-test.json", createQaStore: () => qaStub, QA_STATUSES: ["pinned", "answered", "pending", "hidden"] });
+  vm.runInContext(source.slice(source.indexOf("const adminPassword"), source.indexOf("async function serve(")) +
     "\ndb=fixtureDb; saveDb=async()=>{}; globalThis.routes=api; globalThis.normalize=normalizeTeams; globalThis.normalizeApplications=normalizeApplications;", context);
   async function request(method, pathname, token = "", payload) {
     const req = new EventEmitter();
@@ -148,6 +159,56 @@ test("roadshow registrations stay 已通过 and cannot be restatused from admin"
   const contestant = participant("MC26-9100", "待审核");
   db.applications.push(contestant);
   assert.equal((await request("PATCH", "/api/admin/applications", "ADMIN", { id: contestant.id, status: "已录取" })).status, 200);
+});
+
+test("public voters identify by 姓名 + 报名编号 instead of 学号", async () => {
+  const { db, request } = fixture();
+  db.config.voteOpen = true;
+  db.sessions.ADMIN = { role: "admin", userId: "ADMIN" };
+  db.projects.push({ id: "PROJECT-X1", teamId: "TEAM ORPHAN", projectName: "X1", status: "published" });
+  db.projects.push({ id: "PROJECT-X2", teamId: "TEAM ORPHAN", projectName: "X2", status: "published" });
+  db.projects.push({ id: "PROJECT-X3", teamId: "TEAM ORPHAN", projectName: "X3", status: "published" });
+  const roadshowCode = (await request("POST", "/api/applications", "", roadshow)).data.application.id;
+  const participantCode = (await request("POST", "/api/applications", "", participant("E"))).data.application.id;
+
+  // 学号不再是身份凭据，编号格式也要校验
+  const legacy = await request("POST", "/api/auth/voter", "", { name: "投票人", studentId: "2026000001" });
+  assert.equal(legacy.status, 400);
+  assert.match(legacy.data.error, /报名编号/);
+  assert.equal((await request("POST", "/api/auth/voter", "", { name: "投票人", code: "随便写的" })).status, 400);
+
+  // 参赛编号与路演编号都能进入投票，会话里保存姓名 + 编号
+  for (const code of [participantCode, roadshowCode]) {
+    const login = await request("POST", "/api/auth/voter", "", { name: "投票人", code });
+    assert.equal(login.status, 200);
+    assert.equal(login.data.voter.name, "投票人");
+    assert.equal(login.data.voter.code, code.replace(/-/g, ""));
+  }
+
+  // 真正的投票记录会带上报名编号
+  const login = await request("POST", "/api/auth/voter", "", { name: "投票人", code: participantCode });
+  const stored = db.sessions[login.data.token];
+  const selections = [];
+  for (const award of ["Best Overall", "Best Product", "Best Design", "Best Technical", "Most Unexpected"]) {
+    selections.push({ award, projectId: "PROJECT-X1", points: 3 });
+    selections.push({ award, projectId: "PROJECT-X2", points: 2 });
+    selections.push({ award, projectId: "PROJECT-X3", points: 1 });
+  }
+  selections.push({ award: "People's Choice", projectId: "PROJECT-X1", points: 1 });
+  assert.equal((await request("POST", "/api/votes", login.data.token, { selections })).status, 201);
+  const submittedVote = db.votes[db.votes.length - 1];
+  assert.equal(submittedVote.voterCode, participantCode.replace(/-/g, ""));
+  assert.equal((await request("POST", "/api/auth/voter", "", { name: "投票人", code: participantCode })).data.hasVoted, true);
+
+  // 后台汇总按编号展示：新票读 vote 上的编号，历史大众票靠去重哈希回查会话
+  submittedVote.voterCode = "";
+  db.votes.push({ id: "VOTE-LEGACY", role: "participant", voterId: stored.userId, voterCode: "", voterCredentialHash: stored.credentialHash, voterIdentityHash: stored.userId, selections: [], createdAt: new Date().toISOString() });
+  db.votes.push({ id: "VOTE-ME", role: "participant", voterId: participantCode, voterCode: participantCode, voterCredentialHash: null, voterIdentityHash: null, selections: [], createdAt: new Date().toISOString() });
+  const summary = await request("GET", "/api/admin/summary", "ADMIN");
+  const expected = participantCode.replace(/-/g, "");
+  assert.equal(summary.data.votes.find(item => item.id === submittedVote.id).voterCode, expected);
+  assert.equal(summary.data.votes.find(item => item.id === "VOTE-LEGACY").voterCode, expected);
+  assert.equal(summary.data.votes.find(item => item.id === "VOTE-ME").voterCode, expected);
 });
 
 test("legacy members without a grade field can still be invited to a pre-team", async () => {
