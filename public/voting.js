@@ -131,23 +131,25 @@
     }
   }).catch(() => {});
 
-  document.getElementById("public-voter-student-id")?.addEventListener("input", event => { event.target.value = event.target.value.replace(/\D/g, "").slice(0, 10); });
+  const codePattern = /^(MC26|RO)\d{4,12}$/i;
+  const codeInput = document.getElementById("public-voter-code");
+  codeInput?.addEventListener("input", event => { event.target.value = event.target.value.replace(/[^0-9a-zA-Z-]/g, "").toUpperCase(); });
   login?.addEventListener("submit", async event => {
     event.preventDefault();
     if (!votingOpen) {
       document.getElementById("voter-error").textContent = "投票暂未开放。";
       return;
     }
-    const studentId = document.getElementById("public-voter-student-id");
-    if (!api.isValidStudentId(studentId.value)) {
-      document.getElementById("voter-error").textContent = "请输入 10 位数字学号。";
-      studentId.focus();
+    const code = String(codeInput?.value || "").replace(/[\s-]/g, "").toUpperCase();
+    if (!codePattern.test(code)) {
+      document.getElementById("voter-error").textContent = "请输入报名编号，例如 MC26-1001 或 RO-2026-000001。";
+      codeInput?.focus();
       return;
     }
     try {
       await api.voterLogin({
         name: document.getElementById("public-voter-name").value,
-        studentId: document.getElementById("public-voter-student-id").value
+        code
       });
       location.assign("vote.html");
     } catch (error) { document.getElementById("voter-error").textContent = error.message; }
@@ -202,6 +204,8 @@
       }
       projects = (await api.request("/api/projects")).projects;
       document.getElementById("voter-name").textContent = voter.name;
+      const codeLabel = document.getElementById("voter-code");
+      if (codeLabel) codeLabel.textContent = voter.code ? "（" + voter.code + "）" : "";
       workspace.hidden = false;
       render();
     } catch { location.replace("voting.html"); }

@@ -59,21 +59,154 @@
     const box = document.createElement("section"); box.id = "admin-login"; box.className = "admin-login-card";
     box.innerHTML = "<p class='section-kicker'>ORGANIZER ACCESS</p><h2>进入报名管理工作台</h2><form><label>主办方密码<input type='password' name='password' required></label><p class='form-error'></p><button class='button button-dark'>登录</button></form>";
     root.prepend(box);
-    box.querySelector("form").onsubmit = async e => { e.preventDefault(); try { const d = await api.request("/api/auth/admin", { method: "POST", body: JSON.stringify({ password: new FormData(e.currentTarget).get("password") }) }); api.setAdminToken(d.token); box.remove(); await load(); } catch (err) { box.querySelector(".form-error").textContent = err.message; } };
+    const form = box.querySelector("form");
+    if (!form) return;
+    form.onsubmit = async e => {
+      e.preventDefault();
+      try {
+        const d = await api.request("/api/auth/admin", { method: "POST", body: JSON.stringify({ password: new FormData(e.currentTarget).get("password") }) });
+        api.setAdminToken(d.token);
+        box.remove();
+        await load();
+      } catch (err) {
+        const error = box.querySelector(".form-error");
+        if (error) error.textContent = err.message;
+        else toast(err.message, "error");
+      }
+    };
   }
-  async function load() { try { state = await api.request("/api/admin/summary"); render(); } catch { showLogin(); } }
-
+  function load() { return sync({ withQa: true, reason: "manual", notify: false }); }
   function bar(label, value, max) { return "<div><div class='status-bar-label'><span>" + esc(label) + "</span><b>" + value + "</b></div><div class='status-bar-track'><i style='width:" + (value / Math.max(max, 1) * 100) + "%'></i></div></div>"; }
+  function stackedBar(label, value, acceptedCount, max) {
+    const width = inner => Math.max(inner > 0 ? 3 : 0, inner / Math.max(max, 1) * 100);
+    return "<div class='status-bar-stack'><div class='status-bar-label'><span>" + esc(label) + "</span><b>" + acceptedCount + " / " + value + "</b></div><div class='status-bar-track'><i class='is-total' style='width:" + width(value) + "%'></i><i class='is-accepted' style='width:" + width(acceptedCount) + "%'></i></div></div>";
+  }
+
+  /** 分类统计 */
+  const CATEGORY_LABEL = { grade: "年级", major: "专业", college: "学院", type: "报名类型" };
+  let categoryKey = "grade";
+  let categoryPicked = false;
+  function pickDefaultCategory() {
+    if (categoryPicked) return;
+    categoryPicked = true;
+    const apps = state.applications || [];
+    if (!apps.length) return;
+    const coverage = key => apps.filter(a => String(a[key] || "").trim()).length / apps.length;
+    if (coverage("grade") >= Math.max(coverage("major"), coverage("college"))) return;
+    categoryKey = coverage("major") >= coverage("college") ? "major" : "college";
+  }
+  const appsOfType = type => (state.applications || []).filter(a => type === "全部" || (isRoadshow(a) ? "roadshow" : "contestant") === type);
+  const currentTypeFilter = () => document.getElementById("applicant-type")?.value || "全部";
+  function categoryCounts(key) {
+    const counts = new Map();
+    appsOfType(currentTypeFilter()).forEach(a => {
+      const raw = key === "type" ? (isRoadshow(a) ? "路演报名" : "参赛报名") : String(a[key] || "").trim();
+      const value = raw || "未填写 " + CATEGORY_LABEL[key];
+      const entry = counts.get(value) || {label: value, total: 0, accepted: 0};
+      entry.total += 1;
+      if (a.status === "已录取") entry.accepted += 1;
+      counts.set(value, entry);
+    });
+    return [...counts.values()].sort((a, b) => (b.total - a.total) || a.label.localeCompare(b.label, "zh-CN"));
+  }
+  /** 分类柱状图：纯 SVG 绘制（零依赖）。宽度随列数自适应，高度固定。 */
+  const CHART = { top: 26, bottom: 48, left: 40, right: 16 };
+  function niceTicks(max) {
+    const ticks = [];
+    for (let value = 0; value <= max; value += 1) ticks.push(value);
+    if (ticks.length > 7) {
+      const step = Math.ceil(max / 6);
+      ticks.length = 0;
+      for (let value = 0; value <= max; value += step) ticks.push(value);
+      if (ticks[ticks.length - 1] !== max) ticks.push(max);
+    }
+    return ticks;
+  }
+  function renderCategoryChart() {
+    pickDefaultCategory();
+    const rows = categoryCounts(categoryKey);
+    const total = appsOfType(currentTypeFilter()).length;
+    const typeLabel = currentTypeFilter() === "roadshow" ? "路演报名" : currentTypeFilter() === "contestant" ? "参赛报名" : "全部报名类型";
+    setHtml("category-chart", (rows.length
+      ? categoryChartSvg(rows)
+      : "<p class='empty-state'>当前筛选下没有报名</p>") + "<p class='chart-foot'>" + esc(CATEGORY_LABEL[categoryKey]) + "维度 · " + esc(typeLabel) + " · 共 " + total + " 条" + (rows.some(row => row.accepted) ? " · 深色段为已录取" : "") + "</p>");
+    document.querySelectorAll("#category-switch [data-category]").forEach(button => {
+      button.classList.toggle("active", button.dataset.category === categoryKey);
+      button.setAttribute("aria-selected", String(button.dataset.category === categoryKey));
+    });
+  }
+  function categoryChartSvg(rows) {
+    const max = Math.max(1, ...rows.map(row => row.total));
+    // 宽度随列数走：类别少就画窄一点并居中，类别多才铺满并允许横向滚动。
+    const width = Math.round(Math.max(400, Math.min(700, 64 + rows.length * 86)));
+    const height = 300;
+    const plotWidth = width - CHART.left - CHART.right;
+    const plotHeight = height - CHART.top - CHART.bottom;
+    const baseY = CHART.top + plotHeight;
+    const scale = value => value / max * plotHeight;
+    const slot = plotWidth / rows.length;
+    const longest = Math.max(1, ...rows.map(row => row.label.length));
+    const barWidth = Math.max(10, Math.min(46, slot * 0.56, (slot * 1.6) / longest * 4.4));
+
+    const ticks = niceTicks(max);
+    const grid = ticks.map(value => {
+      const y = baseY - scale(value);
+      return "<line class='chart-grid' x1='" + CHART.left + "' y1='" + y.toFixed(1) + "' x2='" + (width - CHART.right) + "' y2='" + y.toFixed(1) + "'></line>" +
+        "<text class='chart-tick' x='" + (CHART.left - 8) + "' y='" + (y + 3.5).toFixed(1) + "' text-anchor='end'>" + value + "</text>";
+    }).join("");
+
+    const bars = rows.map((row, index) => {
+      const x = CHART.left + slot * index + (slot - barWidth) / 2;
+      const totalHeight = row.total > 0 ? Math.max(3, scale(row.total)) : 0;
+      const acceptedHeight = row.accepted > 0 ? Math.max(2, scale(row.accepted)) : 0;
+      const acceptedText = row.accepted > 0 ? " · 已录取 " + row.accepted : "";
+      return "<title>" + esc(row.label) + "：报名 " + row.total + acceptedText + "</title>" +
+        "<rect class='chart-bar is-total' x='" + x.toFixed(1) + "' y='" + (baseY - totalHeight).toFixed(1) + "' width='" + barWidth.toFixed(1) + "' height='" + totalHeight.toFixed(1) + "' rx='3'></rect>" +
+        (acceptedHeight ? "<rect class='chart-bar is-accepted' x='" + x.toFixed(1) + "' y='" + (baseY - acceptedHeight).toFixed(1) + "' width='" + barWidth.toFixed(1) + "' height='" + acceptedHeight.toFixed(1) + "' rx='3'></rect>" : "") +
+        "<text class='chart-value' x='" + (x + barWidth / 2).toFixed(1) + "' y='" + (baseY - totalHeight - 7).toFixed(1) + "' text-anchor='middle'>" + row.total + "</text>";
+    }).join("");
+
+    const labels = rows.map((row, index) => {
+      const x = CHART.left + slot * index + (slot - barWidth) / 2;
+      return "<foreignObject class='chart-label-box' x='" + (x - 6).toFixed(1) + "' y='" + (baseY + 6) + "' width='" + (barWidth + 12).toFixed(1) + "' height='" + (CHART.bottom - 10) + "'>" +
+        "<div xmlns='http://www.w3.org/1999/xhtml' class='chart-label'>" + esc(row.label) + "</div></foreignObject>";
+    }).join("");
+
+    return "<div class='chart-scroll'><svg class='bar-chart' viewBox='0 0 " + width + " " + height + "' width='" + width + "' height='" + height + "' role='img' aria-label='" + esc(CATEGORY_LABEL[categoryKey]) + "分类报名人数柱状图' preserveAspectRatio='xMidYMid meet'>" +
+      grid +
+      "<line class='chart-axis' x1='" + CHART.left + "' y1='" + baseY + "' x2='" + (width - CHART.right) + "' y2='" + baseY + "'></line>" +
+      bars +
+      labels +
+      "</svg></div>";
+  }
 
   function render() {
     const apps = state.applications || [];
     const count = s => apps.filter(x => x.status === s).length;
-    const total = apps.length, pending = count("待审核"), accepted = count("已录取"), waitlist = count("候补");
-    setHtml("metrics-grid", [["报名总数", total, "实时"], ["待审核", pending, "需处理"], ["已录取", accepted, "正式名额"], ["候补", waitlist, "备选名单"]].map(x => "<div class='metric-card'><span>" + x[0] + "</span><strong>" + x[1] + "</strong><small>" + x[2] + "</small></div>").join(""));
+    const contestants = apps.filter(x => !isRoadshow(x)).length;
+    const roadshows = apps.length - contestants;
+    const acceptedApps = apps.filter(x => x.status === "已录取");
+    const total = apps.length;
+    setHtml("metrics-grid", [["报名总数", total + "<em>（MC " + contestants + " / RO " + roadshows + "）</em>", "报名 / 路演"], ["待审核", count("待审核"), "需处理"], ["已录取", acceptedApps.length, "正式名额"], ["候补", count("候补"), "备选名单"]].map(x => "<div class='metric-card'><span>" + x[0] + "</span><strong>" + x[1] + "</strong><small>" + x[2] + "</small></div>").join(""));
     setHtml("status-bars", STATUSES.map(s => bar(s, count(s), total)).join(""));
-    const skillCounts = SKILLS.map(s => [s, apps.filter(a => (a.skills || []).includes(s)).length]);
-    const skillMax = Math.max(1, ...skillCounts.map(c => c[1]));
-    setHtml("skill-bars", skillCounts.map(c => bar(c[0], c[1], skillMax)).join(""));
+    const skillRows = SKILLS.map(s => {
+      const all = apps.filter(a => (a.skills || []).includes(s)).length;
+      const acceptedCount = acceptedApps.filter(a => (a.skills || []).includes(s)).length;
+      return {label: s, all, accepted: acceptedCount};
+    });
+    const skillMax = Math.max(1, ...skillRows.map(row => row.all));
+    setHtml("skill-bars", skillRows.map(row => stackedBar(row.label, row.all, row.accepted, skillMax)).join(""));
+    setHtml("accepted-major-bars", (() => {
+      const counts = new Map();
+      acceptedApps.forEach(a => {
+        const label = String(a.major || "").trim() || "未填写专业";
+        counts.set(label, (counts.get(label) || 0) + 1);
+      });
+      const rows = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+      const max = Math.max(1, ...rows.map(row => row[1]));
+      return rows.map(row => bar(row[0], row[1], max)).join("") || "<p class='empty-state'>暂无已录取报名</p>";
+    })());
+    renderCategoryChart();
     setHtml("activity-list", apps.slice(0, 6).map(x => "<div class='activity-item'><span class='activity-dot'>" + esc((x.name || "?").slice(0, 1)) + "</span><p><strong>" + esc(x.name) + "</strong> · " + esc(x.id) + "<br><time>" + fmt(x.createdAt) + "</time></p></div>").join("") || "<p class='empty-state'>暂无报名</p>");
     renderReminders();
     renderApps();
@@ -192,6 +325,16 @@
     const juryVotes = new Set((state.votes || []).filter(vote => vote.role === "jury").map(vote => vote.voterId)).size;
     setHtml("vote-summary", "<div class='vote-leader'><span>投票状态</span><strong>" + (state.config?.voteOpen ? "开放中" : "未开放") + "</strong><p>参与者 " + participantVotes + " 人 · Jury " + juryVotes + " 人</p></div><div class='vote-list'><div class='vote-row'><strong>参与者权重</strong><span class='vote-meter'><i style='width:" + Number(state.config?.participantWeight || 0) + "%'></i></span><b>" + Number(state.config?.participantWeight || 0) + "%</b></div><div class='vote-row'><strong>Jury 权重</strong><span class='vote-meter'><i style='width:" + Number(state.config?.juryWeight || 0) + "%'></i></span><b>" + Number(state.config?.juryWeight || 0) + "%</b></div></div>");
     setHtml("vote-results", awards.map(award => "<div class='vote-row'><strong>" + esc(award.award) + "</strong><span>" + esc(award.projectName || award.projectId) + " · " + esc(award.teamId || "") + "</span><b>" + Number(award.weighted || 0).toFixed(1) + "</b></div>").join("") || (results.length ? "<p class='empty-state'>已有投票，正在计算获奖项目。</p>" : "<p class='empty-state'>暂无已提交投票</p>"));
+    // 投票人名单：统一按「报名编号 · 姓名」区分投票人（Jury 单独标注）。
+    const voteRows = [...(state.votes || [])].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).map(vote => {
+      const jury = vote.role === "jury";
+      const known = (state.applications || []).find(a => a.id === vote.voterId);
+      const code = vote.voterCode || (known ? known.id : "");
+      const name = known ? known.name : "";
+      const label = jury ? "Jury 评审" : code ? (name ? code + " · " + name : code) : (vote.voterId || "未知投票人");
+      return "<div class='vote-voter'><span class='vote-voter-role" + (jury ? " is-jury" : "") + "'>" + (jury ? "JURY" : "参与者") + "</span><strong>" + esc(label) + "</strong><small>" + (jury ? esc((vote.selections || []).length + " 个奖项") : name ? "已报名" : "未匹配到报名编号") + "</small><time>" + esc(fmt(vote.createdAt)) + "</time></div>";
+    }).join("");
+    setHtml("vote-voters", voteRows ? voteRows : "<p class='empty-state'>暂无投票记录</p>");
   }
 
   function renderNotices() {
@@ -282,9 +425,86 @@
 
   document.getElementById("applicant-search")?.addEventListener("input", applyFilters);
   document.getElementById("applicant-status")?.addEventListener("change", applyFilters);
-  document.getElementById("applicant-type")?.addEventListener("change", applyFilters);
+  document.getElementById("applicant-type")?.addEventListener("change", () => { applyFilters(); renderCategoryChart(); });
+  document.querySelectorAll("#category-switch [data-category]").forEach(button => button.onclick = () => { categoryKey = button.dataset.category; renderCategoryChart(); });
   document.getElementById("export-csv")?.addEventListener("click", exportCsv);
   document.getElementById("refresh-data")?.addEventListener("click", () => { load(); toast("已刷新"); });
+
+  // ---- 轮询刷新：报名 / 队伍 / Idea / Q&A 等后台数据定时同步 ----
+  // 用户正在输入时跳过本次刷新，避免覆盖正在编辑的搜索框、通知或配置内容。
+  const POLL_KEY = "minicamp2026_admin_poll";
+  const pollState = { enabled: true, seconds: 15, timer: 0, syncing: false };
+  const pollToggle = document.getElementById("admin-poll-toggle");
+  const pollInterval = document.getElementById("admin-poll-interval");
+  const pollTime = document.getElementById("admin-poll-time");
+
+  /** 有输入焦点时暂停覆盖式刷新（登录框也算）。 */
+  function isTyping() {
+    const active = document.activeElement;
+    if (!active) return false;
+    const tag = active.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    return Boolean(active.isContentEditable);
+  }
+  function readPollSettings() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(POLL_KEY) || "null");
+      if (saved && typeof saved === "object") {
+        if (typeof saved.enabled === "boolean") pollState.enabled = saved.enabled;
+        if (Number(saved.seconds) > 0) pollState.seconds = Number(saved.seconds);
+      }
+    } catch { /* 忽略损坏的本地设置 */ }
+  }
+  function savePollSettings() {
+    try { localStorage.setItem(POLL_KEY, JSON.stringify({ enabled: pollState.enabled, seconds: pollState.seconds })); } catch { /* 隐私模式下忽略 */ }
+  }
+  function markSynced(reason) {
+    if (!pollTime) return;
+    pollTime.textContent = "已同步 " + new Date().toLocaleTimeString("zh-CN", { hour12: false }) + (reason === "poll" ? "（自动）" : "");
+  }
+  /** 未登录 / 登录过期都算需要重新登录：把登录卡片放回来。 */
+  function needsLogin(error) {
+    if (!api.getAdminToken()) return true;
+    const message = String(error?.message || "");
+    return /admin required|login required|invalid admin/i.test(message);
+  }
+  /** 拉取后台数据；withQa 时同时刷新 Q&A 面板（qa-admin.js 提供）。 */
+  async function sync({ withQa = false, reason = "poll", notify = true } = {}) {
+    if (pollState.syncing) return false;
+    if (reason === "poll" && isTyping()) return false;
+    if (!api.getAdminToken()) { showLogin(); return false; }
+    pollState.syncing = true;
+    try {
+      state = await api.request("/api/admin/summary");
+      document.getElementById("admin-login")?.remove();
+      render();
+      if (withQa) await window.MinicampQAAdmin?.reload?.();
+      markSynced(reason);
+      return true;
+    } catch (error) {
+      // 登录失效要重新显示登录卡片，其它错误只提示，避免页面变成一片空白。
+      if (needsLogin(error)) showLogin();
+      else if (reason === "manual" && notify) toast(error.message, "error");
+      return false;
+    } finally { pollState.syncing = false; }
+  }
+  function stopPolling() {
+    if (pollState.timer) clearInterval(pollState.timer);
+    pollState.timer = 0;
+  }
+  function startPolling() {
+    stopPolling();
+    if (!pollState.enabled) return;
+    pollState.timer = setInterval(() => { if (!document.hidden) sync({ withQa: true, reason: "poll" }); }, Math.max(5, pollState.seconds) * 1000);
+  }
+  readPollSettings();
+  if (pollToggle) pollToggle.checked = pollState.enabled;
+  if (pollInterval) pollInterval.value = String(pollState.seconds);
+  pollToggle?.addEventListener("change", () => { pollState.enabled = pollToggle.checked; savePollSettings(); startPolling(); toast(pollState.enabled ? "已开启自动刷新" : "已关闭自动刷新"); });
+  pollInterval?.addEventListener("change", () => { pollState.seconds = Number(pollInterval.value) || 15; savePollSettings(); startPolling(); toast("自动刷新间隔：" + pollState.seconds + " 秒"); });
+  document.getElementById("admin-poll-now")?.addEventListener("click", async () => { const ok = await sync({ withQa: true, reason: "manual" }); if (ok) toast("已刷新最新数据", "success"); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && pollState.enabled) sync({ withQa: true, reason: "poll" }); });
+  startPolling();
   document.getElementById("notice-form")?.addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.currentTarget;
