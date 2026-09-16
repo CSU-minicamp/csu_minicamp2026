@@ -157,14 +157,33 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
       await show();
     } catch (err) { editError.textContent = err.message; }
   });
-  document.querySelectorAll("[data-profile-panel]").forEach(button => button.addEventListener("click", () => { document.querySelectorAll("[data-profile-panel]").forEach(item => item.classList.toggle("active", item === button)); document.querySelectorAll(".profile-panel").forEach(panel => panel.classList.toggle("active", panel.id === button.dataset.profilePanel)); }));
+  document.querySelectorAll("[data-profile-panel]").forEach(button => button.addEventListener("click", () => { document.querySelectorAll("[data-profile-panel]").forEach(item => item.classList.toggle("active", item === button)); document.querySelectorAll(".profile-panel").forEach(panel => panel.classList.toggle("active", panel.id === button.dataset.profilePanel)); if (button.dataset.profilePanel === "profile-notices") markNoticesRead(); }));
+
+  /**
+   * 打开通知中心就算看过了：把当前未读一次性标记为已读（服务端按通知 id 落库），
+   * 这样主办方在后台能实时看到「已读 N / M 人」，而不是永远 0。
+   */
+  let markingRead = false;
+  async function markNoticesRead() {
+    if (markingRead || !current) return;
+    const unread = [...document.querySelectorAll(".notice-item.is-unread")].map(item => item.dataset.noticeId).filter(Boolean);
+    if (!unread.length) return;
+    markingRead = true;
+    try {
+      const result = await api.request("/api/me/notices/read", { method: "POST", body: JSON.stringify({ id: unread }) });
+      if (result?.changed) {
+        await refreshNotices({ force: true });
+        MinicampUI?.toast("已把 " + result.changed + " 条通知标为已读", { tone: "success" });
+      }
+    } catch { /* 标记失败不打断阅读，下次打开通知中心会再试 */ } finally { markingRead = false; }
+  }
 
   // ---- 通知中心轮询：每 1 分钟拉一次新通知，只更新内容，不改窗口显示位置 ----
   const NOTICE_POLL_MS = 60000;
   let noticeTimer = 0, noticeRefreshing = false;
   const isEditingProfile = () => Boolean(document.activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName));
-  async function refreshNotices() {
-    if (noticeRefreshing || document.hidden || isEditingProfile()) return false;
+  async function refreshNotices(options = {}) {
+    if (noticeRefreshing || (!options.force && (document.hidden || isEditingProfile()))) return false;
     noticeRefreshing = true;
     try {
       // 重绘通知列表时锁住滚动位置：新通知只更新内容，页面仍停在原来的位置。
@@ -175,10 +194,16 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
   }
   function startNoticePolling() {
     if (noticeTimer) clearInterval(noticeTimer);
-    noticeTimer = setInterval(refreshNotices, NOTICE_POLL_MS);
+    noticeTimer = setInterval(() => { refreshNotices(); }, NOTICE_POLL_MS);
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshNotices(); });
-  document.getElementById("mark-read")?.addEventListener("click", async () => { await api.request("/api/me/notices/read",{method:"POST"}); await renderNotices(); });
+  document.getElementById("mark-read")?.addEventListener("click", async () => {
+    try {
+      const result = await api.request("/api/me/notices/read", { method: "POST" });
+      await refreshNotices({ force: true });
+      MinicampUI?.toast(result?.changed ? "已把 " + result.changed + " 条通知标为已读" : "没有未读通知", { tone: result?.changed ? "success" : "info" });
+    } catch (error) { MinicampUI?.toast(error.message, { tone: "error" }); }
+  });
   document.getElementById("profile-logout")?.addEventListener("click", () => { api.logout(); location.reload(); });
   document.getElementById("profile-delete-account")?.addEventListener("click", async event => {
     const button = event.currentTarget;

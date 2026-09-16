@@ -616,25 +616,36 @@
 
   const NOTICE_TYPE_LABEL = { "资料复核": "资料复核", "问答": "问答回复", "项目审核": "项目审核", event: "活动公告", application: "报名进度", roadshow: "路演报名" };
   const noticeType = value => NOTICE_TYPE_LABEL[String(value || "").trim()] || String(value || "").trim() || "通知";
-  /** 通知发给谁：所有人（ALL）还是某一位报名者（带姓名 / 报名编号）。 */
+  const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
+  /** 收件人展示：新数据用服务端算好的 recipientLabel，老数据在客户端兜底拼一次。 */
   function noticeRecipient(notice) {
+    if (notice?.recipientLabel) return { all: Boolean(notice.broadcast), label: notice.recipientLabel };
     const target = String(notice?.target || "ALL");
-    if (target === "ALL" || !target) return { all: true, label: "所有人（所有报名者）", detail: "该通知会出现在每位报名者的通知中心。" };
+    if (target === "ALL" || !target) return { all: true, label: "所有人（所有报名者）" };
     const person = (state.applications || []).find(x => x.id === target);
-    const who = [person?.name, target].filter(Boolean).join(" · ");
-    return { all: false, label: "指定报名者：" + (who || target), detail: person ? [person.name, target, person.major].filter(Boolean).join(" · ") : "报名者 " + target };
+    return { all: false, label: "指定报名者：" + [person?.name, target].filter(Boolean).join(" · ") };
   }
-  /** 已发布通知：写清「发给谁」+「什么通知」（类型、标题、正文、时间、已读情况）。 */
+  /**
+   * 已发布通知卡片：标题、发给谁、已读进度。
+   * 已读数据来自服务端 adminNoticeView（readBy 是实时落库的），
+   * 每 15 秒全量刷新一次，所以选手标为已读后这里会跟着变。
+   */
   function noticeItemHtml(notice) {
     const to = noticeRecipient(notice);
-    const readCount = (notice.readBy || []).length;
-    const readText = to.all ? (state.applications || []).length + " 人收件箱 · 已读 " + readCount : (readCount ? "收件人已读" : "收件人未读");
+    const recipients = Number.isFinite(notice.recipientCount) ? notice.recipientCount : (state.applications || []).length;
+    const readers = Number.isFinite(notice.readCount) ? notice.readCount : (notice.readBy || []).length;
+    const updated = notice.updatedAt && notice.updatedAt !== notice.createdAt ? "<small class='notice-edited'>内容更新于 " + esc(fmt(notice.updatedAt)) + "</small>" : "";
     return "<article class='admin-notice-item " + (to.all ? "is-broadcast" : "is-direct") + "'>" +
-      "<div class='notice-meta'><span>" + esc(noticeType(notice.type)) + "</span><time>" + esc(fmt(notice.createdAt)) + "</time></div>" +
+      "<div class='notice-meta'><span>" + esc(notice.typeLabel || noticeType(notice.type)) + "</span><time>" + esc(fmt(notice.createdAt)) + "</time></div>" +
       "<h3>" + esc(notice.title) + "</h3>" +
       "<div class='notice-recipient'><b>发给谁</b><span>" + esc(to.label) + "</span></div>" +
       "<p>" + esc(notice.body) + "</p>" +
-      "<small class='notice-foot'>" + esc(readText) + "</small></article>";
+      "<div class='notice-read' title='选手打开通知中心后会立即标记为已读'>" +
+        "<span class='notice-read-bar'><i style='width:" + pct(readers, recipients) + "%'></i></span>" +
+        "<b>已读 " + readers + " / " + recipients + " 人</b>" +
+        "<em>" + pct(readers, recipients) + "%</em>" +
+      "</div>" +
+      updated + "</article>";
   }
   function renderNotices() {
     // 先把「发送对象」下拉按最新报名列表重建，再用草稿回填，避免自动刷新清掉已选收件人。

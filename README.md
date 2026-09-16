@@ -121,6 +121,11 @@ Chart.js（jsDelivr，带 SRI 校验），两个源都不可用时后台图表�
 - 活动日期、报名状态、投票权重和 Starter Pack 可在后台配置。
 - 问答信息独立存储于 `qa_questions` 表，前台 `/qa.html` 支持搜索、折叠展开、置顶、我的提问分段展示，后台可回答与置顶/隐藏，回答后自动通知提问者（见上文）。
 - 统一的通知与确认模块 `public/ui.js`（`MinicampUI.toast / confirm / alert`）：页面不再使用 `window.confirm` 等浏览器默认弹窗，需要时在页面里加一行 `<script src="ui.js"></script>` 即可。
+- 通知系统（`server.mjs` 的 `addNotice / notifyQaAnswered / normalizeNotices`）：
+  - **一件事一条**：每条通知带稳定事件键 `key`。问答通知用「问答:收件人:问题编号」，所以反复保存答案、在「已回答 / 置顶」之间来回切换、服务器重启都不会再刷出重复；答案内容真的改写时，同一条通知会更新正文并清空已读，收件箱重新标未读。
+  - **两个视角分开**：同一份数据，选手看到「你的提问已回答 / 你的追问已回答」，主办方看到「已回答提问 / 已回答追问」（`/api/admin/summary` 返回 `adminNoticeView`：`typeLabel / recipientLabel / recipientCount / readCount / unreadCount / readBy`）。
+  - **已读回传**：选手打开通知中心会自动把未读标记为已读（`POST /api/me/notices/read`，可传 `id` 单条或省略表示全部），后台「已发布通知」显示 `已读 N / M 人` 进度条，随 15 秒全量刷新更新。
+  - **清理历史重复**（可选、一次性）：`MINICAMP_CLEAN_NOTICES=1 npm start`，按问题合并重复的问答通知并删除对应问题已被删除的孤立通知，日志会打印合并前后的条数。
 - 通知写明「发给谁」：后台「已发布通知」标明所有人 / 指定报名者（姓名 + 报名编号），报名者通知中心显示「发给所有人」「只发给你」；通知正文与标题统一转义后渲染。
 - 轮询刷新：主办方后台固定每 15 秒全量同步（报名 / 队伍 / Idea / 项目 / 投票 / 通知 / 问答，不再提供开关与间隔选择），Q&A 页与个人主页通知中心每 1 分钟刷新；所有轮询只更新内容，重绘期间由 `public/scroll.js`（`MinicampScroll.lock / lockUntil`）按住滚动位置并临时关闭 `scroll-behavior: smooth`，同步重绘与异步重绘（如 Q&A 先清空再填回）都不会把窗口带回顶部，后台正在编辑的通知 / 配置 / 主持人提示也会保留未保存的草稿。
 - 后台「分类查看 / 能力结构」两栏用 `minmax(0, …fr)` + `min-width: 0`，窗口变窄时按比例收缩而不是把右栏挤没；760px 以下改为上下排列。
