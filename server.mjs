@@ -4,7 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import mysql from "mysql2/promise";
-import { createQaStore, QA_STATUSES } from "./storage/qa-store.mjs";
+import { createQaStore, QA_STATUSES, QA_PUBLIC_STATUSES } from "./storage/qa-store.mjs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const publicRoot = path.join(root, "public");
@@ -47,8 +47,63 @@ function parseQaStatusFilter(value){
   return wanted.length?wanted:undefined;
 }
 /** 公开列表要脱敏：不暴露提问人报名编号，也不暴露回答人标识。 */
-function publicQuestion(row){
-  return {question_id:row.question_id,question:row.question,asked_at:row.asked_at,answer:row.answer,answered_at:row.answered_at,status:row.status};
+function publicQuestion(row,followUps=[]){
+  return {question_id:row.question_id,parent_question_id:row.parent_question_id||null,question:row.question,asked_at:row.asked_at,answer:row.answer,answered_at:row.answered_at,status:row.status,followUps};
+}
+/** 提问者本人与主办方看得到身份信息（用于"我的提问"与后台去重/追踪），并标出所属会话与层级。 */
+function questionWithId(row){
+  const {rootQuestionId,depth}=qaStore.rootOf(row.question_id);
+  return {question_id:row.question_id,parent_question_id:row.parent_question_id||null,root_question_id:rootQuestionId||row.question_id,depth,asker_id:row.asker_id,question:row.question,asked_at:row.asked_at,answer:row.answer,answered_at:row.answered_at,status:row.status,answered_by:row.answered_by};
+}
+/**
+ * 会话根不公开、但链上某条追问自己已公开时，把它作为 detached 条目返回（前端独立成卡）。
+ * 根公开的会话不在此列 —— 那些追问已经挂在公开链里了。
+ */
+function qaDetachedQuestions(publicRoots){
+  const publicRootIds=new Set(publicRoots.map(row=>row.question_id));
+  const seen=new Set();
+  const result=[];
+  for(const row of qaStore.list({status:[...QA_PUBLIC_STATUSES]})){
+    if(!row.parent_question_id)continue;
+    const {rootQuestionId}=qaStore.rootOf(row.question_id);
+    if(!rootQuestionId||publicRootIds.has(rootQuestionId)||seen.has(row.question_id))continue;
+    seen.add(row.question_id);
+    result.push({...publicQuestion(row),detached:true,root_question_id:rootQuestionId});
+  }
+  return result;
+}
+/**
+ * 公开页面的追问链：只展示公开状态的追问，但会保留"通往更深公开追问"的链接节点
+ * （父问题被隐藏、父还没回答时，已公开的子追问不会丢，客户端会把它断开独立显示）。
+ */
+function qaPublicFollowUps(rootQuestionId){
+  const session=qaStore.listSession(rootQuestionId);
+  const childrenOf=parentId=>session.filter(row=>String(row.parent_question_id||"")===String(parentId));
+  const isVisible=row=>QA_PUBLIC_STATUSES.includes(row.status)||childrenOf(row.question_id).some(isVisible);
+  const build=parentId=>childrenOf(parentId).filter(isVisible).map(row=>publicQuestion(row,build(row.question_id)));
+  return build(rootQuestionId);
+}
+/** 后台列表：每个会话根对应的追问条数、未回答追问数与最后活动时间（用于列表角标与排序）。 */
+function qaThreadSummary(questions){
+  const summary={};
+  for(const row of questions){
+    if(!row.parent_question_id)continue;
+    const {rootQuestionId}=qaStore.rootOf(row.question_id);
+    if(!rootQuestionId)continue;
+    const entry=summary[rootQuestionId]||(summary[rootQuestionId]={rootQuestionId,followUpCount:0,pendingFollowUpCount:0,lastActivityAt:null});
+    entry.followUpCount+=1;
+    if(row.status==="pending")entry.pendingFollowUpCount+=1;
+    if(!entry.lastActivityAt||String(row.asked_at)>String(entry.lastActivityAt))entry.lastActivityAt=row.asked_at;
+  }
+  for(const entry of Object.values(summary)){
+    const thread=qaStore.threadInfo(entry.rootQuestionId);
+    if(thread?.last_activity_at&&(!entry.lastActivityAt||thread.last_activity_at>entry.lastActivityAt))entry.lastActivityAt=thread.last_activity_at;
+  }
+  return summary;
+}
+/** 后台需要每条问题带上「属于哪个会话 / 层级 / 自己的追问情况」，前端才能渲染追问链。 */
+function adminQaQuestion(row,summary){
+  return {...questionWithId(row),thread:summary[row.question_id]||null};
 }
 const makeId=p=>p+"-"+crypto.randomBytes(5).toString("hex").toUpperCase();
 const makeToken=()=>crypto.randomBytes(24).toString("hex");
@@ -121,14 +176,15 @@ function voterCode(vote){
 }
 function testFixtureMode(){return Boolean(db.testFixtures?.active);}
 function addNotice(title,bodyText,type,target="ALL"){db.notices.unshift({id:makeId("NOTICE"),title,body:bodyText,type,target,readBy:[],createdAt:new Date().toISOString(),testFixture:testFixtureMode()});}
-/** 问答回答/公开后通知提问者；一次回答只通知一次，避免反复保存答案刷屏。 */
+/** 问答回答/公开后通知提问者；一次回答只通知一次，避免反复保存答案刷屏。追问会单独标明。 */
 function notifyQaAnswered(question){
   if(!question)return;
   // 注意：只能就地修改数组，不能替换 db 上的数组引用（saveDb 闭包持有的是对象引用）。
   if(!Array.isArray(db.qaAnsweredNoticeIds))db.qaAnsweredNoticeIds=[];
   if(db.qaAnsweredNoticeIds.includes(question.question_id))return;
-  const body=[`你的提问：${question.question}`,"",`主办方回答：${question.answer||""}`,"","在 Q&A 页面 qa.html 可以随时查看。"];
-  addNotice("你的提问已回答",body.join("\n"),"问答",question.asker_id);
+  const isFollowUp=Boolean(question.parent_question_id);
+  const body=[`你${isFollowUp?"的追问":"的提问"}：${question.question}`,"",`主办方回答：${question.answer||""}`,"","在 Q&A 页面 qa.html 可以随时查看。"];
+  addNotice(isFollowUp?"你的追问已回答":"你的提问已回答",body.join("\n"),"问答",question.asker_id);
   db.qaAnsweredNoticeIds.push(question.question_id);
   if(db.qaAnsweredNoticeIds.length>500)db.qaAnsweredNoticeIds.splice(0,db.qaAnsweredNoticeIds.length-500);
 }
@@ -256,22 +312,49 @@ async function api(req,res,url){
   if(url.pathname==="/api/teams"&&method==="POST"){if(!me)return fail(res,401,"login required");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");if(!isProfileComplete(me))return fail(res,400,"profile incomplete");if(me.teamId||db.teams.some(item=>item.memberIds.includes(me.id)))return fail(res,409,"already belongs to a team");const d=await body(req);const team={id:"TEAM "+String(db.teams.length+1).padStart(2,"0"),ownerId:me.id,code:"MC26-"+crypto.randomBytes(2).toString("hex").toUpperCase(),project:d.project||"Untitled",theme:d.theme||"TBD",memberIds:[me.id],status:"draft",locked:false,published:false,testFixture:testFixtureMode()};db.teams.push(team);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,201,{team:teamView(team)});}
   const tm=url.pathname.match(/^\/api\/teams\/([^/]+)\/(join|lock|leave|recruit)$/);
   if(tm){const team=db.teams.find(x=>x.id===decodeURIComponent(tm[1]));if(!team)return fail(res,404,"team not found");if(tm[2]==="recruit"&&method==="PATCH"){if(!me||team.ownerId!==me.id||!team.memberIds.includes(me.id))return fail(res,403,"team owner required");if(team.locked)return fail(res,409,"locked team cannot be changed");team.published=!team.published;await saveDb();return send(res,200,{team:teamView(team)});}if(tm[2]==="join"&&method==="POST"){if(!me)return fail(res,401,"login required");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");if(!isProfileComplete(me))return fail(res,400,"profile incomplete");if(team.locked||team.memberIds.length>=5)return fail(res,409,"team is locked or full");const currentTeam=db.teams.find(item=>item.memberIds.includes(me.id)||item.id===me.teamId);if(currentTeam)return fail(res,409,currentTeam.id===team.id?"already in team":"leave current team first");team.memberIds.push(me.id);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,200,{team:teamView(team)});}if(tm[2]==="leave"&&method==="POST"){if(!me||!team.memberIds.includes(me.id))return fail(res,403,"team member required");if(team.locked)return fail(res,409,"locked team cannot be changed");if(team.memberIds.length===1&&db.projects.some(project=>project.teamId===team.id))return fail(res,409,"submitter must keep the project team");team.memberIds=team.memberIds.filter(memberId=>memberId!==me.id);if(team.ownerId===me.id)team.ownerId=team.memberIds[0]||"";me.teamId="";me.teamCode="";if(!team.memberIds.length)db.teams=db.teams.filter(item=>item.id!==team.id);await saveDb();return send(res,200,{ok:true});}if(tm[2]==="lock"&&method==="PATCH"){if(!db.config.teamConfirmOpen)return fail(res,403,"team confirmation not open");if(!me||team.ownerId!==me.id||!team.memberIds.includes(me.id))return fail(res,403,"team owner required");if(team.memberIds.length<3||team.memberIds.length>5)return fail(res,400,"team must have 3 to 5 members");if(team.memberIds.some(id=>{const p=db.applications.find(x=>x.id===id);return !isContestant(p)||!isAccepted(p)||!isProfileComplete(p);}))return fail(res,400,"all members must be accepted and complete");team.locked=true;team.status="locked";await saveDb();return send(res,200,{team:teamView(team)});}}
-  // ---- 问答信息（qa_questions）：参与者提问，主办方回答 / 置顶 / 隐藏 ----
+  // ---- 问答信息（qa_questions + qa_threads）：参与者提问/追问，主办方回答 / 置顶 / 隐藏 ----
   if(url.pathname==="/api/qa"&&method==="POST"){
     if(!me)return fail(res,401,"login required");
     const d=await body(req);
-    const result=await qaStore.createQuestion({askerId:me.id,question:d.question??d.content??d.text});
+    const text=d.question??d.content??d.text;
+    // 带 parentQuestionId 就是追问：只有原提问者本人能追问，可以连续追问（不限层数）。
+    if(d.parentQuestionId||d.parent_question_id){
+      const result=await qaStore.createFollowUp({askerId:me.id,parentQuestionId:d.parentQuestionId??d.parent_question_id,question:text});
+      if(result.error)return fail(res,result.status,result.error);
+      return send(res,201,{question:result.question,rootQuestionId:result.rootQuestionId,depth:result.depth});
+    }
+    const result=await qaStore.createQuestion({askerId:me.id,question:text});
     if(result.error)return fail(res,result.status,result.error);
     return send(res,201,{question:result.question});
   }
   if(url.pathname==="/api/qa"&&method==="GET"){
-    // 主办方看全部（可按状态筛选，逗号分隔），参与者只看自己提的问题（含待回答）。
-    if(admin(req))return send(res,200,{questions:qaStore.list({status:parseQaStatusFilter(url.searchParams.get("status"))}),stats:qaStore.stats(),storage:qaStore.mode()});
+    // 主办方看全部（可按状态筛选，逗号分隔），参与者只看自己提的问题与追问（含待回答、被隐藏的）。
+    if(admin(req)){
+      const questions=qaStore.list({status:parseQaStatusFilter(url.searchParams.get("status"))});
+      const threads=qaThreadSummary(questions);
+      return send(res,200,{questions:questions.map(row=>adminQaQuestion(row,threads)),stats:qaStore.stats(),threads,storage:qaStore.mode()});
+    }
     if(!me)return fail(res,401,"login required");
-    return send(res,200,{questions:qaStore.list({askerId:me.id})});
+    // 带上 parent_question_id 与 root_question_id，前端才能把"我的追问"归到各自的问题下面。
+    return send(res,200,{questions:qaStore.list({askerId:me.id}).map(questionWithId)});
   }
-  // 公开列表：置顶在前 + 已回答；不含 asker_id 等身份信息。
-  if((url.pathname==="/api/qa/public"||url.pathname==="/api/qa/answered")&&method==="GET")return send(res,200,{questions:qaStore.listPublic().map(publicQuestion)});
+  // 公开列表：会话根（置顶在前 + 已回答），每条根带自己可见的追问链；不含 asker_id 等身份信息。
+  if((url.pathname==="/api/qa/public"||url.pathname==="/api/qa/answered")&&method==="GET"){
+    const roots=qaStore.listPublic();
+    const questions=roots.map(row=>publicQuestion(row,qaPublicFollowUps(row.question_id)));
+    // 断开显示：某条追问自己已公开，但它所在会话的根没公开（根被隐藏 / 还没回答）时，
+    // 这条追问不属于任何公开链，单独作为 detached 条目返回，由前端独立成卡。
+    return send(res,200,{questions:[...questions,...qaDetachedQuestions(roots)]});
+  }
+  // 单条会话的完整树（仅主办方）：含未公开的追问，按层级与时间排列。
+  const qaThreadMatch=url.pathname.match(/^\/api\/qa\/threads\/([^/]+)$/);
+  if(qaThreadMatch&&method==="GET"){
+    if(!admin(req))return fail(res,401,"admin required");
+    const rootId=decodeURIComponent(qaThreadMatch[1]);
+    const session=qaStore.listSession(rootId);
+    if(!session.length)return fail(res,404,"thread not found");
+    return send(res,200,{rootQuestionId:rootId,thread:qaStore.threadInfo(rootId),questions:session.map(questionWithId)});
+  }
   const qaAnswerMatch=url.pathname.match(/^\/api\/admin\/qa\/([^/]+)$/);
   if(qaAnswerMatch&&method==="PATCH"){
     if(!admin(req))return fail(res,401,"admin required");
