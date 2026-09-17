@@ -1,0 +1,3 @@
+/* starter-pack.css — 参赛礼包页（starter-pack.html）专用样式 */
+/* P0/P1 workflow surfaces */
+.workspace-grid,.starter-layout {display:grid;grid-template-columns:1fr 1fr;gap:24px}

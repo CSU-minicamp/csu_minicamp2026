@@ -1,0 +1,3 @@
+/* jury.css — 评委页（jury.html）专用样式 */
+.jury-header { justify-content:space-between; }
+.jury-back-link { padding:9px 0; border-bottom:1px solid var(--ink); font-size:13px; font-weight:800; }

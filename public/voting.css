@@ -1,0 +1,46 @@
+/* voting.css — 投票/作品投票组件样式（voting.js 驱动）
+ * vote.html 与 voting.html 共同加载
+ */
+.profile-demo-hint { margin-top: 17px; padding: 9px 10px; color: var(--muted); background: #f2f2ed; font-size: 10px; line-height: 1.5; }
+.profile-demo-hint strong { color: var(--ink); font: 700 10px Consolas, monospace; }
+/* Voting */
+.voting-body { min-height: 100vh; background: var(--paper); }
+.vote-rules { margin-top: 40px; display: flex; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.vote-rules div { min-width: 110px; padding: 16px 18px; display: flex; flex-direction: column; gap: 5px; border-right: 1px solid var(--ink); }
+.vote-rules div:last-child { border-right: 0; }
+.vote-rules strong { font: 800 26px Consolas, monospace; }
+.vote-rules span { color: var(--muted); font-size: 11px; }
+.voting-top { margin-bottom: 35px; display: flex; justify-content: space-between; align-items: end; gap: 20px; }
+.voting-top h1 { font-size: clamp(42px, 5vw, 68px); }
+.voting-top p { margin: 0; }
+.vote-notice { margin-bottom: 22px; padding: 16px 20px; display: flex; gap: 12px; align-items: flex-start; color: #664d00; background: #fff2b8; border: 1px solid #d7b839; border-radius: var(--radius); }
+.vote-notice > span { width: 22px; height: 22px; display: grid; place-items: center; flex: 0 0 auto; color: white; background: var(--ink); border-radius: 50%; font-weight: 900; font-size: 11px; }
+.vote-notice p { margin: 0; font-size: 12px; line-height: 1.6; }
+.formal-vote-block, .people-choice-block { margin-bottom: 18px; padding: 28px; background: white; border: 1px solid #d8d8d1; border-radius: var(--radius); }
+.vote-section-title { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: end; gap: 20px; }
+.vote-section-title h2 { font-size: 32px; }
+.vote-section-title > span { color: var(--muted); font: 700 10px Consolas, monospace; }
+.candidate-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.people-choice-block { margin-top: 18px; }
+.voting-submit-bar { padding: 21px 0; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.voting-submit-bar p { min-height: 18px; margin: 0; color: var(--error); font-size: 12px; }
+.vote-success { max-width: 680px; margin: 100px auto; padding: 66px; background: white; border: 1px solid var(--ink); box-shadow: 10px 10px 0 var(--yellow); }
+
+@media (max-width: 960px) {
+  .candidate-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 620px) {
+  .vote-rules div { min-width: 0; flex: 1; padding: 13px 10px; }
+  .voting-top { align-items: flex-start; flex-direction: column; }
+  .voting-top h1 { font-size: 42px; }
+  .formal-vote-block, .people-choice-block { padding: 20px 15px; }
+  .vote-section-title { align-items: flex-start; flex-direction: column; }
+  .candidate-grid, .rank-selects { grid-template-columns: 1fr; }
+  .voting-submit-bar { align-items: stretch; flex-direction: column; }
+  .vote-success { margin: 45px auto; padding: 38px 24px; }
+  .vote-success h1 { font-size: 45px; }
+}
+
+.vote-closed-status { margin: 14px 0; padding: 12px; color: var(--muted); background: #f0f0ea; border-left: 3px solid var(--coral); font-size: 12px; }
+.identity-privacy { margin-top: 14px; line-height: 1.6; }
