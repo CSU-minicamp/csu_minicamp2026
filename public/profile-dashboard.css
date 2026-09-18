@@ -1,0 +1,61 @@
+/* profile-dashboard.css — 个人工作台（profile-dashboard.html）专用样式 */
+.profile-dashboard { padding-top: 24px; }
+.profile-status { min-height: 102px; margin-bottom: 18px; padding: 20px 24px; display: flex; align-items: center; gap: 15px; background: var(--ink); color: white; border-radius: var(--radius); }
+.profile-status strong { font-size: 17px; }
+.profile-status p { margin: 5px 0 0; color: #bcbcb3; font-size: 12px; }
+.profile-content-grid { display: grid; grid-template-columns: 235px 1fr; gap: 18px; align-items: start; }
+.profile-side-nav { padding: 9px; background: white; border: 1px solid #d8d8d1; border-radius: var(--radius); }
+.profile-side-nav button { width: 100%; padding: 15px 10px; border: 0; border-bottom: 1px solid #efefe9; display: flex; align-items: center; gap: 11px; text-align: left; color: var(--muted); background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; }
+.profile-side-nav button:last-of-type { border-bottom: 0; }
+.profile-side-nav button span { width: 22px; font: 700 10px Consolas, monospace; }
+.profile-side-nav button b { margin-left: auto; min-width: 18px; padding: 3px 5px; color: white; background: var(--coral); border-radius: 999px; text-align: center; font: 700 9px Consolas, monospace; }
+.profile-side-tip { margin: 22px 4px 5px; padding: 15px; background: #f2f2ed; border-radius: 4px; }
+.profile-side-tip strong { font: 700 11px Consolas, monospace; }
+.profile-side-tip p { margin: 9px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.profile-panel-wrap { min-width: 0; }
+.profile-panel-heading { margin-bottom: 22px; display: flex; justify-content: space-between; align-items: end; gap: 16px; }
+.profile-panel-heading h2 { font-size: 34px; }
+.profile-panel-heading > span { color: var(--muted); font-size: 10px; }
+.profile-form-block { padding: 25px 0; border-top: 1px solid var(--line); }
+.profile-form-block h3 { margin-bottom: 18px; font-size: 14px; }
+.profile-form-block fieldset { padding: 0; margin: 0 0 22px; border: 0; }
+.profile-form-block legend { margin-bottom: 12px; font-size: 12px; font-weight: 700; }
+.profile-form-block legend small, .profile-team-code small { color: var(--muted); font-weight: 400; }
+.profile-form-block > label { margin-top: 18px; }
+.profile-edit-actions { padding-top: 24px; display: flex; justify-content: space-between; align-items: center; gap: 20px; border-top: 1px solid var(--line); }
+.profile-edit-actions span { color: var(--muted); font-size: 11px; }
+.profile-edit-actions .button { flex: 0 0 auto; }
+.notice-list { border-top: 1px solid var(--ink); }
+
+@media (max-width: 960px) {
+  .profile-content-grid { grid-template-columns: 185px 1fr; gap: 14px; }
+}
+
+@media (max-width: 620px) {
+  .profile-status { padding: 17px; align-items: flex-start; }
+  .profile-content-grid { grid-template-columns: 1fr; }
+  .profile-side-nav { display: flex; align-items: center; gap: 5px; overflow-x: auto; }
+  .profile-side-nav button { width: auto; min-width: 105px; padding: 11px 9px; border: 0; }
+  .profile-side-nav button span { display: none; }
+  .profile-side-tip { display: none; }
+  .profile-panel-heading { align-items: flex-start; flex-direction: column; }
+  .profile-panel-heading h2 { font-size: 30px; }
+  .profile-edit-actions { align-items: flex-start; flex-direction: column; }
+  .profile-edit-actions .button { width: 100%; }
+}
+
+.profile-side-nav button b[hidden] {display:none}
+/* Prominent participant application number */
+.profile-header-actions { min-width: 230px; display: flex; flex-direction: column; align-items: stretch; gap: 18px; flex: 0 0 auto; }
+.profile-account-actions { display: flex; flex-direction: row; gap: 8px; }
+.profile-application-id { width: 100%; margin-top: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-left: 5px solid var(--coral); background: var(--yellow); }
+.profile-application-id span { color: var(--ink); font: 700 11px Consolas, monospace; letter-spacing: .04em; }
+.profile-application-id strong { color: var(--ink); font: 900 20px Consolas, monospace; letter-spacing: .06em; }
+
+@media (max-width: 760px) {
+  .profile-header-actions { width: 100%; min-width: 0; align-items: stretch; gap: 16px; }
+  .profile-application-id strong { font-size: 18px; }
+}
+
+.profile-delete-button { color: var(--coral); border-color: #f0b0a3; }
+.profile-delete-button:hover { color: white; background: var(--coral); border-color: var(--coral); }

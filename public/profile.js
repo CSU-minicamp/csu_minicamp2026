@@ -11,6 +11,15 @@
   document.querySelectorAll('input[name="studentId"]').forEach(input => input.addEventListener("input", () => { const digits = input.value.replace(/\D/g, "").slice(0, 10); if (input.value !== digits) input.value = digits; }));
   const activatePanel = id => { document.querySelectorAll("[data-profile-panel]").forEach(item => item.classList.toggle("active", item.dataset.profilePanel === id)); document.querySelectorAll(".profile-panel").forEach(panel => panel.classList.toggle("active", panel.id === id)); };
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+  const NOTICE_TYPE_LABEL = { "资料复核": "资料复核", "问答": "问答回复", "活动公告": "活动公告", "报名进度": "报名进度", "录取结果": "录取结果", "现场提醒": "现场提醒", event: "活动公告", application: "报名进度", roadshow: "路演报名" };
+  const noticeTypeLabel = value => NOTICE_TYPE_LABEL[String(value || "").trim()] || String(value || "").trim() || "通知";
+  /** 这条通知是给谁的：所有人，还是只发给我（主办方定向发送时带上报名编号）。 */
+  const noticeRecipientLabel = (notice, mineId) => {
+    const target = String(notice?.target || "ALL");
+    if (target === "ALL" || !target) return { mine: true, label: "发给所有人", detail: "所有报名者都会收到这条通知。" };
+    if (target === mineId) return { mine: true, label: "只发给你", detail: "这是主办方单独发给你的通知。" };
+    return { mine: false, label: "发给报名编号 " + target, detail: "这条通知由主办方定向发送给该报名者。" };
+  };
   const renderIntendedTeammates = team => {
     const container = document.getElementById("profile-intended-teammates");
     if (!container) return;
@@ -73,10 +82,21 @@
       }
       form.querySelectorAll('input[name="skills"]').forEach(input => input.checked = (current.skills || []).includes(input.value));
       document.getElementById("last-updated").textContent = current.updatedAt ? new Date(current.updatedAt).toLocaleString("zh-CN") : "已提交";
-      if (!localPreview) { await renderNotices(); if (!roadshow) await renderVote(); }
+      if (!localPreview) { await renderNotices(); if (!roadshow) await renderVote(); startNoticePolling(); }
     } catch { if (dashboard) location.replace("profile.html"); }
   };
-  async function renderNotices() { const {notices} = await api.request("/api/me/notices"); const list = document.getElementById("notice-list"); const unread = notices.filter(item => !(item.readBy || []).includes(current.id)).length; const noticeCount = document.getElementById("notice-count"); noticeCount.textContent = unread; noticeCount.hidden = unread === 0; list.innerHTML = notices.map(item => { const read = (item.readBy || []).includes(current.id); return "<article class='notice-item " + (read ? "is-read" : "is-unread") + "'><div class='notice-marker'>" + (read ? "✓" : "!") + "</div><div><div class='notice-meta'><span>" + item.type + "</span><time>" + new Date(item.createdAt).toLocaleString("zh-CN") + "</time></div><h3>" + item.title + "</h3><p>" + item.body + "</p></div></article>"; }).join("") || "<p>暂无通知</p>"; }
+  // 通知内容来自主办方输入，全部转义后再写入，避免标题 / 正文里的 HTML 被当成标签执行。
+  const renderNotices = async () => {
+    const {notices} = await api.request("/api/me/notices");
+    const list = document.getElementById("notice-list");
+    const unread = notices.filter(item => !(item.readBy || []).includes(current.id)).length;
+    const noticeCount = document.getElementById("notice-count"); noticeCount.textContent = unread; noticeCount.hidden = unread === 0;
+    list.innerHTML = notices.map(item => {
+      const read = (item.readBy || []).includes(current.id);
+      const to = noticeRecipientLabel(item, current.id);
+      return "<article class='notice-item " + (read ? "is-read" : "is-unread") + "' data-notice-id='" + escapeHtml(item.id) + "'><div class='notice-marker'>" + (read ? "✓" : "!") + "</div><div><div class='notice-meta'><span>" + escapeHtml(noticeTypeLabel(item.type)) + "</span><time>" + new Date(item.createdAt).toLocaleString("zh-CN") + "</time></div><div class='notice-recipient " + (to.mine ? "is-mine" : "is-other") + "'><b>发给谁</b><span>" + escapeHtml(to.label) + "</span><i>" + escapeHtml(to.detail) + "</i></div><h3>" + escapeHtml(item.title) + "</h3><p>" + escapeHtml(item.body) + "</p></div></article>";
+    }).join("") || "<p>暂无通知</p>";
+  };
   async function renderVote() {
     const container = document.getElementById("my-vote-content");
     if (!container) return;
@@ -137,8 +157,53 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
       await show();
     } catch (err) { editError.textContent = err.message; }
   });
-  document.querySelectorAll("[data-profile-panel]").forEach(button => button.addEventListener("click", () => { document.querySelectorAll("[data-profile-panel]").forEach(item => item.classList.toggle("active", item === button)); document.querySelectorAll(".profile-panel").forEach(panel => panel.classList.toggle("active", panel.id === button.dataset.profilePanel)); }));
-  document.getElementById("mark-read")?.addEventListener("click", async () => { await api.request("/api/me/notices/read",{method:"POST"}); await renderNotices(); });
+  document.querySelectorAll("[data-profile-panel]").forEach(button => button.addEventListener("click", () => { document.querySelectorAll("[data-profile-panel]").forEach(item => item.classList.toggle("active", item === button)); document.querySelectorAll(".profile-panel").forEach(panel => panel.classList.toggle("active", panel.id === button.dataset.profilePanel)); if (button.dataset.profilePanel === "profile-notices") markNoticesRead(); }));
+
+  /**
+   * 打开通知中心就算看过了：把当前未读一次性标记为已读（服务端按通知 id 落库），
+   * 这样主办方在后台能实时看到「已读 N / M 人」，而不是永远 0。
+   */
+  let markingRead = false;
+  async function markNoticesRead() {
+    if (markingRead || !current) return;
+    const unread = [...document.querySelectorAll(".notice-item.is-unread")].map(item => item.dataset.noticeId).filter(Boolean);
+    if (!unread.length) return;
+    markingRead = true;
+    try {
+      const result = await api.request("/api/me/notices/read", { method: "POST", body: JSON.stringify({ id: unread }) });
+      if (result?.changed) {
+        await refreshNotices({ force: true });
+        MinicampUI?.toast("已把 " + result.changed + " 条通知标为已读", { tone: "success" });
+      }
+    } catch { /* 标记失败不打断阅读，下次打开通知中心会再试 */ } finally { markingRead = false; }
+  }
+
+  // ---- 通知中心轮询：每 1 分钟拉一次新通知，只更新内容，不改窗口显示位置 ----
+  const NOTICE_POLL_MS = 60000;
+  let noticeTimer = 0, noticeRefreshing = false;
+  const isEditingProfile = () => Boolean(document.activeElement && ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName));
+  async function refreshNotices(options = {}) {
+    if (noticeRefreshing || (!options.force && (document.hidden || isEditingProfile()))) return false;
+    noticeRefreshing = true;
+    try {
+      // 重绘通知列表时锁住滚动位置：新通知只更新内容，页面仍停在原来的位置。
+      if (window.MinicampScroll) await window.MinicampScroll.lock(renderNotices);
+      else await renderNotices();
+      return true;
+    } catch { return false; } finally { noticeRefreshing = false; }
+  }
+  function startNoticePolling() {
+    if (noticeTimer) clearInterval(noticeTimer);
+    noticeTimer = setInterval(() => { refreshNotices(); }, NOTICE_POLL_MS);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshNotices(); });
+  document.getElementById("mark-read")?.addEventListener("click", async () => {
+    try {
+      const result = await api.request("/api/me/notices/read", { method: "POST" });
+      await refreshNotices({ force: true });
+      MinicampUI?.toast(result?.changed ? "已把 " + result.changed + " 条通知标为已读" : "没有未读通知", { tone: result?.changed ? "success" : "info" });
+    } catch (error) { MinicampUI?.toast(error.message, { tone: "error" }); }
+  });
   document.getElementById("profile-logout")?.addEventListener("click", () => { api.logout(); location.reload(); });
   document.getElementById("profile-delete-account")?.addEventListener("click", async event => {
     const button = event.currentTarget;

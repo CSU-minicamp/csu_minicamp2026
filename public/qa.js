@@ -33,8 +33,12 @@
   };
   if (!els.grid) return;
 
-  const state = { publicQuestions: [], mine: [], me: null, createdIds: new Set(), expanded: new Set() };
+  // createdIds：本次会话里新提交（追问）成功的 question_id，用于在「我的提问」之外识别归属。
+  // expanded：用户手动展开过的追问链（默认折叠）。
+  const state = { publicQuestions: [], mine: [], me: null, timer: 0, refreshing: false, createdIds: new Set(), expanded: new Set() };
   const STATUS_LABEL = { pending: "待回答", answered: "已回答", pinned: "置顶", hidden: "已隐藏" };
+  /** 问答页自动刷新间隔：1 分钟（主办方回答后自动出现在这里）。 */
+  const REFRESH_INTERVAL_MS = 60000;
 
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const normalize = value => String(value ?? "").toLocaleLowerCase("zh-CN").replace(/\s+/g, " ").trim();
@@ -340,7 +344,7 @@
     if (keyword && shown === 0) {
       els.empty.hidden = false;
       els.empty.textContent = `没有匹配「${els.search.value.trim()}」的问题。可以换个关键词，或者登录后直接向主办方提问。`;
-    } else if (!keyword && others.length === 0 && pinned.length === 0 && detached.length === 0 && !mine.length) {
+    } else if (!keyword && others.length === 0 && pinned.length === 0 && detachedCards.length === 0 && !mine.length) {
       els.empty.hidden = false;
       els.empty.textContent = "主办方还没有公开回答任何问题。有问题可以登录后直接提问。";
     } else {
@@ -432,6 +436,36 @@
 
   els.search?.addEventListener("input", render);
 
+  /**
+   * 每 1 分钟自动刷新一次：重新拉取公开问答与自己的提问，然后只重绘内容。
+   * 重绘期间用 MinicampScroll.lock 锁住滚动位置，页面不会跳回顶部；
+   * 正在写提问（输入框有焦点）或标签页在后台时跳过这一轮。
+   */
+  function isAsking() {
+    const active = document.activeElement;
+    return Boolean(active && (active === els.askInput || els.askForm?.contains(active)) && active.tagName === "TEXTAREA");
+  }
+  async function refresh({ reason = "poll" } = {}) {
+    if (state.refreshing) return false;
+    if (reason === "poll" && (document.hidden || isAsking())) return false;
+    state.refreshing = true;
+    try {
+      await Promise.all([loadPublic(), loadMine()]);
+      // 数据驱动的内容一次性重绘：只更新内容，不改窗口显示位置。
+      if (window.MinicampScroll) window.MinicampScroll.lock(() => { renderLoginState(); render(); });
+      else { renderLoginState(); render(); }
+      return true;
+    } finally {
+      state.refreshing = false;
+    }
+  }
+  function startRefreshTimer() {
+    if (state.timer) clearInterval(state.timer);
+    state.timer = setInterval(() => { refresh({ reason: "poll" }); }, REFRESH_INTERVAL_MS);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh({ reason: "visible" }); });
+  startRefreshTimer();
+
   // 追问链上的按钮：折叠/展开、打开/取消/提交追问
   const toggleThread = button => {
     const id = String(button.dataset.toggle || "");
@@ -482,9 +516,7 @@
       if (created?.question?.question_id) state.createdIds.add(created.question.question_id);
       els.askInput.value = "";
       window.MinicampUI?.toast("问题已提交，主办方回答后会通知你。", { tone: "success" });
-      await loadMine();
-      renderLoginState();
-      render();
+      await refresh({ reason: "submit" });
     } catch (error) {
       els.askError.textContent = error.message;
     } finally {

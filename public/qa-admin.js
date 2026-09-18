@@ -69,7 +69,8 @@
       questions = Array.isArray(data.questions) ? data.questions : [];
       if (editingId && !questions.some(item => item.question_id === editingId)) editingId = "";
       if (els.storage) els.storage.textContent = `${data.storage === "table" ? "MySQL 表存储" : "JSON 回退存储"} · 共 ${data.stats?.total ?? questions.length} 条`;
-      render();
+      // 只更新问答内容，重绘期间锁住滚动位置：刷新不会把窗口带回最上面。
+      if (window.MinicampScroll) window.MinicampScroll.lock(render); else render();
     } catch (error) {
       list.innerHTML = "<p class='qa-empty'>问答加载失败：" + esc(error.message) + "</p>";
     }

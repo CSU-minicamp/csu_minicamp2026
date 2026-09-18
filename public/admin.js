@@ -54,6 +54,47 @@
   function toast(msg, tone = "info") { MinicampUI.toast(msg, {tone}); }
   function setHtml(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; }
 
+  /**
+   * 正在编辑的表单（通知 / 活动配置 / 主持人提示）在轮询刷新时不丢草稿：
+   * 每次重绘前用 preserveForm 把已填的值原样放回，内容继续更新、正在写的东西也不会被清掉。
+   */
+  const formDrafts = new Map();
+  const draftOf = id => formDrafts.get(id)?.draft ?? null;
+  /** 读取表单当前值（含未保存的草稿），供 preserveForm 使用。 */
+  function formDraft(form) {
+    const draft = new Map();
+    if (!form) return draft;
+    form.querySelectorAll("input, select, textarea").forEach(field => {
+      if (!field.name) return;
+      if (field.type === "checkbox" || field.type === "radio") draft.set(field.name, field.checked);
+      else draft.set(field.name, field.value);
+    });
+    return draft;
+  }
+  /** 重绘后把草稿原样放回：只更新内容，不清掉主办方正在写的东西。 */
+  function preserveForm(form, draft) {
+    if (!form || !draft || !draft.size) return form;
+    form.querySelectorAll("input, select, textarea").forEach(field => {
+      const name = field.name;
+      if (!name || !draft.has(name)) return;
+      const value = draft.get(name);
+      if (field.type === "checkbox" || field.type === "radio") field.checked = Boolean(value);
+      else field.value = String(value);
+    });
+    return form;
+  }
+  /** 绑定表单：用户改动后记录草稿，重绘时用 preserveForm 还原，标记 span 同步提示。 */
+  function bindDraft(id, form, helpId) {
+    if (!form || formDrafts.has(id)) return;
+    const entry = { draft: null };
+    formDrafts.set(id, entry);
+    ["input", "change"].forEach(type => form.addEventListener(type, () => {
+      entry.draft = formDraft(form);
+      const help = document.getElementById(helpId);
+      if (help) help.textContent = "你有未保存的修改：自动刷新会保留它们，保存或点「刷新数据」后同步最新数据。";
+    }));
+  }
+
   function showLogin() {
     if (document.getElementById("admin-login")) return;
     const box = document.createElement("section"); box.id = "admin-login"; box.className = "admin-login-card";
@@ -75,13 +116,84 @@
       }
     };
   }
-  function load() { return sync({ withQa: true, reason: "manual", notify: false }); }
+  // keepDrafts：轮询 / 面板自动刷新沿用「正在编辑」的状态；手动刷新按钮会清掉未保存草稿重新拉取。
+  // automatic：由轮询 / 切回标签页触发的刷新，正在输入时跳过；用户主动点按钮时为 false，正常刷新。
+  function load({ keepDrafts = true, withQa = true, automatic = true } = {}) {
+    if (!keepDrafts) formDrafts.forEach(entry => { entry.draft = null; });
+    return sync({ withQa, reason: "manual", notify: false, automatic });
+  }
   function bar(label, value, max) { return "<div><div class='status-bar-label'><span>" + esc(label) + "</span><b>" + value + "</b></div><div class='status-bar-track'><i style='width:" + (value / Math.max(max, 1) * 100) + "%'></i></div></div>"; }
   function stackedBar(label, value, acceptedCount, max) {
     const width = inner => Math.max(inner > 0 ? 3 : 0, inner / Math.max(max, 1) * 100);
     return "<div class='status-bar-stack'><div class='status-bar-label'><span>" + esc(label) + "</span><b>" + acceptedCount + " / " + value + "</b></div><div class='status-bar-track'><i class='is-total' style='width:" + width(value) + "%'></i><i class='is-accepted' style='width:" + width(acceptedCount) + "%'></i></div></div>";
   }
 
+  /**
+   * 报名筛选（advance search 风格）：一条条件 = 一个维度 + 一个取值，
+   * 同一维度可以同时选中多个取值（维度内并集，例如「专业=软件工程 或 计算机」），
+   * 不同维度之间为「同时满足」。统计范围可选「全部报名」或「筛选结果」。
+   */
+  const FILTER_DIMENSIONS = [
+    { key: "status", label: "状态" },
+    { key: "registration_type", label: "报名类型" },
+    { key: "grade", label: "年级" },
+    { key: "major", label: "专业" },
+    { key: "college", label: "学院" }
+  ];
+  const DIMENSION_LABEL = Object.fromEntries(FILTER_DIMENSIONS.map(item => [item.key, item.label]));
+  /** 维度下拉由 FILTER_DIMENSIONS 生成，避免两处定义走样。 */
+  function renderFilterDimensions() {
+    const select = document.getElementById("filter-dimension");
+    if (!select) return;
+    const previous = select.value;
+    select.innerHTML = FILTER_DIMENSIONS.map(item => "<option value='" + item.key + "'>" + esc(item.label) + "</option>").join("");
+    if (FILTER_DIMENSIONS.some(item => item.key === previous)) select.value = previous;
+  }
+  const FILTER_STORAGE_KEY = "minicamp2026_admin_filters";
+  /** chips 里保存的是「单个取值」的条件，上限防止多选后条件过多（存 localStorage 也够小）。 */
+  const FILTER_CHIP_LIMIT = 24;
+  const filterState = { active: false, chips: [] };
+  const appValue = (app, key) => key === "registration_type" ? (isRoadshow(app) ? "roadshow" : "contestant") : String(app[key] ?? "").trim();
+  const displayValue = (key, value) => {
+    if (key === "registration_type") return value === "roadshow" ? "路演报名" : "参赛报名";
+    return value || "未填写";
+  };
+  /** 按维度归并条件：维度内多选 → 并集；维度之间 → 交集。 */
+  function groupChips(chips) {
+    const groups = new Map();
+    chips.forEach(chip => {
+      if (!groups.has(chip.key)) groups.set(chip.key, []);
+      groups.get(chip.key).push(chip.value);
+    });
+    return groups;
+  }
+  /**
+   * 条件匹配：同一维度内多个取值取并集（年级=大三 或 大四），
+   * 不同维度之间取交集（状态=已通过 且 专业=软件工程）。
+   */
+  function matchesChips(app, chips) {
+    for (const [key, values] of groupChips(chips)) {
+      if (!values.includes(appValue(app, key))) return false;
+    }
+    return true;
+  }
+  /**
+   * 筛选只作用于「分类查看」与「能力结构」两块，其它统计（指标卡、报名状态、最近报名、
+   * 已录取来源、报名审核表）始终看全部报名。返回是否启用筛选 + 命中数量 + 判定函数。
+   */
+  function overviewFilter() {
+    const active = filterState.active && filterState.chips.length > 0;
+    return {
+      active,
+      matches: app => !active || matchesChips(app, filterState.chips),
+      count: active ? (state.applications || []).filter(app => matchesChips(app, filterState.chips)).length : (state.applications || []).length
+    };
+  }
+  /** 需要跟随筛选的两块统计所用的数据集。 */
+  function filteredApps() {
+    const filter = overviewFilter();
+    return (state.applications || []).filter(filter.matches);
+  }
   /** 分类统计 */
   const CATEGORY_LABEL = { grade: "年级", major: "专业", college: "学院", type: "报名类型" };
   let categoryKey = "grade";
@@ -95,7 +207,8 @@
     if (coverage("grade") >= Math.max(coverage("major"), coverage("college"))) return;
     categoryKey = coverage("major") >= coverage("college") ? "major" : "college";
   }
-  const appsOfType = type => (state.applications || []).filter(a => type === "全部" || (isRoadshow(a) ? "roadshow" : "contestant") === type);
+  /** 分类查看的数据集：跟随筛选 + 报名类型筛选。 */
+  const appsOfType = type => filteredApps().filter(a => type === "全部" || (isRoadshow(a) ? "roadshow" : "contestant") === type);
   const currentTypeFilter = () => document.getElementById("applicant-type")?.value || "全部";
   function categoryCounts(key) {
     const counts = new Map();
@@ -109,93 +222,117 @@
     });
     return [...counts.values()].sort((a, b) => (b.total - a.total) || a.label.localeCompare(b.label, "zh-CN"));
   }
-  /** 分类柱状图：纯 SVG 绘制（零依赖）。宽度随列数自适应，高度固定。 */
-  const CHART = { top: 26, bottom: 48, left: 40, right: 16 };
-  function niceTicks(max) {
-    const ticks = [];
-    for (let value = 0; value <= max; value += 1) ticks.push(value);
-    if (ticks.length > 7) {
-      const step = Math.ceil(max / 6);
-      ticks.length = 0;
-      for (let value = 0; value <= max; value += step) ticks.push(value);
-      if (ticks[ticks.length - 1] !== max) ticks.push(max);
-    }
-    return ticks;
-  }
+  // 图表交给 Chart.js（本地 vendor/chart.umd.min.js），标签冲突由它自动换行/旋转处理。
+  let categoryChart = null;
+  const CHART_COLORS = { total: "#dfe3dc", accepted: "#247b63", axis: "#a2a29a", grid: "#ececE5" };
   function renderCategoryChart() {
     pickDefaultCategory();
     const rows = categoryCounts(categoryKey);
-    const total = appsOfType(currentTypeFilter()).length;
-    const typeLabel = currentTypeFilter() === "roadshow" ? "路演报名" : currentTypeFilter() === "contestant" ? "参赛报名" : "全部报名类型";
-    setHtml("category-chart", (rows.length
-      ? categoryChartSvg(rows)
-      : "<p class='empty-state'>当前筛选下没有报名</p>") + "<p class='chart-foot'>" + esc(CATEGORY_LABEL[categoryKey]) + "维度 · " + esc(typeLabel) + " · 共 " + total + " 条" + (rows.some(row => row.accepted) ? " · 深色段为已录取" : "") + "</p>");
+    const filter = overviewFilter();
+    const typeFilter = currentTypeFilter();
+    const typeLabel = typeFilter === "roadshow" ? "路演报名" : typeFilter === "contestant" ? "参赛报名" : "";
+    const scopeLabel = filter.active ? "筛选结果 " + appsOfType(typeFilter).length + " 条" : "全部报名 " + appsOfType(typeFilter).length + " 条";
+    const wrap = document.getElementById("category-canvas-wrap");
+    const canvas = document.getElementById("category-canvas");
+    if (!canvas || !wrap) return;
+    const foot = document.getElementById("chart-foot");
+    if (foot) foot.textContent = CATEGORY_LABEL[categoryKey] + "维度 · " + (typeLabel ? typeLabel + " · " : "") + scopeLabel + (rows.some(row => row.accepted) ? " · 深色为已录取" : "");
     document.querySelectorAll("#category-switch [data-category]").forEach(button => {
       button.classList.toggle("active", button.dataset.category === categoryKey);
       button.setAttribute("aria-selected", String(button.dataset.category === categoryKey));
     });
-  }
-  function categoryChartSvg(rows) {
-    const max = Math.max(1, ...rows.map(row => row.total));
-    // 宽度随列数走：类别少就画窄一点并居中，类别多才铺满并允许横向滚动。
-    const width = Math.round(Math.max(400, Math.min(700, 64 + rows.length * 86)));
-    const height = 300;
-    const plotWidth = width - CHART.left - CHART.right;
-    const plotHeight = height - CHART.top - CHART.bottom;
-    const baseY = CHART.top + plotHeight;
-    const scale = value => value / max * plotHeight;
-    const slot = plotWidth / rows.length;
-    const longest = Math.max(1, ...rows.map(row => row.label.length));
-    const barWidth = Math.max(10, Math.min(46, slot * 0.56, (slot * 1.6) / longest * 4.4));
-
-    const ticks = niceTicks(max);
-    const grid = ticks.map(value => {
-      const y = baseY - scale(value);
-      return "<line class='chart-grid' x1='" + CHART.left + "' y1='" + y.toFixed(1) + "' x2='" + (width - CHART.right) + "' y2='" + y.toFixed(1) + "'></line>" +
-        "<text class='chart-tick' x='" + (CHART.left - 8) + "' y='" + (y + 3.5).toFixed(1) + "' text-anchor='end'>" + value + "</text>";
-    }).join("");
-
-    const bars = rows.map((row, index) => {
-      const x = CHART.left + slot * index + (slot - barWidth) / 2;
-      const totalHeight = row.total > 0 ? Math.max(3, scale(row.total)) : 0;
-      const acceptedHeight = row.accepted > 0 ? Math.max(2, scale(row.accepted)) : 0;
-      const acceptedText = row.accepted > 0 ? " · 已录取 " + row.accepted : "";
-      return "<title>" + esc(row.label) + "：报名 " + row.total + acceptedText + "</title>" +
-        "<rect class='chart-bar is-total' x='" + x.toFixed(1) + "' y='" + (baseY - totalHeight).toFixed(1) + "' width='" + barWidth.toFixed(1) + "' height='" + totalHeight.toFixed(1) + "' rx='3'></rect>" +
-        (acceptedHeight ? "<rect class='chart-bar is-accepted' x='" + x.toFixed(1) + "' y='" + (baseY - acceptedHeight).toFixed(1) + "' width='" + barWidth.toFixed(1) + "' height='" + acceptedHeight.toFixed(1) + "' rx='3'></rect>" : "") +
-        "<text class='chart-value' x='" + (x + barWidth / 2).toFixed(1) + "' y='" + (baseY - totalHeight - 7).toFixed(1) + "' text-anchor='middle'>" + row.total + "</text>";
-    }).join("");
-
-    const labels = rows.map((row, index) => {
-      const x = CHART.left + slot * index + (slot - barWidth) / 2;
-      return "<foreignObject class='chart-label-box' x='" + (x - 6).toFixed(1) + "' y='" + (baseY + 6) + "' width='" + (barWidth + 12).toFixed(1) + "' height='" + (CHART.bottom - 10) + "'>" +
-        "<div xmlns='http://www.w3.org/1999/xhtml' class='chart-label'>" + esc(row.label) + "</div></foreignObject>";
-    }).join("");
-
-    return "<div class='chart-scroll'><svg class='bar-chart' viewBox='0 0 " + width + " " + height + "' width='" + width + "' height='" + height + "' role='img' aria-label='" + esc(CATEGORY_LABEL[categoryKey]) + "分类报名人数柱状图' preserveAspectRatio='xMidYMid meet'>" +
-      grid +
-      "<line class='chart-axis' x1='" + CHART.left + "' y1='" + baseY + "' x2='" + (width - CHART.right) + "' y2='" + baseY + "'></line>" +
-      bars +
-      labels +
-      "</svg></div>";
+    if (categoryChart) { categoryChart.destroy(); categoryChart = null; }
+    if (!rows.length) { wrap.innerHTML = "<p class='empty-state'>当前条件下没有报名</p>"; wrap.style.height = ""; wrap.style.width = ""; return; }
+    if (!wrap.querySelector("canvas")) wrap.innerHTML = "<canvas id='category-canvas' aria-label='分类报名人数柱状图' role='img'></canvas>";
+    const target = wrap.querySelector("canvas");
+    /*
+     * 横向条（indexAxis: "y"）：类别名在左侧一行一个，天然不会互相压字，
+     * 也省掉斜排标签；容器高度随类别数增长，保证每个类别都有足够的行高。
+     * 同时锁定宽度，避免 height 变化时 Chart.js 按宽高比把画布撑宽而造成横向溢出。
+     */
+    const wrapWidth = Math.max(320, Math.round(wrap.clientWidth || wrap.getBoundingClientRect().width || 600));
+    wrap.style.height = Math.max(260, Math.min(900, 44 + rows.length * 30)) + "px";
+    wrap.style.width = wrapWidth + "px";
+    if (typeof window.Chart !== "function") {
+      wrap.style.height = "";
+      wrap.innerHTML = "<p class='empty-state'>图表库未加载，以下为数字列表：</p><div class='status-bars'>" + rows.map(row => stackedBar(row.label, row.total, row.accepted, Math.max(1, ...rows.map(item => item.total)))).join("") + "</div>";
+      return;
+    }
+    const maxValue = Math.max(1, ...rows.map(row => row.total));
+    categoryChart = new window.Chart(target, {
+      type: "bar",
+      data: {
+        labels: rows.map(row => row.label),
+        datasets: [
+          { label: "报名人数", data: rows.map(row => row.total), backgroundColor: CHART_COLORS.total, borderRadius: 4, maxBarThickness: 24 },
+          { label: "已录取", data: rows.map(row => row.accepted), backgroundColor: CHART_COLORS.accepted, borderRadius: 4, maxBarThickness: 24 }
+        ]
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 220 },
+        layout: { padding: { right: 5 } },
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: {
+            position: "top",
+            align: "end",
+            labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: "rectRounded", font: { size: 11, weight: "700" }, color: "#3f3f39" }
+          },
+          tooltip: {
+            backgroundColor: "#111111",
+            padding: 10,
+            displayColors: false,
+            titleFont: { size: 12, weight: "800" },
+            bodyFont: { size: 12 },
+            callbacks: {
+              title: items => rows[items[0]?.dataIndex]?.label ?? "",
+              label: item => item.dataset.label + "：" + item.parsed.x + " 人"
+            }
+          }
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            suggestedMax: maxValue * 1.08,
+            grid: { color: CHART_COLORS.grid },
+            border: { display: false },
+            ticks: { color: CHART_COLORS.axis, font: { size: 10, family: "Consolas, monospace" }, precision: 0, maxTicksLimit: 8 }
+          },
+          y: {
+            grid: { display: false },
+            border: { color: "#c8c8c1" },
+            ticks: { color: "#6e6e66", font: { size: 11 }, autoSkip: false, padding: 8 }
+          }
+        }
+      }
+    });
   }
 
   function render() {
+    // 全局统计始终基于全部报名；只有「分类查看」与「能力结构」跟随筛选。
     const apps = state.applications || [];
+    const facetApps = filteredApps();
+    const filter = overviewFilter();
     const count = s => apps.filter(x => x.status === s).length;
     const contestants = apps.filter(x => !isRoadshow(x)).length;
     const roadshows = apps.length - contestants;
     const acceptedApps = apps.filter(x => x.status === "已录取");
+    const facetAccepted = facetApps.filter(x => x.status === "已录取");
     const total = apps.length;
     setHtml("metrics-grid", [["报名总数", total + "<em>（MC " + contestants + " / RO " + roadshows + "）</em>", "报名 / 路演"], ["待审核", count("待审核"), "需处理"], ["已录取", acceptedApps.length, "正式名额"], ["候补", count("候补"), "备选名单"]].map(x => "<div class='metric-card'><span>" + x[0] + "</span><strong>" + x[1] + "</strong><small>" + x[2] + "</small></div>").join(""));
     setHtml("status-bars", STATUSES.map(s => bar(s, count(s), total)).join(""));
     const skillRows = SKILLS.map(s => {
-      const all = apps.filter(a => (a.skills || []).includes(s)).length;
-      const acceptedCount = acceptedApps.filter(a => (a.skills || []).includes(s)).length;
+      const all = facetApps.filter(a => (a.skills || []).includes(s)).length;
+      const acceptedCount = facetAccepted.filter(a => (a.skills || []).includes(s)).length;
       return {label: s, all, accepted: acceptedCount};
     });
     const skillMax = Math.max(1, ...skillRows.map(row => row.all));
     setHtml("skill-bars", skillRows.map(row => stackedBar(row.label, row.all, row.accepted, skillMax)).join(""));
+    const skillScope = document.getElementById("skill-scope");
+    if (skillScope) skillScope.textContent = filter.active ? "筛选结果 " + facetApps.length + " 条 · 深色为已录取" : "浅色为报名人数 · 深色为已录取";
     setHtml("accepted-major-bars", (() => {
       const counts = new Map();
       acceptedApps.forEach(a => {
@@ -207,6 +344,8 @@
       return rows.map(row => bar(row[0], row[1], max)).join("") || "<p class='empty-state'>暂无已录取报名</p>";
     })());
     renderCategoryChart();
+    renderFilterBuilder();
+    renderFilterChips();
     setHtml("activity-list", apps.slice(0, 6).map(x => "<div class='activity-item'><span class='activity-dot'>" + esc((x.name || "?").slice(0, 1)) + "</span><p><strong>" + esc(x.name) + "</strong> · " + esc(x.id) + "<br><time>" + fmt(x.createdAt) + "</time></p></div>").join("") || "<p class='empty-state'>暂无报名</p>");
     renderReminders();
     renderApps();
@@ -217,6 +356,144 @@
     renderNotices();
     renderConfig();
     renderStageBriefEditor();
+  }
+
+  /**
+   * 条件取值列表：复选框，支持一个维度同时勾选多个取值。
+   * 每个取值后面标注「加上该条件后」的命中人数（其余维度的已选条件仍然生效）。
+   * 维度内已添加过的取值保持勾选并禁用，避免重复条件。
+   */
+  let stagedValues = [];
+  function renderFilterBuilder() {
+    const dimension = document.getElementById("filter-dimension");
+    const valueList = document.getElementById("filter-value");
+    if (!dimension || !valueList) return;
+    const key = dimension.value || "status";
+    const others = filterState.chips.filter(chip => chip.key !== key);
+    const added = new Set(filterState.chips.filter(chip => chip.key === key).map(chip => chip.value));
+    const counts = new Map();
+    (state.applications || []).filter(app => matchesChips(app, others)).forEach(app => {
+      const value = appValue(app, key);
+      counts.set(value, (counts.get(value) || 0) + 1);
+    });
+    const rows = [...counts.entries()].sort((a, b) => (b[1] - a[1]) || displayValue(key, a[0]).localeCompare(displayValue(key, b[0]), "zh-CN"));
+    valueList.innerHTML = rows.length
+      ? rows.map(([value, num]) => {
+          const isAdded = added.has(value);
+          return "<label class='filter-option" + (isAdded ? " is-added" : "") + "'><input type='checkbox' value='" + esc(value) + "'" + (isAdded ? " checked disabled" : "") + "><span class='filter-option-label'>" + esc(displayValue(key, value)) + "</span><b>" + num + "</b></label>";
+        }).join("")
+      : "<p class='filter-empty'>没有可选值</p>";
+    // 每次重绘都清空暂存勾选：已添加的取值由上面的 checked/disabled 表示。
+    stagedValues = [];
+    setFilterValueChecks([]);
+    updateFilterValueHint();
+    const button = document.getElementById("filter-add");
+    if (button) button.disabled = !rows.length;
+  }
+
+  /** 当前列表里可勾选（尚未添加）的取值。 */
+  function checkedFilterValues() {
+    const valueList = document.getElementById("filter-value");
+    if (!valueList) return [];
+    return [...valueList.querySelectorAll("input[type='checkbox']:checked")].filter(box => !box.disabled).map(box => box.value);
+  }
+  /** 回填勾选状态（不触发 change 事件；调用方负责随后刷新提示文案）。 */
+  function setFilterValueChecks(values) {
+    const wanted = new Set(values);
+    document.querySelectorAll("#filter-value input[type='checkbox']").forEach(box => {
+      if (!box.disabled) box.checked = wanted.has(box.value);
+    });
+  }
+  /** 列表右上角的小字：提示当前勾选了几个 / 若添加会命中多少条。 */
+  function updateFilterValueHint() {
+    const hint = document.getElementById("filter-values-hint");
+    if (!hint) return;
+    if (!stagedValues.length) { hint.textContent = "勾选一个或多个"; return; }
+    const next = filterState.chips.concat(stagedValues.map(value => ({key: document.getElementById("filter-dimension")?.value || "", value})));
+    const hits = (state.applications || []).filter(app => matchesChips(app, next)).length;
+    hint.textContent = "已选 " + stagedValues.length + " 项 · 添加后命中 " + hits + " 条";
+  }
+
+  function renderFilterChips() {
+    const filter = overviewFilter();
+    const box = document.getElementById("filter-chips");
+    if (box) {
+      if (!filterState.chips.length) {
+        box.innerHTML = "<span class='filter-empty'>未添加条件：下面「分类查看」与「能力结构」都按全部报名统计。</span>";
+      } else {
+        box.innerHTML = [...groupChips(filterState.chips)].map(([key, values]) => "<div class='filter-chip-group'><span class='filter-chip-head'><b>" + esc(DIMENSION_LABEL[key] || key) + "</b>" + (values.length > 1 ? "<em>" + values.length + " 项任一</em>" : "<em>是</em>") + "</span>" + values.map(value => "<span class='filter-chip'>" + esc(displayValue(key, value)) + "<button type='button' data-chip-key='" + esc(key) + "' data-chip-value='" + esc(value) + "' aria-label='移除该条件'>×</button></span>").join("") + "</div>").join("") + "<span class='filter-empty'>共 " + filterState.chips.length + " 个取值，维度内任一满足 · 维度之间同时满足</span>";
+      }
+      box.querySelectorAll("[data-chip-key]").forEach(button => button.onclick = () => {
+        const { chipKey, chipValue } = button.dataset;
+        cropFilterChips(item => item.key === chipKey && item.value === chipValue);
+        saveFilterSettings();
+        stagedValues = [];
+        render();
+      });
+    }
+    const scope = document.getElementById("overview-scope");
+    if (scope) {
+      const usable = filterState.chips.length > 0;
+      if (!usable) filterState.active = false;
+      scope.querySelectorAll("[data-scope]").forEach(button => {
+        const isActive = usable && button.dataset.scope === (filterState.active ? "filtered" : "all");
+        button.classList.toggle("active", isActive || (!usable && button.dataset.scope === "all"));
+        button.disabled = !usable && button.dataset.scope === "filtered";
+      });
+    }
+    const summary = document.getElementById("filter-summary");
+    if (summary) {
+      const allTotal = (state.applications || []).length;
+      summary.innerHTML = filterState.chips.length
+        ? "命中 <b>" + filter.count + "</b> / " + allTotal + " 条 · 影响范围：" + (filter.active ? "分类查看 · 能力结构" : "未启用（点右上角切到筛选结果）")
+        : "全部报名 <b>" + allTotal + "</b> 条";
+    }
+  }
+
+  /** 原地裁剪条件数组（remove = 返回 true 表示该条件要移除）。 */
+  function cropFilterChips(remove) {
+    filterState.chips = filterState.chips.filter(chip => !remove(chip));
+    if (!filterState.chips.length) filterState.active = false;
+  }
+
+  /** 添加条件：把当前勾选的所有取值一次性加入该维度（已添加过的自动跳过）。 */
+  function addFilterChip() {
+    const dimension = document.getElementById("filter-dimension");
+    const key = dimension?.value || "";
+    const picked = checkedFilterValues();
+    if (!key) return;
+    if (!picked.length) { toast("先勾选一个或多个取值"); return; }
+    const exists = value => filterState.chips.some(chip => chip.key === key && chip.value === value);
+    const room = Math.max(0, FILTER_CHIP_LIMIT - filterState.chips.length);
+    const added = picked.filter(value => !exists(value)).slice(0, room);
+    if (!added.length) {
+      toast(picked.every(exists) ? "这些取值已经加过了" : "条件数量已达上限（" + FILTER_CHIP_LIMIT + " 个）", "info");
+      return;
+    }
+    filterState.chips.push(...added.map(value => ({ key, value })));
+    filterState.active = true;
+    saveFilterSettings();
+    stagedValues = [];
+    render();
+    const label = DIMENSION_LABEL[key] || key;
+    toast(added.length > 1 ? "已添加 " + label + " " + added.length + " 个取值（满足任一）" : "已添加条件：" + label + " = " + displayValue(key, added[0]), "success");
+  }
+
+  function saveFilterSettings() {
+    try { localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ chips: filterState.chips, active: filterState.active })); } catch { /* 隐私模式忽略 */ }
+  }
+  function readFilterSettings() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || "null");
+      if (saved && Array.isArray(saved.chips)) {
+        const seen = new Set();
+        filterState.chips = saved.chips
+          .filter(chip => chip && DIMENSION_LABEL[chip.key] && typeof chip.value === "string")
+          .filter(chip => { const id = chip.key + "\u0000" + chip.value; if (seen.has(id)) return false; seen.add(id); return true; })
+          .slice(0, FILTER_CHIP_LIMIT);
+        filterState.active = Boolean(saved.active) && filterState.chips.length > 0;
+      }
+    } catch { /* 忽略损坏的本地设置 */ }
   }
 
   function renderReminders() {
@@ -337,19 +614,63 @@
     setHtml("vote-voters", voteRows ? voteRows : "<p class='empty-state'>暂无投票记录</p>");
   }
 
+  const NOTICE_TYPE_LABEL = { "资料复核": "资料复核", "问答": "问答回复", "项目审核": "项目审核", event: "活动公告", application: "报名进度", roadshow: "路演报名" };
+  const noticeType = value => NOTICE_TYPE_LABEL[String(value || "").trim()] || String(value || "").trim() || "通知";
+  const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
+  /** 收件人展示：新数据用服务端算好的 recipientLabel，老数据在客户端兜底拼一次。 */
+  function noticeRecipient(notice) {
+    if (notice?.recipientLabel) return { all: Boolean(notice.broadcast), label: notice.recipientLabel };
+    const target = String(notice?.target || "ALL");
+    if (target === "ALL" || !target) return { all: true, label: "所有人（所有报名者）" };
+    const person = (state.applications || []).find(x => x.id === target);
+    return { all: false, label: "指定报名者：" + [person?.name, target].filter(Boolean).join(" · ") };
+  }
+  /**
+   * 已发布通知卡片：标题、发给谁、已读进度。
+   * 已读数据来自服务端 adminNoticeView（readBy 是实时落库的），
+   * 每 15 秒全量刷新一次，所以选手标为已读后这里会跟着变。
+   */
+  function noticeItemHtml(notice) {
+    const to = noticeRecipient(notice);
+    const recipients = Number.isFinite(notice.recipientCount) ? notice.recipientCount : (state.applications || []).length;
+    const readers = Number.isFinite(notice.readCount) ? notice.readCount : (notice.readBy || []).length;
+    const updated = notice.updatedAt && notice.updatedAt !== notice.createdAt ? "<small class='notice-edited'>内容更新于 " + esc(fmt(notice.updatedAt)) + "</small>" : "";
+    return "<article class='admin-notice-item " + (to.all ? "is-broadcast" : "is-direct") + "'>" +
+      "<div class='notice-meta'><span>" + esc(notice.typeLabel || noticeType(notice.type)) + "</span><time>" + esc(fmt(notice.createdAt)) + "</time></div>" +
+      "<h3>" + esc(notice.title) + "</h3>" +
+      "<div class='notice-recipient'><b>发给谁</b><span>" + esc(to.label) + "</span></div>" +
+      "<p>" + esc(notice.body) + "</p>" +
+      "<div class='notice-read' title='选手打开通知中心后会立即标记为已读'>" +
+        "<span class='notice-read-bar'><i style='width:" + pct(readers, recipients) + "%'></i></span>" +
+        "<b>已读 " + readers + " / " + recipients + " 人</b>" +
+        "<em>" + pct(readers, recipients) + "%</em>" +
+      "</div>" +
+      updated + "</article>";
+  }
   function renderNotices() {
-    setHtml("admin-notice-list", (state.notices || []).slice(0, 12).map(x => "<article class='admin-notice-item'><div class='notice-meta'><span>" + esc(x.type) + "</span><time>" + fmt(x.createdAt) + "</time></div><h3>" + esc(x.title) + "</h3><p>" + esc(x.body) + "</p></article>").join("") || "<p class='empty-state'>暂无通知</p>");
+    // 先把「发送对象」下拉按最新报名列表重建，再用草稿回填，避免自动刷新清掉已选收件人。
+    const select = document.getElementById("notice-target");
+    if (select) select.innerHTML = "<option value='ALL'>所有人（所有报名者）</option>" + (state.applications || []).map(x => "<option value='" + esc(x.id) + "'>" + esc(x.name) + " · " + esc(x.id) + "</option>").join("");
+    preserveForm(document.getElementById("notice-form"), draftOf("notice"));
+    setHtml("admin-notice-list", (state.notices || []).slice(0, 12).map(noticeItemHtml).join("") || "<p class='empty-state'>暂无通知</p>");
     const total = document.getElementById("notice-total"); if (total) total.textContent = (state.notices || []).length + " 条";
-    setHtml("notice-target", "<option value='ALL'>所有报名者</option>" + (state.applications || []).map(x => "<option value='" + esc(x.id) + "'>" + esc(x.name) + " · " + esc(x.id) + "</option>").join(""));
   }
 
   function renderConfig() {
-    const box = document.getElementById("config-editor"); if (!box) return; const c = state.config || {};
+    const box = document.getElementById("config-editor"); if (!box) return;
+    const c = state.config || {};
     const pack = JSON.stringify(c.starterPack || {}, null, 2);
-    box.innerHTML = "<div class='admin-card-head'><h2>活动配置</h2><span>保存后官网实时生效</span></div><form class='field-grid'><label>活动名称<input name='eventName' value='" + esc(c.eventName) + "'></label><label>活动日期<input name='date' value='" + esc(c.date) + "'></label><label>活动地点<input name='venue' value='" + esc(c.venue) + "'></label><label>主题揭晓<input name='themeReveal' value='" + esc(c.themeReveal) + "'></label><label>报名截止" + timeInput("applicationDeadline", "报名截止", c.applicationDeadline) + "</label><label>录取公布" + timeInput("resultDate", "录取公布", c.resultDate) + "</label><label>投票开始时间" + timeInput("voteStartAt", "投票开始时间", c.voteStartAt) + "</label><label>报名状态<select name='applicationOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>正式组队确认<select name='teamConfirmOpen'><option value='true'>开启</option><option value='false'>关闭</option></select></label><label>投票状态<select name='voteOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>参与者投票权重（%）<input name='participantWeight' type='number' min='0' max='100' value='" + Number(c.participantWeight || 60) + "'></label><label>Jury 投票权重（%）<input name='juryWeight' type='number' min='0' max='100' value='" + Number(c.juryWeight || 40) + "'></label><label class='config-pack'>Starter Pack（JSON）<textarea name='starterPack' rows='10'>" + esc(pack) + "</textarea></label><div class='config-actions'><button class='button button-dark'>保存配置</button></div></form>";
+    box.innerHTML = "<div class='admin-card-head'><h2>活动配置</h2><span id='config-form-state'>保存后官网实时生效</span></div><form class='field-grid'><label>活动名称<input name='eventName' value='" + esc(c.eventName) + "'></label><label>活动日期<input name='date' value='" + esc(c.date) + "'></label><label>活动地点<input name='venue' value='" + esc(c.venue) + "'></label><label>主题揭晓<input name='themeReveal' value='" + esc(c.themeReveal) + "'></label><label>报名截止" + timeInput("applicationDeadline", "报名截止", c.applicationDeadline) + "</label><label>录取公布" + timeInput("resultDate", "录取公布", c.resultDate) + "</label><label>投票开始时间" + timeInput("voteStartAt", "投票开始时间", c.voteStartAt) + "</label><label>报名状态<select name='applicationOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>正式组队确认<select name='teamConfirmOpen'><option value='true'>开启</option><option value='false'>关闭</option></select></label><label>投票状态<select name='voteOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>参与者投票权重（%）<input name='participantWeight' type='number' min='0' max='100' value='" + Number(c.participantWeight || 60) + "'></label><label>Jury 投票权重（%）<input name='juryWeight' type='number' min='0' max='100' value='" + Number(c.juryWeight || 40) + "'></label><label class='config-pack'>Starter Pack（JSON）<textarea name='starterPack' rows='10'>" + esc(pack) + "</textarea></label><div class='config-actions'><button class='button button-dark'>保存配置</button></div></form>";
     box.querySelector('[name="applicationOpen"]').value = String(c.applicationOpen);
     box.querySelector('[name="teamConfirmOpen"]').value = String(Boolean(c.teamConfirmOpen));
     box.querySelector('[name="voteOpen"]').value = String(c.voteOpen);
+    // 重建后把未保存的草稿放回，自动刷新不会清掉正在改的配置。
+    preserveForm(box.querySelector("form"), draftOf("config"));
+    bindDraft("config", box.querySelector("form"), "config-form-state");
+    if (draftOf("config")?.size) {
+      const stateEl = document.getElementById("config-form-state");
+      if (stateEl) stateEl.textContent = "你有未保存的修改：自动刷新会保留它们。";
+    }
     box.querySelector("form").onsubmit = async e => {
       e.preventDefault();
       const d = Object.fromEntries(new FormData(e.currentTarget));
@@ -363,7 +684,12 @@
       }
       if (d.participantWeight + d.juryWeight !== 100) return toast("参与者与 Jury 权重之和必须为 100%。", "error");
       try { d.starterPack = JSON.parse(d.starterPack); } catch { return toast("Starter Pack 必须是有效的 JSON。", "error"); }
-      try { await api.request("/api/admin/config", { method: "PATCH", body: JSON.stringify(d) }); toast("配置已保存，官网已同步", "success"); await load(); } catch (err) { toast(err.message, "error"); }
+      try {
+        await api.request("/api/admin/config", { method: "PATCH", body: JSON.stringify(d) });
+        if (formDrafts.get("config")) formDrafts.get("config").draft = null;
+        toast("配置已保存，官网已同步", "success");
+        await load();
+      } catch (err) { toast(err.message, "error"); }
     };
   }
 
@@ -388,12 +714,19 @@
   function renderStageBriefEditor() {
     const form = document.getElementById("stage-brief-form");
     if (!form || !state) return;
+    bindDraft("stage-brief", form, "stage-brief-state");
     const context = stageBriefContext();
     if (!context.item) return;
     const script = form.elements.script;
     const actions = form.elements.actions;
-    if (document.activeElement !== script) script.value = context.item.script || "";
-    if (document.activeElement !== actions) actions.value = (context.item.actions || []).join("\n");
+    const draft = draftOf("stage-brief");
+    // 有未保存的草稿就不覆盖输入框；没有草稿时按最新数据回填（正在输入的字段除外）。
+    if (draft?.size) {
+      preserveForm(form, draft);
+    } else {
+      if (document.activeElement !== script) script.value = context.item.script || "";
+      if (document.activeElement !== actions) actions.value = (context.item.actions || []).join("\n");
+    }
     form.onsubmit = async event => {
       event.preventDefault();
       const data = Object.fromEntries(new FormData(event.currentTarget));
@@ -405,6 +738,7 @@
         await api.request("/api/admin/config", { method: "PATCH", body: JSON.stringify({ stageSchedule: next }) });
         state.config.stageSchedule = next;
         context.stage?.setSchedule?.(next);
+        if (formDrafts.get("stage-brief")) formDrafts.get("stage-brief").draft = null;
         toast("主持人提示和现场动作已保存", "success");
         await load();
       } catch (error) { toast(error.message, "error"); }
@@ -426,17 +760,31 @@
   document.getElementById("applicant-search")?.addEventListener("input", applyFilters);
   document.getElementById("applicant-status")?.addEventListener("change", applyFilters);
   document.getElementById("applicant-type")?.addEventListener("change", () => { applyFilters(); renderCategoryChart(); });
-  document.querySelectorAll("#category-switch [data-category]").forEach(button => button.onclick = () => { categoryKey = button.dataset.category; renderCategoryChart(); });
+  document.querySelectorAll("#category-switch [data-category]").forEach(button => button.onclick = () => { categoryKey = button.dataset.category; categoryPicked = true; renderCategoryChart(); });
+  // 多条件筛选：勾选取值 / 添加 / 清空 / 切换统计范围
+  document.getElementById("filter-add")?.addEventListener("click", addFilterChip);
+  document.getElementById("filter-dimension")?.addEventListener("change", renderFilterBuilder);
+  document.getElementById("filter-value")?.addEventListener("change", () => {
+    stagedValues = checkedFilterValues();
+    updateFilterValueHint();
+  });
+  document.getElementById("filter-clear")?.addEventListener("click", () => { filterState.chips = []; filterState.active = false; stagedValues = []; saveFilterSettings(); render(); });
+  document.querySelectorAll("#overview-scope [data-scope]").forEach(button => button.onclick = () => {
+    if (!filterState.chips.length) { toast("先添加一个筛选条件"); return; }
+    filterState.active = button.dataset.scope === "filtered";
+    saveFilterSettings();
+    render();
+  });
   document.getElementById("export-csv")?.addEventListener("click", exportCsv);
-  document.getElementById("refresh-data")?.addEventListener("click", () => { load(); toast("已刷新"); });
+  document.getElementById("refresh-data")?.addEventListener("click", () => { load({ keepDrafts: false }); toast("已刷新"); });
 
-  // ---- 轮询刷新：报名 / 队伍 / Idea / Q&A 等后台数据定时同步 ----
-  // 用户正在输入时跳过本次刷新，避免覆盖正在编辑的搜索框、通知或配置内容。
-  const POLL_KEY = "minicamp2026_admin_poll";
-  const pollState = { enabled: true, seconds: 15, timer: 0, syncing: false };
-  const pollToggle = document.getElementById("admin-poll-toggle");
-  const pollInterval = document.getElementById("admin-poll-interval");
+  // ---- 轮询刷新：报名 / 队伍 / Idea / Q&A 等后台数据每 15 秒同步一次 ----
+  // 间隔固定为 15 秒（不再提供开关与间隔选择）；轮询只更新内容，
+  // 通过 MinicampScroll.lock 保持窗口显示位置不变。
+  const POLL_INTERVAL_MS = 15000;
+  const pollState = { timer: 0, syncing: false };
   const pollTime = document.getElementById("admin-poll-time");
+  const pollBox = document.getElementById("admin-sync");
 
   /** 有输入焦点时暂停覆盖式刷新（登录框也算）。 */
   function isTyping() {
@@ -445,18 +793,6 @@
     const tag = active.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
     return Boolean(active.isContentEditable);
-  }
-  function readPollSettings() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(POLL_KEY) || "null");
-      if (saved && typeof saved === "object") {
-        if (typeof saved.enabled === "boolean") pollState.enabled = saved.enabled;
-        if (Number(saved.seconds) > 0) pollState.seconds = Number(saved.seconds);
-      }
-    } catch { /* 忽略损坏的本地设置 */ }
-  }
-  function savePollSettings() {
-    try { localStorage.setItem(POLL_KEY, JSON.stringify({ enabled: pollState.enabled, seconds: pollState.seconds })); } catch { /* 隐私模式下忽略 */ }
   }
   function markSynced(reason) {
     if (!pollTime) return;
@@ -469,16 +805,25 @@
     return /admin required|login required|invalid admin/i.test(message);
   }
   /** 拉取后台数据；withQa 时同时刷新 Q&A 面板（qa-admin.js 提供）。 */
-  async function sync({ withQa = false, reason = "poll", notify = true } = {}) {
+  async function sync({ withQa = false, reason = "poll", notify = true, automatic = false } = {}) {
     if (pollState.syncing) return false;
-    if (reason === "poll" && isTyping()) return false;
+    // 用户正在输入时跳过自动刷新（轮询与「切回标签页」），手动点按钮的刷新不受影响。
+    if (isTyping() && (reason === "poll" || automatic)) return false;
     if (!api.getAdminToken()) { showLogin(); return false; }
     pollState.syncing = true;
+    pollBox?.classList.add("is-syncing");
+    const guard = reason !== "poll";
+    const scroll = window.MinicampScroll;
     try {
       state = await api.request("/api/admin/summary");
       document.getElementById("admin-login")?.remove();
-      render();
-      if (withQa) await window.MinicampQAAdmin?.reload?.();
+      // 数据驱动的内容一次性重绘，期间锁住滚动位置，刷新完仍停在原来的地方。
+      if (scroll) scroll.lock(() => render(), { guard }); else render();
+      // Q&A 面板是异步重绘（先清空、拿到数据再填回来），整段过程都盯住位置，别让文档变矮把页面夹到顶部。
+      if (withQa) {
+        const reload = window.MinicampQAAdmin?.reload;
+        if (reload) { if (scroll) await scroll.lockUntil(() => reload(), { guard }); else await reload(); }
+      }
       markSynced(reason);
       return true;
     } catch (error) {
@@ -486,7 +831,10 @@
       if (needsLogin(error)) showLogin();
       else if (reason === "manual" && notify) toast(error.message, "error");
       return false;
-    } finally { pollState.syncing = false; }
+    } finally {
+      pollState.syncing = false;
+      pollBox?.classList.remove("is-syncing");
+    }
   }
   function stopPolling() {
     if (pollState.timer) clearInterval(pollState.timer);
@@ -494,17 +842,14 @@
   }
   function startPolling() {
     stopPolling();
-    if (!pollState.enabled) return;
-    pollState.timer = setInterval(() => { if (!document.hidden) sync({ withQa: true, reason: "poll" }); }, Math.max(5, pollState.seconds) * 1000);
+    pollState.timer = setInterval(() => { if (!document.hidden) sync({ withQa: true, reason: "poll" }); }, POLL_INTERVAL_MS);
   }
-  readPollSettings();
-  if (pollToggle) pollToggle.checked = pollState.enabled;
-  if (pollInterval) pollInterval.value = String(pollState.seconds);
-  pollToggle?.addEventListener("change", () => { pollState.enabled = pollToggle.checked; savePollSettings(); startPolling(); toast(pollState.enabled ? "已开启自动刷新" : "已关闭自动刷新"); });
-  pollInterval?.addEventListener("change", () => { pollState.seconds = Number(pollInterval.value) || 15; savePollSettings(); startPolling(); toast("自动刷新间隔：" + pollState.seconds + " 秒"); });
-  document.getElementById("admin-poll-now")?.addEventListener("click", async () => { const ok = await sync({ withQa: true, reason: "manual" }); if (ok) toast("已刷新最新数据", "success"); });
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && pollState.enabled) sync({ withQa: true, reason: "poll" }); });
+  readFilterSettings();
+  renderFilterDimensions();
   startPolling();
+  // 通知表单：改动后记住草稿，自动刷新会保留它（见 preserveForm）。
+  bindDraft("notice", document.getElementById("notice-form"), "notice-form-state");
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) load({ automatic: true }); });
   document.getElementById("notice-form")?.addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -512,6 +857,7 @@
     try {
       await api.request("/api/admin/notices", { method: "POST", body: JSON.stringify(d) });
       form.reset();
+      if (formDrafts.get("notice")) formDrafts.get("notice").draft = null;
       toast("通知已发布", "success");
       await load();
     } catch (err) { toast(err.message, "error"); }
