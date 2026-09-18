@@ -36,6 +36,28 @@
   const statusOf = question => question.status || "pending";
   const answerOf = question => String(question.answer || "").trim();
 
+  /** 列表只显示会话根：追问渲染在各自父问题的卡片里，避免一条会话出现多张卡片。 */
+  function rootRows() {
+    return questions.filter(question => !question.parent_question_id);
+  }
+
+  /** 按父问题分组，渲染追问链时按需取子行（含未公开的追问）。 */
+  function childrenMap() {
+    const map = new Map();
+    for (const question of questions) {
+      if (!question.parent_question_id) continue;
+      const key = String(question.parent_question_id);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(question);
+    }
+    return map;
+  }
+
+  /** 某个会话根下的追问统计（服务端 threads 汇总）。 */
+  function threadStats(rootId) {
+    return questions.find(question => question.question_id === rootId)?.thread || null;
+  }
+
   async function load() {
     if (!token()) {
       list.innerHTML = "<p class='qa-empty'>请先在上方登录主办方账号，然后回到本面板。</p>";
@@ -115,32 +137,88 @@
     </div>`;
   }
 
-  function cardHtml(question) {
+  /**
+   * 单条追问：左侧展示问题与答案，右侧是它自己的状态下拉与「更改答案 / 回答问题」。
+   * 追问的状态与答案独立于父问题，且可以继续被追问，所以这里递归渲染下一层。
+   */
+  function followUpHtml(question, children, map) {
     const status = statusOf(question);
     const editing = editingId === question.question_id;
+    const nested = (children || []).map(child => {
+      const grandChildren = map.get(String(child.question_id)) || [];
+      return `<div class="qa-admin-followup-branch">${followUpHtml(child, grandChildren, map)}</div>`;
+    }).join("");
+    return `<div class="qa-admin-followup${status === "pending" ? " is-pending" : ""}" data-id="${esc(question.question_id)}">
+      <div class="qa-admin-followup-head">
+        <span class="qa-admin-followup-label">追问</span>
+        <span class="qa-badge qa-badge-${esc(status)}">${esc(STATUS_LABEL[status] || status)}</span>
+        <time class="qa-time">${esc(fmt(question.asked_at))}</time>
+      </div>
+      <div class="qa-admin-card-main">
+        ${editing ? editorHtml(question) : bodyHtml(question) + sideHtml(question)}
+      </div>
+      ${notice && notice.id === question.question_id ? `<p class="qa-admin-inline-error">${esc(notice.message)}</p>` : ""}
+      ${nested ? `<div class="qa-admin-followups">${nested}</div>` : ""}
+    </div>`;
+  }
+
+  function cardHtml(question, children = [], map = new Map()) {
+    const status = statusOf(question);
+    const editing = editingId === question.question_id;
+    const stats = threadStats(question.question_id);
+    const followUpCount = stats?.followUpCount || children.length;
+    const pendingFollowUps = stats?.pendingFollowUpCount ?? countPending(children, map);
+    const followUps = children.length
+      ? `<div class="qa-admin-followups">${children.map(child => followUpHtml(child, map.get(String(child.question_id)) || [], map)).join("")}</div>`
+      : "";
     return `<article class="qa-card qa-admin-card${editing ? " is-editing" : ""}" data-id="${esc(question.question_id)}" data-status="${esc(status)}">
       <div class="qa-admin-card-head">
         <div class="qa-admin-meta">
           <span class="qa-badge qa-badge-${esc(status)}">${esc(STATUS_LABEL[status] || status)}</span>
           <span class="qa-admin-asker">${esc(askerLabel(question.asker_id))}</span>
           <time class="qa-time">提问于 ${fmt(question.asked_at)}</time>
+          ${followUpCount ? `<span class="qa-admin-followup-count">追问 ${followUpCount}${pendingFollowUps ? ` · <b>${pendingFollowUps} 条待回答</b>` : ""}</span>` : ""}
         </div>
       </div>
       <div class="qa-admin-card-main">
         ${editing ? editorHtml(question) : bodyHtml(question) + sideHtml(question)}
       </div>
       ${notice && notice.id === question.question_id ? `<p class="qa-admin-inline-error">${esc(notice.message)}</p>` : ""}
+      ${followUps}
     </article>`;
+  }
+
+  /** 会话内还有多少条追问是待回答的（服务端没给 threads 时兜底自己数）。 */
+  function countPending(children, map) {
+    let count = 0;
+    for (const child of children || []) {
+      if (statusOf(child) === "pending") count += 1;
+      count += countPending(map.get(String(child.question_id)) || [], map);
+    }
+    return count;
   }
 
   function render() {
     const keyword = String(els.search?.value || "").trim().toLowerCase();
     const filter = els.filter?.value || "";
-    const shown = questions.filter(question => {
-      if (filter && statusOf(question) !== filter) return false;
+    const children = childrenMap();
+    const hit = question => {
       if (!keyword) return true;
       return [question.question, question.answer, question.asker_id, askerLabel(question.asker_id)]
         .some(value => String(value || "").toLowerCase().includes(keyword));
+    };
+    // 搜索要递归到追问内容：命中追问时，它所在的根卡片也要保留。
+    const subtreeHit = question => hit(question) || (children.get(String(question.question_id)) || []).some(subtreeHit);
+    // 追问与根一起展示：筛选或搜索命中追问时，把它的会话根也留下。
+    const shown = rootRows().filter(question => {
+      const childRows = children.get(String(question.question_id)) || [];
+      if (filter) {
+        const own = statusOf(question) === filter;
+        const childHit = childRows.some(child => statusOf(child) === filter);
+        if (!own && !childHit) return false;
+      }
+      if (!keyword) return true;
+      return subtreeHit(question);
     });
     if (!shown.length) {
       list.innerHTML = "<p class='qa-empty'>" + (questions.length ? "没有匹配的问答。" : "还没有人提问。") + "</p>";
@@ -148,7 +226,7 @@
     }
     // 排序：置顶永远在最前，其余一律按提问时间倒序（不再按状态分组）。
     shown.sort((a, b) => (Number(statusOf(b) === "pinned") - Number(statusOf(a) === "pinned")) || String(b.asked_at || "").localeCompare(String(a.asked_at || "")));
-    list.innerHTML = shown.map(cardHtml).join("");
+    list.innerHTML = shown.map(question => cardHtml(question, children.get(String(question.question_id)) || [], children)).join("");
     if (editingId) list.querySelector(`textarea[data-answer="${CSS.escape(editingId)}"]`)?.focus();
   }
 
@@ -228,6 +306,7 @@
   window.MinicampQAAdmin = {
     getQuestions: () => [...questions],
     getEditingId: () => editingId,
+    getRootCount: () => rootRows().length,
     reload: load
   };
 })();
