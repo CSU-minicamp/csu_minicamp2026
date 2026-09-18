@@ -298,6 +298,15 @@
 #panel-ideas .admin-idea-status { margin-top: auto; width: 100%; }
 #panel-teams .team-card-status .status-dot-mark,
 #panel-ideas .idea-card-status .status-dot-mark { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: currentColor; }
+button.team-member-name {
+  border: none;
+  background-color: #fff0;
+  border-radius: 4px;
+}
+button.team-member-name:hover {
+  background-color: #f1f0ea;
+  color: var(--coral);
+}
 .chart-switch { display: inline-flex; padding: 3px; gap: 2px; background: #f1f0ea; border-radius: 999px; }
 .chart-switch button { min-height: 26px; padding: 0 11px; border: 0; border-radius: 999px; color: var(--muted); background: transparent; font-size: 11px; font-weight: 700; cursor: pointer; transition: background .15s, color .15s; }
 .chart-switch button:hover { color: var(--ink); }

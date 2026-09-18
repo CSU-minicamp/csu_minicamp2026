@@ -52,7 +52,7 @@
   };
   const modal = document.getElementById("applicant-modal");
   function toast(msg, tone = "info") { MinicampUI.toast(msg, {tone}); }
-  function setHtml(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; }
+  function setHtml(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; return el;}
 
   /**
    * 正在编辑的表单（通知 / 活动配置 / 主持人提示）在轮询刷新时不丢草稿：
@@ -552,19 +552,22 @@
     const teams = state.teams || [];
     const total = document.getElementById("team-total");
     if (total) total.textContent = teams.length + " 支队伍";
-    setHtml("admin-team-board", teams.map(team => {
-      const members = (team.members || []).map(member => "<li><span class='team-member-name'>" + esc(member.name) + "</span><small>" + esc((member.skills || []).join(" / ") || "未填写能力标签") + "</small></li>").join("") || "<li class='is-empty'>暂无成员</li>";
+    const board = setHtml("admin-team-board", teams.map(team => {
+      const members = (team.members || []).map(member => `<li><button class='team-member-name' data-view="${esc(member.id)}">` + esc(member.name) + "</button><small>" + esc((member.skills || []).join(" / ") || "未填写能力标签") + "</small></li>").join("") || "<li class='is-empty'>暂无成员</li>";
       const locked = Boolean(team.locked);
       const statusText = locked ? "正式队伍 · 已锁定" : (state.config?.teamConfirmOpen ? "正式确认已开启 · 等待队长提交" : "预组队中 · 可继续招募");
       const owner = team.ownerId ? "<span>队长 <b>" + esc(team.ownerId) + "</b></span>" : "";
-      return "<article class='team-card-admin" + (locked ? " is-locked" : "") + "'><header class='team-card-head'><strong class='team-card-name'>" + esc(team.project || team.id) + "</strong><span class='team-card-count'>" + team.members.length + " / 5 人</span></header><div class='team-card-meta'><span>队伍码 <b>" + esc(team.code) + "</b></span><span>编号 <b>" + esc(team.id) + "</b></span>" + owner + "</div><p class='team-card-status'><i class='status-dot-mark'></i>" + statusText + "</p><ul class='team-member-list'>" + members + "</ul><button class='outline-button admin-team-lock' data-id='" + esc(team.id) + "' data-locked='" + String(!locked) + "'>" + (locked ? "解除正式锁定" : (state.config?.teamConfirmOpen ? "管理员锁定队伍" : "预览锁定（确认开启后生效）")) + "</button></article>";
+      return "<article class='team-card-admin" + (locked ? " is-locked" : "") + "'><header class='team-card-head'><strong class='team-card-name'>" + esc(team.project || team.id) + "</strong><span class='team-card-count'>" + (team.members || []).length + " / 5 人</span></header><div class='team-card-meta'><span>队伍码 <b>" + esc(team.code) + "</b></span><span>编号 <b>" + esc(team.id) + "</b></span>" + owner + "</div><p class='team-card-status'><i class='status-dot-mark'></i>" + statusText + "</p><ul class='team-member-list'>" + members + "</ul><button class='outline-button admin-team-lock' data-id='" + esc(team.id) + "' data-locked='" + String(!locked) + "'>" + (locked ? "解除正式锁定" : (state.config?.teamConfirmOpen ? "管理员锁定队伍" : "预览锁定（确认开启后生效）")) + "</button></article>";
     }).join("") || "<p class='empty-state'>暂无队伍</p>");
-    document.querySelectorAll(".admin-team-lock").forEach(button => button.onclick = async () => {
-      try {
-        await api.request("/api/admin/teams/" + encodeURIComponent(button.dataset.id), { method: "PATCH", body: JSON.stringify({ locked: button.dataset.locked === "true" }) });
-        toast("队伍状态已更新", "success"); await load();
-      } catch (error) { toast(error.message, "error"); }
-    });
+    if(board){
+      board.querySelectorAll("button.team-member-name").forEach(el => el.onclick = () => openDetail(el.dataset.view));
+      board.querySelectorAll(".admin-team-lock").forEach(button => button.onclick = async () => {
+        try {
+          await api.request("/api/admin/teams/" + encodeURIComponent(button.dataset.id), { method: "PATCH", body: JSON.stringify({ locked: button.dataset.locked === "true" }) });
+          toast("队伍状态已更新", "success"); await load();
+        } catch (error) { toast(error.message, "error"); }
+      });
+    }
   }
 
   function renderIdeas() {
