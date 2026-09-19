@@ -160,7 +160,15 @@ function createFixtures(state) {
     fixture({ id: testId(20), name: "候补同学", studentId: "2026000020", college: "资源与安全工程学院", ...splitMajorGrade("安全工程 · 大三"), phone: "1390001020", email: "test-waitlist@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["Hardware"], motivation: "【测试数据】候补报名。", experience: "", portfolio: "", askMeAbout: "硬件原型", canHelpWith: "传感器", explore: "智能硬件", status: "候补", teamId: "", createdAt: timestamp(20) }),
     fixture({ id: testId(21), name: "待复审同学", studentId: "2026000021", college: "冶金与环境学院", ...splitMajorGrade("环境工程 · 大二"), phone: "1390001021", email: "test-review@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["AI Engineer"], motivation: "【测试数据】待复审报名。", experience: "", portfolio: "", askMeAbout: "调研", canHelpWith: "资料整理", explore: "环境议题", status: "待复审", teamId: "", createdAt: timestamp(21) }),
     fixture({ id: testId(22), name: "创建队伍同学", studentId: "2026000022", college: "计算机学院", ...splitMajorGrade("软件工程 · 大二"), phone: "1390001022", email: "test-create-team@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["Frontend", "Product"], motivation: "【测试数据】可用于测试创建队伍。", experience: "", portfolio: "", askMeAbout: "MVP", canHelpWith: "前端开发", explore: "发起项目", status: "已录取", teamId: "", createdAt: timestamp(22) }),
-    fixture({ id: testId(23), name: "加入队伍同学", studentId: "2026000023", college: "商学院", ...splitMajorGrade("市场营销 · 大三"), phone: "1390001023", email: "test-join-team@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["Product"], motivation: "【测试数据】可用于测试加入和锁定队伍。", experience: "", portfolio: "", askMeAbout: "用户访谈", canHelpWith: "现场展示", explore: "加入队伍", status: "已录取", teamId: "", createdAt: timestamp(23) })
+    fixture({ id: testId(23), name: "加入队伍同学", studentId: "2026000023", college: "商学院", ...splitMajorGrade("市场营销 · 大三"), phone: "1390001023", email: "test-join-team@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["Product"], motivation: "【测试数据】可用于测试加入和锁定队伍。", experience: "", portfolio: "", askMeAbout: "用户访谈", canHelpWith: "现场展示", explore: "加入队伍", status: "已录取", teamId: "", createdAt: timestamp(23) }),
+    fixture({ id: testId(24), name: "未通过同学", studentId: "2026000024", college: "体育教研部", ...splitMajorGrade("运动训练 · 大二"), phone: "1390001024", email: "test-rejected@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["Media"], motivation: "【测试数据】未通过的报名。", experience: "", portfolio: "", askMeAbout: "赛事运营", canHelpWith: "现场执行", explore: "运动科技", status: "未通过", teamId: "", createdAt: timestamp(24) }),
+    // 路演报名：前台固定显示「已通过」，报名总览的「已通过」进度条靠它填色。
+    fixture({
+      id: "TEST-RO-01", name: "路演观众", registration_type: "roadshow", registrationType: "roadshow", entryType: "路演报名",
+      identity_type: "校外人员", school_or_company: "【测试数据】合作单位", grade_or_position: "工程师",
+      attend_roadshow: true, receive_notifications: true, phone: "1390001025", email: "test-roadshow@minicamp.local",
+      skills: [], status: "已通过", teamCode: "", teamId: "", createdAt: timestamp(25)
+    })
   );
 
   const teams = teamDefinitions.map((definition, index) => {

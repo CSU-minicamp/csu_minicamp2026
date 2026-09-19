@@ -3,23 +3,20 @@
   let state;
   const root = document.querySelector(".admin-main");
   const SKILLS = ["Frontend", "Backend", "Product", "Design", "Hardware", "AI Engineer", "Media"];
+  // 「能力结构」每个能力标签一种颜色，样式在 admin.css 的 .tone-* 里（浅=报名人数，深=已录取）。
+  const SKILL_TONE = { "Frontend": "green", "Backend": "teal", "Product": "amber", "Design": "coral", "Hardware": "violet", "AI Engineer": "blue", "Media": "magenta" };
   const STATUSES = ["待审核", "已录取", "已通过", "候补", "待复审", "未通过"];
   const STATUS_CLASS = { "待审核": "status-pending", "已录取": "status-accepted", "候补": "status-waitlist", "待复审": "status-pending" };
   const isRoadshow = a => (a.registration_type || a.registrationType || "contestant") === "roadshow";
   const statusCell = a => isRoadshow(a)
     ? "<button type='button' class='status status-accepted status-locked' data-locked-status='" + esc(a.id) + "' title='路演报名固定为「已通过」，不可更改'>已通过 <span aria-hidden='true'>锁</span></button>"
     : "<select class='status-select' data-id='" + esc(a.id) + "'>" + STATUSES.map(s => "<option " + (s === a.status ? "selected" : "") + ">" + s + "</option>").join("") + "</select>";
+  // 报名状态 → 配色代号：队伍卡片的成员底色（浅色）与报名总览的进度条（深色）共用同一套色系。
+  const STATUS_TONE = { "待审核": "pending", "已录取": "approved", "已通过": "approved", "候补": "waitlist", "待复审": "review", "未通过": "rejected" };
+  const statusTone = status => STATUS_TONE[String(status || "").trim()] || "pending";
   // 队伍卡片里每个成员按报名状态上色：已录取/已通过=浅绿、待审核=纸色、待复审=浅蓝、未通过=浅红、候补=黄。
   const MEMBER_TONE = { approved: "is-approved", pending: "is-pending", review: "is-review", rejected: "is-rejected", waitlist: "is-waitlist" };
-  const memberTone = member => {
-    if (isRoadshow(member)) return "approved";
-    const s = String(member?.status || "").trim();
-    if (s === "已录取" || s === "已通过") return "approved";
-    if (s === "待复审") return "review";
-    if (s === "未通过") return "rejected";
-    if (s === "候补") return "waitlist";
-    return "pending";
-  };
+  const memberTone = member => (isRoadshow(member) ? "approved" : statusTone(member?.status));
   const memberToneClass = member => MEMBER_TONE[memberTone(member)] || "is-pending";
   const PANEL_META = {
     overview: ["报名总览", "集中管理报名、审核、录取与通知。"],
@@ -134,10 +131,10 @@
     if (!keepDrafts) formDrafts.forEach(entry => { entry.draft = null; });
     return sync({ withQa, reason: "manual", notify: false, automatic });
   }
-  function bar(label, value, max) { return "<div><div class='status-bar-label'><span>" + esc(label) + "</span><b>" + value + "</b></div><div class='status-bar-track'><i style='width:" + (value / Math.max(max, 1) * 100) + "%'></i></div></div>"; }
-  function stackedBar(label, value, acceptedCount, max) {
+  function bar(label, value, max, tone) { return "<div><div class='status-bar-label'><span>" + esc(label) + "</span><b>" + value + "</b></div><div class='status-bar-track'><i" + (tone ? " class='is-" + tone + "'" : "") + " style='width:" + (value / Math.max(max, 1) * 100) + "%'></i></div></div>"; }
+  function stackedBar(label, value, acceptedCount, max, tone) {
     const width = inner => Math.max(inner > 0 ? 3 : 0, inner / Math.max(max, 1) * 100);
-    return "<div class='status-bar-stack'><div class='status-bar-label'><span>" + esc(label) + "</span><b>" + acceptedCount + " / " + value + "</b></div><div class='status-bar-track'><i class='is-total' style='width:" + width(value) + "%'></i><i class='is-accepted' style='width:" + width(acceptedCount) + "%'></i></div></div>";
+    return "<div class='status-bar-stack" + (tone ? " tone-" + tone : "") + "'><div class='status-bar-label'><span>" + esc(label) + "</span><b>" + acceptedCount + " / " + value + "</b></div><div class='status-bar-track'><i class='is-total' style='width:" + width(value) + "%'></i><i class='is-accepted' style='width:" + width(acceptedCount) + "%'></i></div></div>";
   }
 
   /**
@@ -236,7 +233,7 @@
   }
   // 图表交给 Chart.js（本地 vendor/chart.umd.min.js），标签冲突由它自动换行/旋转处理。
   let categoryChart = null;
-  const CHART_COLORS = { total: "#dfe3dc", accepted: "#247b63", axis: "#a2a29a", grid: "#ececE5" };
+  const CHART_COLORS = { total: "#d9f2e8", accepted: "#14513f", axis: "#a2a29a", grid: "#ececE5" };
   function renderCategoryChart() {
     pickDefaultCategory();
     const rows = categoryCounts(categoryKey);
@@ -335,14 +332,14 @@
     const facetAccepted = facetApps.filter(x => x.status === "已录取");
     const total = apps.length;
     setHtml("metrics-grid", [["报名总数", total + "<em>（MC " + contestants + " / RO " + roadshows + "）</em>", "报名 / 路演"], ["待审核", count("待审核"), "需处理"], ["已录取", acceptedApps.length, "正式名额"], ["候补", count("候补"), "备选名单"]].map(x => "<div class='metric-card'><span>" + x[0] + "</span><strong>" + x[1] + "</strong><small>" + x[2] + "</small></div>").join(""));
-    setHtml("status-bars", STATUSES.map(s => bar(s, count(s), total)).join(""));
+    setHtml("status-bars", STATUSES.map(s => bar(s, count(s), total, statusTone(s))).join(""));
     const skillRows = SKILLS.map(s => {
       const all = facetApps.filter(a => (a.skills || []).includes(s)).length;
       const acceptedCount = facetAccepted.filter(a => (a.skills || []).includes(s)).length;
       return {label: s, all, accepted: acceptedCount};
     });
     const skillMax = Math.max(1, ...skillRows.map(row => row.all));
-    setHtml("skill-bars", skillRows.map(row => stackedBar(row.label, row.all, row.accepted, skillMax)).join(""));
+    setHtml("skill-bars", skillRows.map(row => stackedBar(row.label, row.all, row.accepted, skillMax, SKILL_TONE[row.label])).join(""));
     const skillScope = document.getElementById("skill-scope");
     if (skillScope) skillScope.textContent = filter.active ? "筛选结果 " + facetApps.length + " 条 · 深色为已录取" : "浅色为报名人数 · 深色为已录取";
     setHtml("accepted-major-bars", (() => {
@@ -353,7 +350,7 @@
       });
       const rows = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
       const max = Math.max(1, ...rows.map(row => row[1]));
-      return rows.map(row => bar(row[0], row[1], max)).join("") || "<p class='empty-state'>暂无已录取报名</p>";
+      return rows.map(row => bar(row[0], row[1], max, "approved")).join("") || "<p class='empty-state'>暂无已录取报名</p>";
     })());
     renderCategoryChart();
     renderFilterBuilder();

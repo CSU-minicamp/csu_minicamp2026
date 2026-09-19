@@ -49,14 +49,33 @@
 .status-bar-label span { min-width: 0; overflow-wrap: anywhere; }
 .status-bar-label b { flex: 0 0 auto; }
 .status-bar-track { height: 8px; background: #efefe9; overflow: hidden; }
-.status-bar-track i { height: 100%; display: block; background: var(--cyan); }
-.status-bars > div:nth-child(2) i { background: var(--yellow); }
-.status-bars > div:nth-child(3) i { background: var(--coral); }
+.status-bar-track i { height: 100%; display: block; background: #17a06d; }
 .status-bar-track { position: relative; overflow: hidden; border-radius: 999px; }
 .status-bar-track i.is-total,
 .status-bar-track i.is-accepted { height: 100%; display: block; }
-.status-bar-track i.is-total { background: #dfe3dc; }
-.status-bar-track i.is-accepted { position: absolute; inset: 0 auto 0 0; background: var(--green); }
+/*
+ * 报名总览配色：和队伍卡片共用一套色系。
+ * 「报名状态」六条用亮一档的同色系（细条在白底上要看得清）；
+ * 「能力结构 / 分类查看」是浅+深一对：浅色=队伍卡片那套浅色，深色=同色系加深。
+ */
+.status-bar-track i.is-total { background: #d9f2e8; }
+.status-bar-track i.is-accepted { position: absolute; inset: 0 auto 0 0; background: #14513f; }
+/* 「能力结构」每个条目一种颜色：浅色=报名人数，深色=已录取（同一色系的深浅两档） */
+#skill-bars .status-bar-stack { --tone-light: #d9f2e8; --tone-deep: #12a06f; }
+#skill-bars .status-bar-stack.tone-green { --tone-light: #d9f2e8; --tone-deep: #12a06f; }
+#skill-bars .status-bar-stack.tone-teal { --tone-light: #d6f0f3; --tone-deep: #17a3b3; }
+#skill-bars .status-bar-stack.tone-amber { --tone-light: #fbe8ae; --tone-deep: #dda613; }
+#skill-bars .status-bar-stack.tone-coral { --tone-light: #ffe1d8; --tone-deep: #f26a45; }
+#skill-bars .status-bar-stack.tone-violet { --tone-light: #e6e0f7; --tone-deep: #7a63e8; }
+#skill-bars .status-bar-stack.tone-blue { --tone-light: #dbe7fa; --tone-deep: #2f86e0; }
+#skill-bars .status-bar-stack.tone-magenta { --tone-light: #fadfeb; --tone-deep: #d94ba1; }
+#skill-bars .status-bar-track i.is-total { background: var(--tone-light); }
+#skill-bars .status-bar-track i.is-accepted { background: var(--tone-deep); }
+.status-bar-track i.is-approved { background: #17a06d; }
+.status-bar-track i.is-waitlist { background: #e3ad24; }
+.status-bar-track i.is-pending { background: #8f8f86; }
+.status-bar-track i.is-review { background: #2f96d4; }
+.status-bar-track i.is-rejected { background: #e04b3a; }
 .activity-list { display: grid; gap: 14px; }
 .activity-item { display: grid; grid-template-columns: 34px 1fr; gap: 10px; }
 .activity-dot { width: 29px; height: 29px; display: grid; place-items: center; background: #f0f0ea; border-radius: 50%; font-size: 10px; }
