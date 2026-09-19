@@ -8,6 +8,7 @@
     "test-data": "node scripts/test-data.mjs seed",
     "clear-test-data": "node scripts/test-data.mjs clear",
     "qa-store-test": "node scripts/qa-store-test.mjs",
+    "privacy-test": "node scripts/privacy.test.mjs",
     "qa-import": "node scripts/qa-import.mjs"
   },
   "dependencies": {
