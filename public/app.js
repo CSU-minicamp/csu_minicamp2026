@@ -176,6 +176,69 @@
     } catch (err) { error.textContent = err.message; } finally { submit.disabled = false; }
   });
   document.getElementById("close-roadshow-success")?.addEventListener("click", () => roadshowModal?.close());
+
+  /* ---------- 首页通知弹窗 ----------
+   * 主办方发布「需要回复」的通知（例如录取结果）后，已登录的报名者进首页会看到一次弹窗：
+   *   - 标题与正文由服务端按本人报名状态解析（录取结果按状态分内容，正文留空的状态不发）；
+   *   - canReply（已录取的参赛者）给「我会参与 / 我不会参与」，其余人只读确认；
+   *   - 同一条通知 + 同一版内容只弹一次（localStorage），错过还能在个人主页通知中心补回复。
+   * 放在报名表单逻辑之前：即使以后首页没有报名表单，弹窗也要照常工作。
+   */
+  const NOTICE_PROMPT_SEEN_KEY = "minicamp2026_notice_prompt";
+  const promptSeenStamp = notice => String(notice.id || "") + "@" + String(notice.updatedAt || notice.createdAt || "");
+  const promptAlreadySeen = notice => {
+    try { return (JSON.parse(localStorage.getItem(NOTICE_PROMPT_SEEN_KEY) || "{}") || {})[notice.id] === promptSeenStamp(notice); }
+    catch { return false; }
+  };
+  const markPromptSeen = notice => {
+    try {
+      const seen = JSON.parse(localStorage.getItem(NOTICE_PROMPT_SEEN_KEY) || "{}") || {};
+      seen[notice.id] = promptSeenStamp(notice);
+      localStorage.setItem(NOTICE_PROMPT_SEEN_KEY, JSON.stringify(seen));
+    } catch { /* 隐私模式下写不了，就每次都弹 */ }
+  };
+  const markPromptRead = async notice => {
+    try { await api.request("/api/me/notices/read", {method: "POST", body: JSON.stringify({id: notice.id})}); } catch { /* 已读失败不影响主流程 */ }
+  };
+  async function showNoticePrompt() {
+    if (!api?.getToken() || !window.MinicampUI) return;
+    const [me, inbox] = await Promise.all([
+      api.request("/api/me").catch(() => null),
+      api.request("/api/me/notices").catch(() => ({notices: []}))
+    ]);
+    if (!me?.participant) return;
+    const notice = (inbox?.notices || [])
+      .filter(item => item.requiresReply && !item.myReply)
+      .sort((a, b) => Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0))[0];
+    if (!notice || promptAlreadySeen(notice)) return;
+    // 服务端已按状态解析好 title/body：超文本走消毒渲染，纯文本按纯文本写入。
+    const body = notice.format === "html" ? [{html: notice.body}] : [notice.body];
+    const kicker = notice.typeLabel || "MINICAMP 2026";
+    if (notice.canReply) {
+      const options = notice.replyOptions || [];
+      // 服务端把首选选项放在最前（默认「我会参与」）：DOM 里倒序渲染，让它落在最右 / 移动端最上并被聚焦。
+      const value = await window.MinicampUI.choose({
+        kicker,
+        title: notice.title,
+        body,
+        cancelText: "稍后再说",
+        actions: [...options].reverse().map(option => ({value: option.value, label: option.label, tone: option.value === options[0]?.value ? "primary" : "quiet"}))
+      });
+      markPromptSeen(notice);
+      await markPromptRead(notice);
+      if (!options.some(option => option.value === value)) return;   // 点了「稍后再说」/ Esc
+      try {
+        await api.request("/api/me/notices/reply", {method: "POST", body: JSON.stringify({id: notice.id, value})});
+        window.MinicampUI.toast(value === "attend" ? "已记录：我会参与。期待现场见！" : "已记录你的回复。", {tone: "success"});
+      } catch (err) { window.MinicampUI.toast(err.message || "回复未能保存，请稍后重试", {tone: "error"}); }
+      return;
+    }
+    await window.MinicampUI.alert({kicker, title: notice.title, body, confirmText: "知道了"});
+    markPromptSeen(notice);
+    await markPromptRead(notice);
+  }
+  showNoticePrompt().catch(() => { /* 首页弹窗失败就安静跳过，不影响页面 */ });
+
   if (!form) return;
   const steps = [...form.querySelectorAll(".form-step")], progress = document.getElementById("form-progress"), error = document.getElementById("form-error");
   form.querySelectorAll('input[name="phone"]').forEach(input => input.addEventListener("input", () => { const digits = input.value.replace(/\D/g, "").slice(0, 11); if (input.value !== digits) input.value = digits; }));

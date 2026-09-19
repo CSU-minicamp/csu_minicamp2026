@@ -651,6 +651,85 @@
     return { all: false, label: "指定报名者：" + [person?.name, target].filter(Boolean).join(" · ") };
   }
   /**
+   * 「录取结果」按报名状态分别写内容：下面是各状态的默认标题/正文（超文本，可直接带 admission.html 链接）。
+   * 正文留空 = 不给这批人发送；服务端也按同一规则过滤，所以不会有人收到空通知。
+   */
+  const NOTICE_STATUS_TEMPLATES = [
+    {status: "已录取", title: "恭喜，你已被 minicamp 2026 录取", body: "你已被 minicamp 2026 录取！完整名单见 <a href=\"admission.html\">录取名单</a>。<br>请在下方确认你是否会参与 2026 年 9 月 26–27 日的现场活动。"},
+    {status: "已通过", title: "", body: ""},
+    {status: "候补", title: "你目前处于候补名单", body: "你目前在候补名单中，完整名单见 <a href=\"admission.html\">录取名单</a>。如有名额空缺，我们会按顺序联系你。"},
+    {status: "待审核", title: "你的录取结果还在确认中", body: "你的报名仍在审核中，结果公布后会在通知中心第一时间提醒你。可先查看 <a href=\"admission.html\">录取名单</a>。"},
+    {status: "待复审", title: "你的资料正在复核", body: "你的资料正在复核，结果公布后会在通知中心第一时间提醒你。可先查看 <a href=\"admission.html\">录取名单</a>。"},
+    {status: "未通过", title: "这次没能进入本届现场名单", body: "很遗憾，这次没能进入 minicamp 2026 的现场名单。感谢你的报名与认真填写，期待在后续活动里见到你。"}
+  ];
+  /** 表单里要展示哪些报名状态：以服务端状态表为准，按模板顺序排列。 */
+  function noticeStatusRows() {
+    const known = (state.applicationStatuses || []).length ? state.applicationStatuses : NOTICE_STATUS_TEMPLATES.map(item => item.status);
+    return NOTICE_STATUS_TEMPLATES.filter(item => known.includes(item.status));
+  }
+  const statusCountLabel = status => (state.applications || []).filter(item => String(item.status) === status).length + " 人";
+  /** 类型切到「录取结果」时才显示按状态填写的面板，其他类型恢复原来的标题 + 内容。 */
+  function renderNoticeStatusPanel() {
+    const form = document.getElementById("notice-form");
+    const panel = document.getElementById("notice-status-panel");
+    const list = document.getElementById("notice-status-list");
+    if (!form || !panel || !list) return;
+    const isResult = form.elements.type?.value === "录取结果";
+    panel.hidden = !isResult;
+    // 隐藏默认字段时必须同时取消 required，否则浏览器会拦住提交说「不可聚焦的必填项」。
+    form.querySelectorAll("[data-notice-default-field]").forEach(field => {
+      field.hidden = isResult;
+      field.querySelectorAll("input, textarea").forEach(input => { input.required = !isResult; });
+    });
+    if (!isResult || list.childElementCount) return;   // 已有内容就不重绘，避免清掉正在编辑的正文
+    list.innerHTML = noticeStatusRows().map(row =>
+      "<section class='notice-status-row' data-status='" + esc(row.status) + "'>" +
+        "<div class='notice-status-row-head'><b>" + esc(row.status) + "</b><span>" + esc(statusCountLabel(row.status)) + "</span><i>正文留空则不发送</i></div>" +
+        "<label>标题<input name='statusTitle__" + esc(row.status) + "' value='" + esc(row.title) + "'></label>" +
+        "<label>正文<textarea name='statusBody__" + esc(row.status) + "' rows='3'>" + esc(row.body) + "</textarea></label>" +
+      "</section>").join("");
+  }
+  /** 提交「录取结果」时把各状态内容收成一个数组；正文为空的状态直接丢掉。 */
+  function collectStatusContents(form) {
+    return [...form.querySelectorAll(".notice-status-row")].map(row => ({
+      status: row.dataset.status || "",
+      title: (row.querySelector("input")?.value || "").trim(),
+      body: row.querySelector("textarea")?.value || ""
+    })).filter(row => row.status && row.body.trim());
+  }
+  /** 通知卡片的正文：普通通知一段，录取结果按状态分段展示，并标出没有发送的状态。 */
+  function noticeContentHtml(notice) {
+    const rich = text => (notice.format === "html" ? MinicampUI.sanitizeHtml(text) : esc(text));
+    if (!(notice.contentRows || []).length) return "<p>" + rich(notice.body || "") + "</p>";
+    const sent = notice.contentRows.map(row => row.statuses || [row.status]).flat();
+    const skipped = (state.applicationStatuses || []).filter(status => !sent.includes(status));
+    return notice.contentRows.map(row =>
+      "<div class='notice-status-preview'>" +
+        "<div class='notice-status-preview-head'><b>" + esc(row.status) + "</b><span>" + row.recipientCount + " 人</span></div>" +
+        "<h4>" + esc(row.title || "（无标题）") + "</h4>" +
+        "<div class='rich-text'>" + rich(row.body) + "</div>" +
+      "</div>").join("") +
+      (skipped.length ? "<p class='notice-status-skipped'>未发送：" + esc(skipped.join(" / ")) + "</p>" : "");
+  }
+  /**
+   * 需要回复的通知（录取确认）：汇总计数 + 可展开的逐人明细 + 导出 CSV。
+   * 应回复人数只算已录取的参赛者（服务端 replySummary.eligible），路演观众与未录取者不参与确认。
+   */
+  function noticeReplyHtml(notice) {
+    if (!notice.requiresReply) return "";
+    const summary = notice.replySummary || { eligible: 0, replied: 0, pending: 0, counts: [] };
+    const counts = (summary.counts || []).map(item => esc(item.label) + " <b>" + item.count + "</b>").join(" · ");
+    const rows = (notice.replies || []).slice().sort((a, b) => String(a.at).localeCompare(String(b.at)));
+    const list = rows.length
+      ? "<ol class='notice-reply-list'>" + rows.map(row => "<li><span>" + esc(row.name || "—") + "</span><i>" + esc(row.id) + "</i><b>" + esc(row.label || row.value) + "</b><time>" + esc(fmt(row.at)) + "</time></li>").join("") + "</ol>"
+      : "<p class='notice-reply-empty'>还没有人回复。</p>";
+    return "<div class='notice-reply'>" +
+      "<div class='notice-reply-summary'><b>参与确认</b><span>" + (counts || "—") + "</span><em>已回复 " + summary.replied + " / " + summary.eligible + " 人 · 未回复 " + summary.pending + " 人</em></div>" +
+      "<details class='notice-reply-details'><summary>查看回复明细（" + rows.length + "）</summary>" + list + "</details>" +
+      "<button class='outline-button notice-reply-export' type='button' data-id='" + esc(notice.id) + "'>导出回复 CSV</button>" +
+      "</div>";
+  }
+  /**
    * 已发布通知卡片：标题、发给谁、已读进度。
    * 已读数据来自服务端 adminNoticeView（readBy 是实时落库的），
    * 每 15 秒全量刷新一次，所以选手标为已读后这里会跟着变。
@@ -660,11 +739,14 @@
     const recipients = Number.isFinite(notice.recipientCount) ? notice.recipientCount : (state.applications || []).length;
     const readers = Number.isFinite(notice.readCount) ? notice.readCount : (notice.readBy || []).length;
     const updated = notice.updatedAt && notice.updatedAt !== notice.createdAt ? "<small class='notice-edited'>内容更新于 " + esc(fmt(notice.updatedAt)) + "</small>" : "";
+    const skipped = notice.skippedCount ? "<div class='notice-skipped'>另有 " + notice.skippedCount + " 人不在本次发送范围（状态未填写内容）</div>" : "";
     return "<article class='admin-notice-item " + (to.all ? "is-broadcast" : "is-direct") + "'>" +
       "<div class='notice-meta'><span>" + esc(notice.typeLabel || noticeType(notice.type)) + "</span><time>" + esc(fmt(notice.createdAt)) + "</time></div>" +
       "<h3>" + esc(notice.title) + "</h3>" +
       "<div class='notice-recipient'><b>发给谁</b><span>" + esc(to.label) + "</span></div>" +
-      "<p>" + esc(notice.body) + "</p>" +
+      noticeContentHtml(notice) +
+      skipped +
+      noticeReplyHtml(notice) +
       "<div class='notice-read' title='选手打开通知中心后会立即标记为已读'>" +
         "<span class='notice-read-bar'><i style='width:" + pct(readers, recipients) + "%'></i></span>" +
         "<b>已读 " + readers + " / " + recipients + " 人</b>" +
@@ -672,11 +754,33 @@
       "</div>" +
       updated + "</article>";
   }
+  /** 导出某条通知的回复：报名编号 / 姓名 / 学院 / 专业 / 回复 / 时间。 */
+  function exportNoticeReplies(noticeId) {
+    const notice = (state.notices || []).find(item => String(item.id) === String(noticeId));
+    if (!notice) { toast("找不到这条通知", "error"); return; }
+    const rows = (notice.replies || []).slice().sort((a, b) => String(a.at).localeCompare(String(b.at)));
+    if (!rows.length) { toast("这条通知还没有回复"); return; }
+    const cell = value => '"' + String(value == null ? "" : value).replace(/"/g, '""') + '"';
+    const head = ["报名编号", "姓名", "学院", "专业", "回复", "回复时间"].map(cell).join(",");
+    const body = rows.map(row => [row.id, row.name, row.college, row.major, row.label || row.value, fmt(row.at)].map(cell).join(","));
+    const csv = "\uFEFF" + [head, ...body].join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "minicamp-参与确认-" + String(notice.title || notice.id).replace(/[\\/:*?"<>|\s]+/g, "-").slice(0, 24) + ".csv";
+    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+    toast("已导出 " + rows.length + " 条回复", "success");
+  }
+  document.addEventListener("click", event => {
+    const button = event.target?.closest?.(".notice-reply-export");
+    if (button) exportNoticeReplies(button.dataset.id);
+  });
   function renderNotices() {
     // 先把「发送对象」下拉按最新报名列表重建，再用草稿回填，避免自动刷新清掉已选收件人。
     const select = document.getElementById("notice-target");
     if (select) select.innerHTML = "<option value='ALL'>所有人（所有报名者）</option>" + (state.applications || []).map(x => "<option value='" + esc(x.id) + "'>" + esc(x.name) + " · " + esc(x.id) + "</option>").join("");
     preserveForm(document.getElementById("notice-form"), draftOf("notice"));
+    renderNoticeStatusPanel();
     setHtml("admin-notice-list", (state.notices || []).slice(0, 12).map(noticeItemHtml).join("") || "<p class='empty-state'>暂无通知</p>");
     const total = document.getElementById("notice-total"); if (total) total.textContent = (state.notices || []).length + " 条";
   }
@@ -880,13 +984,27 @@
     const form = e.currentTarget;
     const d = Object.fromEntries(new FormData(form));
     try {
-      await api.request("/api/admin/notices", { method: "POST", body: JSON.stringify(d) });
+      let payload;
+      if (d.type === "录取结果") {
+        const rows = collectStatusContents(form);
+        if (!rows.length) { toast("至少给一个报名状态填写正文", "error"); return; }
+        const skipped = noticeStatusRows().map(item => item.status).filter(status => !rows.some(row => row.status === status));
+        if (skipped.length && !await MinicampUI.confirm({title: "这些状态不会收到通知", body: "正文留空，将不发送给：" + skipped.join(" / ") + "。确定发布吗？", confirmText: "继续发布"})) return;
+        payload = {type: "录取结果", target: d.target, format: d.format || "html", requiresReply: Boolean(d.requiresReply), statusContents: JSON.stringify(rows.map(row => ({statuses: [row.status], title: row.title, body: row.body})))};
+      } else {
+        payload = {type: d.type, target: d.target, title: d.title, body: d.body};
+      }
+      await api.request("/api/admin/notices", { method: "POST", body: JSON.stringify(payload) });
       form.reset();
+      const list = document.getElementById("notice-status-list");
+      if (list) list.innerHTML = "";
       if (formDrafts.get("notice")) formDrafts.get("notice").draft = null;
       toast("通知已发布", "success");
       await load();
     } catch (err) { toast(err.message, "error"); }
   });
+  // 切到「录取结果」时展开按报名状态填写的面板（含默认标题/正文），切走就恢复默认表单。
+  document.querySelector('#notice-form select[name="type"]')?.addEventListener("change", renderNoticeStatusPanel);
 
   function activate(panel) {
     document.querySelectorAll(".admin-nav button").forEach(x => x.classList.toggle("active", x.dataset.panel === panel));

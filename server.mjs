@@ -184,6 +184,34 @@ function testFixtureMode(){return Boolean(db.testFixtures?.active);}
 const noticeRecipients=target=>String(target||"ALL")==="ALL"?(db.applications||[]).map(item=>item.id):[String(target)];
 /** 通知标题按视角区分：提问者看到「你的提问已回答」，主办方看到「已回答提问」。 */
 const NOTICE_TYPE_LABEL={"问答":"问答回复","资料复核":"资料复核","项目审核":"项目审核",event:"活动公告",application:"报名进度",roadshow:"路演报名","活动公告":"活动公告","报名进度":"报名进度","录取结果":"录取结果","现场提醒":"现场提醒"};
+/**
+ * 需要报名者回复的通知（例如录取确认）默认给两个选项：
+ * value 落库、label 显示，改了 label 不会影响已收集的回复。
+ */
+const DEFAULT_REPLY_OPTIONS=[{value:"attend",label:"我会参与"},{value:"decline",label:"我不会参与"}];
+const replyOptionsOf=notice=>Array.isArray(notice?.replyOptions)&&notice.replyOptions.length?notice.replyOptions:DEFAULT_REPLY_OPTIONS;
+/**
+ * 通知正文格式：显式写了就用写的；没写时，按状态定制内容的通知（录取结果）默认超文本，
+ * 其它通知（问答回复、状态变更等）保持原来的纯文本渲染，行为不变。
+ */
+const noticeFormatOf=notice=>notice?.format==="html"?"html":notice?.format==="text"?"text":(Array.isArray(notice?.contents)&&notice.contents.length?"html":"text");
+/**
+ * 按报名状态取这条通知给某个人的内容：
+ *   - 没有 contents 的通知（普通公告）= 通知自己的 title/body，人人可见；
+ *   - 有 contents 的通知（录取结果）= 命中自己 status 的那一条；
+ *     没命中（或该状态留空）= 返回 null，表示这个人根本不该收到这条通知。
+ */
+function noticeContentFor(notice,participant){
+  const contents=Array.isArray(notice?.contents)?notice.contents.filter(row=>row&&String(row.body||"").trim()):[];
+  if(!contents.length)return {title:String(notice?.title||""),body:String(notice?.body||"")};
+  const status=String(participant?.status||"");
+  const row=contents.find(item=>(Array.isArray(item.statuses)?item.statuses:[item.status]).some(value=>String(value)===status));
+  if(!row)return null;
+  return {title:String(row.title||notice?.title||""),body:String(row.body||"")};
+}
+const noticeContentStatuses=notice=>(Array.isArray(notice?.contents)?notice.contents:[]).flatMap(row=>Array.isArray(row?.statuses)?row.statuses:[row?.status]).filter(Boolean).map(String);
+/** 应回复的人 = 通知收件人里「已录取的参赛者」；路演观众与未录取者不需要确认参与。 */
+const replyRecipientsOf=(notice,ids)=>{const eligible=new Set((db.applications||[]).filter(item=>isContestant(item)&&isAccepted(item)).map(item=>item.id));return (ids||noticeRecipients(notice.target)).filter(id=>eligible.has(id));};
 const IS_QA_NOTICE=notice=>notice?.contextType==="问答"||notice?.type==="问答"||notice?.type==="qa"||String(notice?.title||"").includes("已回答");
 function noticeTitleFor(notice,audience){
   if(!IS_QA_NOTICE(notice))return String(notice?.title||"");
@@ -197,23 +225,51 @@ function noticeTitleFor(notice,audience){
  */
 function adminNoticeView(notice){
   const recipients=noticeRecipients(notice.target);
-  const recipientSet=new Set(recipients);
+  const statusOf=id=>String((db.applications||[]).find(item=>item.id===id)?.status||"");
+  const contentRows=Array.isArray(notice.contents)?notice.contents.map(row=>{
+    const statuses=(Array.isArray(row?.statuses)?row.statuses:[row?.status]).filter(Boolean).map(String);
+    return {statuses,status:statuses.join(" · "),title:String(row?.title||""),body:String(row?.body||""),recipientCount:recipients.filter(id=>statuses.includes(statusOf(id))).length};
+  }):[];
+  // 有按状态内容时，真正的收件人只有「命中某个状态」的那批人；留空的状态不发送。
+  const notified=contentRows.length?recipients.filter(id=>noticeContentFor(notice,db.applications.find(item=>item.id===id))):recipients;
+  const recipientSet=new Set(notified);
   const readBy=[...new Set((notice.readBy||[]).map(String))].filter(id=>recipientSet.has(id));
   const broadcast=String(notice.target||"ALL")==="ALL";
   const asker=broadcast?"":(db.applications||[]).find(item=>item.id===String(notice.target))?.name||"";
+  const requiresReply=Boolean(notice.requiresReply);
+  const replyOptions=requiresReply?replyOptionsOf(notice):[];
+  const replyRecipients=requiresReply?replyRecipientsOf(notice,notified):[];
+  const replies=notice.replies||{};
+  const replyRows=replyRecipients.filter(id=>replies[id]).map(id=>{
+    const person=(db.applications||[]).find(item=>item.id===id);
+    const value=String(replies[id].value||"");
+    return {id,name:person?.name||"",college:person?.college||"",major:person?.major||"",value,label:replyOptions.find(option=>String(option.value)===value)?.label||value,at:replies[id].at||""};
+  });
   return {
     id:notice.id,
     type:notice.type,
     typeLabel:NOTICE_TYPE_LABEL[notice.type]||String(notice.type||"通知"),
-    title:noticeTitleFor(notice,"admin"),
+    title:noticeTitleFor(notice,"admin")||contentRows[0]?.title||String(notice.title||""),
     body:notice.body,
     target:notice.target,
     broadcast,
-    recipientCount:recipients.length,
+    recipientCount:notified.length,
+    skippedCount:Math.max(0,recipients.length-notified.length),
+    contentRows,
+    format:noticeFormatOf(notice),
     recipientLabel:broadcast?"所有人（所有报名者）":[...new Set([asker,notice.target].filter(Boolean))].join(" · "),
     readCount:readBy.length,
-    unreadCount:Math.max(0,recipients.length-readBy.length),
+    unreadCount:Math.max(0,notified.length-readBy.length),
     readBy,
+    requiresReply,
+    replyOptions,
+    replySummary:requiresReply?{
+      eligible:replyRecipients.length,
+      replied:replyRows.length,
+      pending:Math.max(0,replyRecipients.length-replyRows.length),
+      counts:replyOptions.map(option=>({value:option.value,label:option.label,count:replyRows.filter(row=>String(row.value)===String(option.value)).length}))
+    }:null,
+    replies:replyRows,
     contextType:notice.contextType||"",
     contextId:notice.contextId||"",
     createdAt:notice.createdAt,
@@ -221,13 +277,25 @@ function adminNoticeView(notice){
   };
 }
 const noticeKeyOf=(notice)=>String(notice?.key||"")||`${notice?.type||"notice"}:${notice?.target||"ALL"}:${notice?.contextId||notice?.id||""}`;
+const noticeExtraFields=options=>{
+  const extra={};
+  if(options.requiresReply!==undefined){
+    extra.requiresReply=Boolean(options.requiresReply);
+    if(extra.requiresReply)extra.replyOptions=Array.isArray(options.replyOptions)&&options.replyOptions.length?options.replyOptions:DEFAULT_REPLY_OPTIONS;
+  }
+  if(options.format!==undefined)extra.format=options.format==="text"?"text":"html";
+  if(options.contents!==undefined)extra.contents=Array.isArray(options.contents)?options.contents:[];
+  return extra;
+};
 /**
  * 写入通知。同一事件键已存在时不重复写入，而是就地更新内容（保留首次时间与已读记录），
  * 这样「回答被修改」「置顶/隐藏来回切换」都只对应收件箱里的一条。
  * 结果类通知（资料更新、状态变更）每次都是一件新事，不传 key，各留一条。
+ * options.requiresReply 会让这条通知带上「参与确认」按钮，回复落库到 notice.replies。
  */
 function addNotice(title,bodyText,type,target="ALL",options={}){
   const noticeKey=options.key||`${type}:${target}:${makeId("EVENT")}`;
+  const extra=noticeExtraFields(options);
   const existing=db.notices.find(item=>noticeKeyOf(item)===noticeKey);
   if(existing){
     // 内容真的变了（例如答案被改写、问题从待回答变已回答）就当作一件新消息：
@@ -235,13 +303,42 @@ function addNotice(title,bodyText,type,target="ALL",options={}){
     const changed=existing.body!==bodyText||existing.title!==title;
     existing.title=title;existing.body=bodyText;existing.type=type;existing.target=target;
     existing.contextType=options.contextType||"";existing.contextId=options.contextId||"";
+    // 回复类字段跟随更新，但已收集的回复保留（同一件事的答复不因为改文案而作废）。
+    if(extra.requiresReply!==undefined)existing.requiresReply=extra.requiresReply;
+    if(extra.replyOptions)existing.replyOptions=extra.replyOptions;
+    if(extra.format!==undefined)existing.format=extra.format;
+    if(extra.contents!==undefined)existing.contents=extra.contents;
     existing.updatedAt=new Date().toISOString();
     if(changed){existing.createdAt=existing.updatedAt;existing.readBy=[];existing.readAt={};}
     return existing;
   }
-  const notice={id:options.id||makeId("NOTICE"),key:noticeKey,title,body:bodyText,type,target,contextType:options.contextType||"",contextId:options.contextId||"",readBy:[],readAt:{},createdAt:new Date().toISOString(),updatedAt:"",testFixture:testFixtureMode()};
+  const notice={id:options.id||makeId("NOTICE"),key:noticeKey,title,body:bodyText,type,target,contextType:options.contextType||"",contextId:options.contextId||"",readBy:[],readAt:{},createdAt:new Date().toISOString(),updatedAt:"",testFixture:testFixtureMode(),...extra};
   db.notices.unshift(notice);
   return notice;
+}
+/**
+ * 选手视角的通知视图：只保留自己的已读记录与自己的回复，
+ * 不能把别人的 readBy / replies 一起发下去；
+ * 按状态定制的通知（录取结果）在这里解析成「这个人该看到的那一份」，
+ * 没命中任何状态就返回 null —— 调用方据此把这条通知从收件箱里剔除。
+ */
+function participantNoticeView(notice,participant){
+  const meId=String(participant?.id||"");
+  const content=noticeContentFor(notice,participant);
+  if(!content)return null;
+  const copy={...notice};
+  copy.title=noticeTitleFor(notice,"participant")||content.title;
+  copy.body=content.body;
+  copy.format=noticeFormatOf(notice);
+  copy.typeLabel=NOTICE_TYPE_LABEL[notice.type]||String(notice.type||"通知");
+  copy.readBy=(notice.readBy||[]).some(id=>String(id)===meId)?[meId]:[];
+  copy.readAt=notice.readAt&&notice.readAt[meId]?{[meId]:notice.readAt[meId]}:{};
+  copy.myReply=(notice.replies||{})[meId]||null;
+  copy.canReply=Boolean(notice.requiresReply&&isContestant(participant)&&isAccepted(participant));
+  delete copy.replies;
+  delete copy.contents;
+  delete copy.key;
+  return copy;
 }
 /**
  * 问答回答/公开后通知提问者。一次回答只通知一次：
@@ -435,9 +532,10 @@ async function api(req,res,url){
   if(url.pathname==="/api/me"&&method==="GET"){if(!me)return fail(res,401,"login required");return send(res,200,{participant:safe(me),team:teamView(db.teams.find(x=>x.id===me.teamId))});}
   if(url.pathname==="/api/me/vote"&&method==="GET"){if(me&&!isContestant(me))return fail(res,403,"roadshow participants do not have voting access");if(!me&&!voter)return fail(res,401,"login required");const voterId=voter?.userId||me.id;return send(res,200,{voter:voter?.voter||{code:me.id,name:me.name,grade:me.grade,college:me.college,teamId:me.teamId},vote:voteView(db.votes.find(item=>item.role==="participant"&&(item.voterId===voterId||voter&&(item.voterIdentityHash===voter.userId)))),voteOpen:votingIsOpen()});}
   if(url.pathname==="/api/me"&&method==="PATCH"){if(!me)return fail(res,401,"login required");const d=await body(req);if(!isContestant(me)){if(!["name","phone","email","identity_type","school_or_company","grade_or_position"].every(key=>String(d[key]||"").trim()))return fail(res,400,"required fields missing");Object.assign(me,{name:d.name,phone:d.phone,email:d.email,identity_type:d.identity_type,school_or_company:d.school_or_company,grade_or_position:d.grade_or_position,attend_roadshow:d.attend_roadshow===undefined?me.attend_roadshow:d.attend_roadshow!==false&&d.attend_roadshow!=="false",receive_notifications:d.receive_notifications===undefined?me.receive_notifications:d.receive_notifications!==false&&d.receive_notifications!=="false",updatedAt:new Date().toISOString()});await saveDb();return send(res,200,{participant:safe(me)});}if(!d.name||!d.studentId||!d.college||!d.major||!d.grade||!d.phone||!d.email||!d.motivation)return fail(res,400,"required fields missing");if(d.studentId&&d.studentId!==me.studentId&&db.applications.some(item=>item.id!==me.id&&item.studentId===d.studentId))return fail(res,409,"student id already exists");d.entryType="个人报名";d.participationMode=participationModeFor(d.grade);d.teamCode=me.teamCode;Object.assign(me,d,{id:me.id,registration_type:me.registration_type,registrationType:me.registrationType,status:isAccepted(me)?"待复审":me.status,teamId:me.teamId});me.updatedAt=new Date().toISOString();addNotice("资料已更新","你的报名资料已更新，主办方将重新审核。","资料复核",me.id);await saveDb();return send(res,200,{participant:safe(me)});}
-  if(url.pathname==="/api/me/notices"&&method==="GET"){if(!me)return fail(res,401,"login required");return send(res,200,{notices:db.notices.filter(x=>x.target==="ALL"||x.target===me.id)});}
+  if(url.pathname==="/api/me/notices"&&method==="GET"){if(!me)return fail(res,401,"login required");return send(res,200,{notices:db.notices.filter(x=>x.target==="ALL"||x.target===me.id).map(x=>participantNoticeView(x,me)).filter(Boolean)});}
   // 标记已读：body.id 省略时把「我可见的全部通知」标为已读；带 id 时只标记那一条。
   if(url.pathname==="/api/me/notices/read"&&method==="POST"){if(!me)return fail(res,401,"login required");const d=await body(req).catch(()=>({}));const wanted=d&&d.id?new Set(Array.isArray(d.id)?d.id.map(String):[String(d.id)]):null;const at=new Date().toISOString();let changed=0;db.notices.forEach(x=>{if(x.target!=="ALL"&&x.target!==me.id)return;if(wanted&&!wanted.has(String(x.id)))return;const readers=new Set((x.readBy||[]).map(String));if(readers.has(String(me.id)))return;readers.add(String(me.id));x.readBy=[...readers];x.readAt={...(x.readAt||{}),[me.id]:at};changed+=1;});if(changed)await saveDb();return send(res,200,{ok:true,changed});}
+  if(url.pathname==="/api/me/notices/reply"&&method==="POST"){if(!me)return fail(res,401,"login required");const d=await body(req).catch(()=>({}));const notice=db.notices.find(x=>String(x.id)===String(d.id||""));if(!notice)return fail(res,404,"notice not found");if(notice.target!=="ALL"&&String(notice.target)!==me.id)return fail(res,403,"notice not addressed to you");if(!notice.requiresReply)return fail(res,400,"notice does not accept replies");if(!noticeContentFor(notice,me))return fail(res,403,"notice not sent to your status");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");const options=replyOptionsOf(notice);const value=String(d.value||"");if(!options.some(option=>String(option.value)===value))return fail(res,400,"invalid reply value");const at=new Date().toISOString();notice.replies={...(notice.replies||{}),[me.id]:{value,at}};const readers=new Set((notice.readBy||[]).map(String));readers.add(String(me.id));notice.readBy=[...readers];notice.readAt={...(notice.readAt||{}),[me.id]:at};await saveDb();return send(res,200,{ok:true,reply:notice.replies[me.id]});}
   if(url.pathname==="/api/teams"&&method==="GET"){if(me&&!isContestant(me))return fail(res,403,"roadshow participants do not have team access");return send(res,200,{teams:db.teams.filter(team=>team.published&&!team.locked).map(teamView)});}
   if(url.pathname==="/api/teams/join-by-code"&&method==="POST"){if(!me)return fail(res,401,"login required");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");if(!isProfileComplete(me))return fail(res,400,"profile incomplete");const currentTeam=db.teams.find(item=>item.memberIds.includes(me.id)||item.id===me.teamId);if(currentTeam)return fail(res,409,"already belongs to a team");const d=await body(req),code=String(d.code||"").trim().toUpperCase();if(!code)return fail(res,400,"team code required");const team=db.teams.find(item=>String(item.code||"").toUpperCase()===code);if(!team)return fail(res,404,"team code not found");if(team.locked||team.memberIds.length>=5)return fail(res,409,"team is locked or full");team.memberIds.push(me.id);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,200,{team:teamView(team)});}
   if(url.pathname==="/api/teams"&&method==="POST"){if(!me)return fail(res,401,"login required");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");if(!isProfileComplete(me))return fail(res,400,"profile incomplete");if(me.teamId||db.teams.some(item=>item.memberIds.includes(me.id)))return fail(res,409,"already belongs to a team");const d=await body(req);const team={id:"TEAM "+String(db.teams.length+1).padStart(2,"0"),ownerId:me.id,code:"MC26-"+crypto.randomBytes(2).toString("hex").toUpperCase(),project:d.project||"Untitled",theme:d.theme||"TBD",memberIds:[me.id],status:"draft",locked:false,published:false,testFixture:testFixtureMode()};db.teams.push(team);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,201,{team:teamView(team)});}
@@ -513,10 +611,23 @@ async function api(req,res,url){
   if(url.pathname.startsWith("/api/projects/")&&method==="PATCH"){const isAdmin=admin(req);if(!me&&!isAdmin)return fail(res,401,"login required");const p=db.projects.find(x=>x.id===decodeURIComponent(url.pathname.split("/").pop()));if(!p)return fail(res,404,"project not found");const d=await body(req);if(!isAdmin&&p.teamId!==me.teamId)return fail(res,403,"project access denied");if(isAdmin)Object.assign(p,d);else for(const key of ["projectName","theme","tagline","problem","solution","demoUrl","githubUrl","coverUrl","aiTools"]){if(Object.hasOwn(d,key))p[key]=d[key];}await saveDb();return send(res,200,{project:projectView(p)});}
   if(url.pathname==="/api/votes"&&method==="POST"){const jury=admin(req);if(!votingIsOpen())return fail(res,403,"voting not open");if(!jury&&!me&&!voter)return fail(res,401,"login required");if(me&&(!isContestant(me)||!isAccepted(me)))return fail(res,403,"accepted participants only");const d=await body(req),role=jury?"jury":"participant",voterId=jury?"ADMIN":voter?.userId||me.id;if(duplicatePublicVote(voter?{credentialHash:voter.credentialHash,identityHash:voter.userId}:{credentialHash:null,identityHash:null})||db.votes.some(x=>x.voterId===voterId&&x.role===role))return fail(res,409,"vote already submitted");const selections=normalizeVoteSelections(d.selections,role);if(!selections)return fail(res,400,"invalid vote selections");const allowed=new Set(db.projects.filter(x=>x.status==="published").map(x=>x.id));if(selections.some(x=>!allowed.has(x.projectId)))return fail(res,400,"unpublished project in vote");if(me&&selections.some(x=>db.projects.find(p=>p.id===x.projectId)?.teamId===me.teamId))return fail(res,400,"cannot vote for your team");db.votes.push({id:makeId("VOTE"),voterId,role,selections,createdAt:new Date().toISOString(),voterCode:voter?.voter?.code||me?.id||"",voterCredentialHash:voter?.credentialHash||null,voterIdentityHash:voter?.userId||null,testFixture:testFixtureMode()});await saveDb();return send(res,201,{ok:true});}
   if(url.pathname==="/api/organizer/summary"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{config:{eventName:db.config.eventName,date:db.config.date,venue:db.config.venue,applicationOpen:db.config.applicationOpen,applicationDeadline:db.config.applicationDeadline,resultDate:db.config.resultDate},metrics:{applications:db.applications.length,accepted:db.applications.filter(x=>x.status==="已录取").length,pending:db.applications.filter(x=>x.status==="待审核").length,teams:db.teams.length,publishedProjects:db.projects.filter(x=>x.status==="published").length},teams:db.teams.map(t=>({id:t.id,project:t.project,theme:t.theme,status:t.status,memberCount:t.memberIds.length})),projects:db.projects.filter(x=>x.status==="published").map(p=>({id:p.id,projectName:p.projectName,theme:p.theme,tagline:p.tagline,demoUrl:p.demoUrl})),notices:db.notices.filter(x=>x.target==="ALL").slice(0,10).map(x=>({title:x.title,body:x.body,type:x.type,createdAt:x.createdAt}))});}
-  if(url.pathname==="/api/admin/summary"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{applications:db.applications.map(safe),teams:db.teams.map(teamView),ideas:db.ideas,projects:db.projects.map(projectView),notices:db.notices.map(adminNoticeView),votes:db.votes.map(vote=>({...vote,voterCode:voterCode(vote)})),results:calcResults(),awards:resolvedAwards(),config:{...db.config,voteOpen:votingIsOpen()}});}
+  if(url.pathname==="/api/admin/summary"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{applications:db.applications.map(safe),applicationStatuses:[...applicationStatuses],teams:db.teams.map(teamView),ideas:db.ideas,projects:db.projects.map(projectView),notices:db.notices.map(adminNoticeView),votes:db.votes.map(vote=>({...vote,voterCode:voterCode(vote)})),results:calcResults(),awards:resolvedAwards(),config:{...db.config,voteOpen:votingIsOpen()}});}
   if(url.pathname==="/api/admin/applications"&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const d=await body(req),a=db.applications.find(x=>x.id===d.id);if(!a)return fail(res,404,"application not found");if(!isContestant(a)&&d.status!==undefined&&d.status!==a.status)return fail(res,403,"roadshow applications are always 已通过");if(!applicationStatuses.has(d.status))return fail(res,400,"invalid application status");a.status=d.status;if(d.teamId){a.teamId=d.teamId;const t=db.teams.find(x=>x.id===d.teamId);if(t&&!t.memberIds.includes(a.id))t.memberIds.push(a.id);}addNotice("Application status updated","Your application status has changed.","application",a.id);await saveDb();return send(res,200,{participant:safe(a)});}
   if(url.pathname==="/api/admin/config"&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");Object.assign(db.config,await body(req));await saveDb();return send(res,200,{config:{...db.config,voteOpen:votingIsOpen()}});}
-  if(url.pathname==="/api/admin/notices"&&method==="POST"){if(!admin(req))return fail(res,401,"admin required");const d=await body(req);addNotice(d.title,d.body,d.type||"event",d.target||"ALL");await saveDb();return send(res,201,{ok:true});}
+  if(url.pathname==="/api/admin/notices"&&method==="POST"){if(!admin(req))return fail(res,401,"admin required");const d=await body(req);
+    // 录取结果可以按报名状态分别写标题/正文：statusContents 是 [{status,title,body}]，
+    // 正文留空的状态直接丢掉 —— 那批人不会收到这条通知，也不会出现在应回复名单里。
+    let contents;
+    if(d.statusContents!==undefined){
+      let rows=d.statusContents;
+      if(typeof rows==="string"){try{rows=JSON.parse(rows||"[]");}catch{return fail(res,400,"invalid statusContents");}}
+      if(!Array.isArray(rows))return fail(res,400,"invalid statusContents");
+      contents=rows.map(row=>({statuses:(Array.isArray(row?.statuses)?row.statuses:[row?.status]).filter(Boolean).map(String),title:String(row?.title||"").trim(),body:String(row?.body||"")})).filter(row=>row.statuses.length&&row.body.trim());
+      if(!contents.length)return fail(res,400,"at least one status needs content");
+    }
+    const requiresReply=d.requiresReply===true||d.requiresReply==="true"||d.requiresReply==="on";
+    addNotice(d.title||"",d.body||"",d.type||"event",d.target||"ALL",{requiresReply,format:d.format,contents});
+    await saveDb();return send(res,201,{ok:true});}
   if(url.pathname==="/api/admin/projects"&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const d=await body(req),p=db.projects.find(x=>x.id===d.id);if(!p)return fail(res,404,"project not found");p.status=d.status;await saveDb();return send(res,200,{project:projectView(p)});}
   const adminTeam=url.pathname.match(/^\/api\/admin\/teams\/([^/]+)$/);if(adminTeam&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const team=db.teams.find(item=>item.id===decodeURIComponent(adminTeam[1]));if(!team)return fail(res,404,"team not found");const d=await body(req);if(typeof d.locked!=="boolean")return fail(res,400,"locked flag required");if(d.locked&&!db.config.teamConfirmOpen)return fail(res,403,"team confirmation not open");team.locked=d.locked;team.status=d.locked?"locked":"draft";await saveDb();return send(res,200,{team:teamView(team)});}
   const adminIdea=url.pathname.match(/^\/api\/admin\/ideas\/([^/]+)$/);if(adminIdea&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const idea=db.ideas.find(item=>item.id===decodeURIComponent(adminIdea[1]));if(!idea)return fail(res,404,"idea not found");const d=await body(req);if(!["open","closed"].includes(d.status))return fail(res,400,"invalid idea status");idea.status=d.status;await saveDb();return send(res,200,{idea});}

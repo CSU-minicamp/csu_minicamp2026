@@ -11,16 +11,14 @@
       { id: "about", label: "活动介绍", href: "index.html#about", current: ["home", "starter-pack"] },
       { id: "qa", label: "Q&A", href: "qa.html", current: ["qa"] },
       { id: "team", label: "组队工作区", href: "team.html", current: ["team"] },
-      { id: "gallery", label: "项目 Gallery", href: "gallery.html", current: ["gallery", "submission"] },
-      { id: "voting", label: "现场投票", href: "voting.html", current: ["voting", "vote"], voting: true },
+      // Gallery 与现场投票已注释移除。如需恢复，去除注释即可（index.html 奖项区的投票按钮由 app.js 单独控制，不受影响）。
+      // { id: "gallery", label: "项目 Gallery", href: "gallery.html", current: ["gallery", "submission"] },
+      // { id: "voting", label: "现场投票", href: "voting.html", current: ["voting", "vote"], voting: true },
       { id: "profile", label: "个人主页", href: "profile.html", current: ["profile", "profile-dashboard"] }
     ];
     const links = items.map(item => {
       const current = item.current.includes(page);
-      const attributes = [
-        item.voting ? "data-voting-entry" : "",
-        current ? 'aria-current="page"' : ""
-      ].filter(Boolean).join(" ");
+      const attributes = current ? 'aria-current="page"' : "";
       return `<a href="${item.href}" ${attributes}>${item.label}</a>`;
     }).join("");
     header.className = "site-header";
@@ -78,14 +76,9 @@
   if (!window.MinicampAPI?.getToken()) signOut();
   else window.MinicampAPI.request("/api/me").then(({participant}) => {
     const type = participant.registration_type || participant.registrationType || "contestant";
-    const pending = participant.status === "待审核";
     signIn(participant);
-    if (type === "roadshow") {
-      header.querySelectorAll('a[href="team.html"],a[href="gallery.html"],a[href="voting.html"],a[data-voting-entry]').forEach(link => link.remove());
-    }
-    if (pending) {
-      header.querySelectorAll('a[href="gallery.html"],a[href="voting.html"],a[data-voting-entry]').forEach(link => link.remove());
-    }
+    // 路演观众不参与组队，去掉组队工作区入口。
+    if (type === "roadshow") header.querySelector('a[href="team.html"]')?.remove();
   }).catch(signOut);
   window.MinicampAPI?.request("/api/config").then(({ config }) => {
     if (config.voteOpen) return;
