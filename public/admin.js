@@ -9,6 +9,18 @@
   const statusCell = a => isRoadshow(a)
     ? "<button type='button' class='status status-accepted status-locked' data-locked-status='" + esc(a.id) + "' title='路演报名固定为「已通过」，不可更改'>已通过 <span aria-hidden='true'>锁</span></button>"
     : "<select class='status-select' data-id='" + esc(a.id) + "'>" + STATUSES.map(s => "<option " + (s === a.status ? "selected" : "") + ">" + s + "</option>").join("") + "</select>";
+  // 队伍卡片里每个成员按报名状态上色：已录取/已通过=浅绿、待审核=纸色、待复审=浅蓝、未通过=浅红、候补=黄。
+  const MEMBER_TONE = { approved: "is-approved", pending: "is-pending", review: "is-review", rejected: "is-rejected", waitlist: "is-waitlist" };
+  const memberTone = member => {
+    if (isRoadshow(member)) return "approved";
+    const s = String(member?.status || "").trim();
+    if (s === "已录取" || s === "已通过") return "approved";
+    if (s === "待复审") return "review";
+    if (s === "未通过") return "rejected";
+    if (s === "候补") return "waitlist";
+    return "pending";
+  };
+  const memberToneClass = member => MEMBER_TONE[memberTone(member)] || "is-pending";
   const PANEL_META = {
     overview: ["报名总览", "集中管理报名、审核、录取与通知。"],
     applicants: ["报名审核", "查看报名者资料、调整录取状态、导出名单。"],
@@ -553,11 +565,21 @@
     const total = document.getElementById("team-total");
     if (total) total.textContent = teams.length + " 支队伍";
     const board = setHtml("admin-team-board", teams.map(team => {
-      const members = (team.members || []).map(member => `<li><button class='team-member-name' data-view="${esc(member.id)}">` + esc(member.name) + "</button><small>" + esc((member.skills || []).join(" / ") || "未填写能力标签") + "</small></li>").join("") || "<li class='is-empty'>暂无成员</li>";
+      const teamMembers = team.members || [];
+      const members = teamMembers.map(member => `<li class='${memberToneClass(member)}'><button class='team-member-name' data-view="${esc(member.id)}">` + esc(member.name) + "</button><small>" + esc((member.skills || []).join(" / ") || "未填写能力标签") + "</small></li>").join("") || "<li class='is-empty'>暂无成员</li>";
+      // 卡片头部统计：已录取/已通过 · 候补 · 待审核/待复审 · 未通过，颜色与成员底色一致，个数为 0 的不显示。
+      const tones = teamMembers.reduce((acc, member) => { const key = memberTone(member); acc[key] = (acc[key] || 0) + 1; return acc; }, {});
+      const statChips = [
+        ["is-approved", "已录取/已通过", tones.approved || 0],
+        ["is-waitlist", "候补", tones.waitlist || 0],
+        ["is-pending", "待审核/待复审", (tones.pending || 0) + (tones.review || 0)],
+        ["is-rejected", "未通过", tones.rejected || 0]
+      ].filter(chip => chip[2] > 0);
+      const stats = statChips.length ? "<div class='team-card-stats'>" + statChips.map(chip => "<span class='team-stat " + chip[0] + "'>" + chip[1] + " <b>" + chip[2] + "</b></span>").join("") + "</div>" : "";
       const locked = Boolean(team.locked);
       const statusText = locked ? "正式队伍 · 已锁定" : (state.config?.teamConfirmOpen ? "正式确认已开启 · 等待队长提交" : "预组队中 · 可继续招募");
       const owner = team.ownerId ? "<span>队长 <b>" + esc(team.ownerId) + "</b></span>" : "";
-      return "<article class='team-card-admin" + (locked ? " is-locked" : "") + "'><header class='team-card-head'><strong class='team-card-name'>" + esc(team.project || team.id) + "</strong><span class='team-card-count'>" + (team.members || []).length + " / 5 人</span></header><div class='team-card-meta'><span>队伍码 <b>" + esc(team.code) + "</b></span><span>编号 <b>" + esc(team.id) + "</b></span>" + owner + "</div><p class='team-card-status'><i class='status-dot-mark'></i>" + statusText + "</p><ul class='team-member-list'>" + members + "</ul><button class='outline-button admin-team-lock' data-id='" + esc(team.id) + "' data-locked='" + String(!locked) + "'>" + (locked ? "解除正式锁定" : (state.config?.teamConfirmOpen ? "管理员锁定队伍" : "预览锁定（确认开启后生效）")) + "</button></article>";
+      return "<article class='team-card-admin" + (locked ? " is-locked" : "") + "'><header class='team-card-head'><strong class='team-card-name'>" + esc(team.project || team.id) + "</strong><span class='team-card-count'>" + teamMembers.length + " / 5 人</span></header><div class='team-card-meta'><span>队伍码 <b>" + esc(team.code) + "</b></span><span>编号 <b>" + esc(team.id) + "</b></span>" + owner + "</div><p class='team-card-status'><i class='status-dot-mark'></i>" + statusText + "</p>" + stats + "<ul class='team-member-list'>" + members + "</ul><button class='outline-button admin-team-lock' data-id='" + esc(team.id) + "' data-locked='" + String(!locked) + "'>" + (locked ? "解除正式锁定" : (state.config?.teamConfirmOpen ? "管理员锁定队伍" : "预览锁定（确认开启后生效）")) + "</button></article>";
     }).join("") || "<p class='empty-state'>暂无队伍</p>");
     if(board){
       board.querySelectorAll("button.team-member-name").forEach(el => el.onclick = () => openDetail(el.dataset.view));

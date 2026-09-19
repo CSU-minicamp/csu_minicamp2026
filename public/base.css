@@ -618,12 +618,25 @@ input[type="checkbox"].field-error, input[type="radio"].field-error { outline: 2
 #panel-teams .team-card-admin .team-card-meta b { color: var(--ink); font: 800 11px Consolas, monospace; letter-spacing: .02em; }
 #panel-teams .team-card-admin .team-card-status { margin: 0; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; line-height: 1.4; }
 #panel-teams .team-card-admin.is-locked .team-card-status { color: var(--green); font-weight: 700; }
-#panel-teams .team-card-admin .team-member-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid #ededE7; }
-#panel-teams .team-card-admin .team-member-list li { padding: 9px 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border-bottom: 1px solid #f2f2ed; font-size: 12px; }
-#panel-teams .team-card-admin .team-member-list li:last-child { border-bottom: 0; }
+#panel-teams .team-card-admin .team-member-list { margin: 0; padding: 8px 0 0; list-style: none; border-top: 1px solid #ededE7; }
+#panel-teams .team-card-admin .team-member-list li { padding: 9px 10px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border-bottom: 0; border-radius: 4px; font-size: 12px; }
+#panel-teams .team-card-admin .team-member-list li + li { margin-top: 4px; }
 #panel-teams .team-card-admin .team-member-list .team-member-name { font-weight: 700; overflow-wrap: anywhere; }
 #panel-teams .team-card-admin .team-member-list small { flex: 0 0 auto; max-width: 58%; color: var(--muted); font-size: 10px; text-align: right; }
-#panel-teams .team-card-admin .team-member-list li.is-empty { color: #a2a29a; }
+#panel-teams .team-card-admin .team-member-list li.is-empty { color: #a2a29a; background: transparent; }
+/* 成员状态底色：已录取/已通过=浅绿 · 待审核=纸色 · 待复审=浅蓝 · 未通过=浅红 · 候补=黄 */
+#panel-teams .team-card-admin .team-member-list li.is-approved { background: #d9f2e8; }
+#panel-teams .team-card-admin .team-member-list li.is-pending { background: var(--paper); }
+#panel-teams .team-card-admin .team-member-list li.is-review { background: #d2e7f8; }
+#panel-teams .team-card-admin .team-member-list li.is-rejected { background: #ffe3de; }
+#panel-teams .team-card-admin .team-member-list li.is-waitlist { background: #fbe6a0; }
+/* 卡片里的状态计数 */
+#panel-teams .team-card-admin .team-card-stats { display: flex; flex-wrap: wrap; gap: 6px; }
+#panel-teams .team-card-admin .team-stat { padding: 5px 9px; display: inline-flex; align-items: baseline; gap: 5px; color: #3f3f39; background: var(--paper); border: 1px solid #e4e4dd; border-radius: 999px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+#panel-teams .team-card-admin .team-stat b { font: 800 11px Consolas, monospace; }
+#panel-teams .team-card-admin .team-stat.is-approved { color: #07583e; background: #d9f2e8; border-color: #b6e3d2; }
+#panel-teams .team-card-admin .team-stat.is-waitlist { color: #6b4f00; background: #fbe6a0; border-color: #eed481; }
+#panel-teams .team-card-admin .team-stat.is-rejected { color: #7e2a1d; background: #ffe3de; border-color: #f4c3b8; }
 #panel-teams .team-card-admin.is-locked .admin-team-lock { color: var(--coral-strong); border-color: #e3b8ab; background: #fff5f2; }
 #panel-teams .team-card-admin.is-locked .admin-team-lock:hover { color: white; background: var(--coral-strong); border-color: var(--coral-strong); }
 
