@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="minicamp 2026 校园黑客松录取名单。">
+  <title>录取名单｜minicamp 2026</title>
+  <link rel="icon" type="image/png" href="assets/brand/minicamp-logo-seal.png">
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="admission.css">
+</head>
+<body data-page="admission">
+  <header class="site-header" id="site-header">
+    <a class="brand" href="index.html" aria-label="返回 minicamp 首页">
+      <img class="brand-lockup" src="assets/brand/minicamp-logo-lockup-partners-horizontal.png" alt="minicamp" width="2203" height="614">
+    </a>
+    <button class="nav-toggle" id="nav-toggle" type="button" aria-label="打开导航菜单" aria-expanded="false" aria-controls="site-nav">
+      <span></span><span></span><span></span>
+    </button>
+    <nav class="site-nav" id="site-nav" aria-label="主导航">
+      <a href="index.html">首页</a>
+      <a href="index.html#format">活动流程</a>
+      <a href="index.html#awards">奖项</a>
+      <a href="qa.html">Q&A</a>
+      <a href="team.html">组队工作区</a>
+    </nav>
+  </header>
+  <main id="top">
+    <section class="admission-hero">
+      <div class="shell">
+        <p class="section-kicker">ADMISSION / MINICAMP 2026</p>
+        <h1 class="admission-title">录取名单</h1>
+        <p class="admission-lead">
+          感谢每一位认真填写报名的同学。经过对创造欲、参与动机、合作意愿与能力组合的综合了解，我们确定了本届 minicamp 的参赛选手名单。以下同学将正式加入 2026 年 9 月 26–27 日的现场活动，一起在两天里把想法做成能运行的作品。
+        </p>
+      </div>
+    </section>
+    <section class="admission-panel">
+      <div class="shell">
+        <div class="admission-toolbar">
+          <label class="admission-search">
+            <span class="visually-hidden">搜索录取名单</span>
+            <input type="search" id="admission-search" placeholder="搜索姓名 / 学院 / 专业 / 能力标签" autocomplete="off">
+          </label>
+          <div class="admission-filters" id="admission-filters" role="group" aria-label="按能力标签筛选"></div>
+        </div>
+        <div class="admission-status">
+          <span id="admission-status-text" aria-live="polite">正在读取名单…</span>
+          <button class="text-link dark-link admission-reset" id="admission-reset" type="button" hidden>清除筛选 <span>↺</span></button>
+        </div>
+        <div class="admission-grid" id="admission-grid"></div>
+        <p class="admission-empty" id="admission-empty" hidden>没有找到匹配的同学，换个关键词或清除筛选试试。</p>
+        <div class="admission-error" id="admission-error" hidden></div>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div class="shell footer-grid">
+      <div class="footer-brand-block">
+        <img class="footer-wordmark" src="assets/brand/minicamp-wordmark.png" alt="minicamp" width="2203" height="614">
+        <span>2026</span>
+        <p>Meet. Build. Make Something Together.</p>
+      </div>
+      <div><span>活动日期</span><p>2026年9月26日–27日</p></div>
+      <div><span>活动地点</span><p>中南大学外语楼635</p></div>
+      <div><span>联系我们</span><p>qmzjyyds@163.com</p></div>
+    </div>
+    <div class="shell footer-bottom"><span>© 2026 minicamp</span></div>
+  </footer>
+  <script src="api.js"></script>
+  <script src="nav.js"></script>
+  <script src="admission.js"></script>
+</body>
+</html>

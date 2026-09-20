@@ -99,6 +99,31 @@
 .notice-admin-layout { display: grid; grid-template-columns: .78fr 1.22fr; gap: 14px; }
 .notice-compose { display: flex; flex-direction: column; gap: 17px; }
 .notice-compose label { display: flex; flex-direction: column; gap: 8px; font-size: 11px; font-weight: 700; }
+/* 「需要回复」勾选项：整行可点，说明文字在右侧换行，不被挤成一行小字。 */
+.notice-compose label.notice-compose-toggle { flex-direction: row; align-items: flex-start; gap: 10px; padding: 12px; background: #f7f7f3; border: 1px solid #e4e4dc; border-radius: 4px; cursor: pointer; }
+.notice-compose label.notice-compose-toggle input[type="checkbox"] { width: 16px; height: 16px; margin: 1px 0 0; flex: 0 0 auto; accent-color: var(--green); cursor: pointer; }
+.notice-compose label.notice-compose-toggle span { display: flex; flex-direction: column; gap: 5px; }
+.notice-compose .field-grid { gap: 12px; }
+/* 「录取结果」专用：按报名状态分别填标题/正文 */
+.notice-status-panel { display: flex; flex-direction: column; gap: 14px; padding: 14px; background: #f7f7f3; border: 1px solid #e4e4dc; border-radius: 4px; }
+.notice-status-note { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.notice-status-note b { color: var(--ink); }
+.notice-status-list { display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; }
+.notice-status-row { padding: 11px 12px; display: flex; flex-direction: column; gap: 9px; background: white; border: 1px solid #e4e4dc; border-radius: 4px; }
+.notice-status-row-head { display: flex; align-items: baseline; gap: 8px; }
+.notice-status-row-head b { font-size: 13px; }
+.notice-status-row-head span { color: var(--muted); font: 700 10px Consolas, monospace; }
+.notice-status-row-head i { margin-left: auto; color: var(--muted); font-size: 9px; font-style: normal; }
+.notice-status-row label { font-size: 10px; }
+.notice-status-row input, .notice-status-row textarea { font-size: 11px; }
+.notice-status-preview { margin-top: 9px; padding: 10px 12px; background: #f7f7f3; border-left: 3px solid var(--cyan); border-radius: 4px; }
+.notice-status-preview-head { display: flex; align-items: baseline; gap: 8px; }
+.notice-status-preview-head b { font-size: 12px; }
+.notice-status-preview-head span { color: var(--muted); font: 700 10px Consolas, monospace; }
+.notice-status-preview h4 { margin: 6px 0 4px; font-size: 12px; }
+.notice-status-preview .rich-text { color: var(--muted); font-size: 11px; line-height: 1.55; }
+.notice-status-skipped { margin: 8px 0 0; color: var(--muted); font-size: 10px; }
+.notice-skipped { margin-top: 7px; color: var(--muted); font-size: 10px; }
 .notice-compose textarea { resize: vertical; }
 .notice-compose .button { margin-top: 2px; align-self: flex-start; }
 .notice-compose-note, .notice-list-note { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
@@ -119,6 +144,24 @@
 .notice-read b { color: var(--ink); font-size: 10px; font-weight: 800; white-space: nowrap; }
 .notice-read em { color: var(--muted); font: 700 10px Consolas, monospace; font-style: normal; }
 .notice-edited { display: block; margin-top: 6px; color: var(--coral-strong); font-size: 9px; }
+/* 参与确认（需要回复的通知）：汇总 + 明细 + 导出 */
+.notice-reply { margin-top: 12px; padding: 12px; background: #f7f7f3; border-left: 3px solid var(--green); border-radius: 4px; }
+.notice-reply-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.notice-reply-summary b { color: var(--muted); font: 700 9px Consolas, monospace; text-transform: uppercase; }
+.notice-reply-summary span { color: var(--ink); font-size: 12px; font-weight: 800; }
+.notice-reply-summary span b { color: var(--green); font: 800 13px Consolas, monospace; }
+.notice-reply-summary em { color: var(--muted); font-size: 10px; font-style: normal; }
+.notice-reply-details { margin-top: 9px; }
+.notice-reply-details summary { color: var(--ink); font-size: 10px; font-weight: 800; cursor: pointer; }
+.notice-reply-list { margin: 9px 0 0; padding: 0; max-height: 220px; overflow-y: auto; list-style: none; }
+.notice-reply-list li { padding: 6px 0; display: flex; align-items: baseline; gap: 8px; border-top: 1px solid #e8e8e1; font-size: 11px; }
+.notice-reply-list li:first-child { border-top: 0; }
+.notice-reply-list span { min-width: 0; flex: 0 1 auto; font-weight: 700; overflow-wrap: anywhere; }
+.notice-reply-list i { color: var(--muted); font: 700 10px Consolas, monospace; font-style: normal; }
+.notice-reply-list b { margin-left: auto; color: var(--green); font-size: 11px; white-space: nowrap; }
+.notice-reply-list time { color: var(--muted); font-size: 9px; white-space: nowrap; }
+.notice-reply-empty { margin: 9px 0 0; color: var(--muted); font-size: 10px; }
+.notice-reply-export { margin-top: 10px; min-height: 32px; font-size: 10px; }
 .stage-brief-state { margin: 0 0 4px; color: var(--muted); font-size: 10px; line-height: 1.55; }
 .vote-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .vote-leader { padding: 25px; color: white; background: var(--green); border-radius: var(--radius); }

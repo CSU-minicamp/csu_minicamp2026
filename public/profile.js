@@ -85,7 +85,21 @@
       if (!localPreview) { await renderNotices(); if (!roadshow) await renderVote(); startNoticePolling(); }
     } catch { if (dashboard) location.replace("profile.html"); }
   };
-  // 通知内容来自主办方输入，全部转义后再写入，避免标题 / 正文里的 HTML 被当成标签执行。
+  // 通知内容来自主办方输入：纯文本一律转义，超文本（format=html）先消毒再渲染。
+  /** 首页弹窗只弹一次，所以通知中心这里保留「参与确认」入口，错过弹窗的人还能补回复。 */
+  const noticeBodyHtml = item => item.format === "html"
+    ? "<div class='notice-body rich-text'>" + (MinicampUI?.sanitizeHtml(item.body) ?? escapeHtml(item.body)) + "</div>"
+    : "<p>" + escapeHtml(item.body) + "</p>";
+  const noticeReplyLabel = (item, value) => (item.replyOptions || []).find(option => String(option.value) === String(value))?.label || String(value);
+  const noticeReplyBlock = item => {
+    if (!item.requiresReply) return "";
+    if (item.myReply) return "<div class='notice-reply-done'>你已回复：<b>" + escapeHtml(noticeReplyLabel(item, item.myReply.value)) + "</b></div>";
+    // canReply 由服务端判定（需要回复 + 已录取的参赛者），前端不再自己算身份。
+    if (!item.canReply) return "";
+    return "<div class='notice-reply-actions'>" + (item.replyOptions || []).map(option =>
+      "<button class='outline-button notice-reply-button' type='button' data-notice-id='" + escapeHtml(item.id) + "' data-value='" + escapeHtml(option.value) + "'>" + escapeHtml(option.label) + "</button>"
+    ).join("") + "</div>";
+  };
   const renderNotices = async () => {
     const {notices} = await api.request("/api/me/notices");
     const list = document.getElementById("notice-list");
@@ -94,7 +108,7 @@
     list.innerHTML = notices.map(item => {
       const read = (item.readBy || []).includes(current.id);
       const to = noticeRecipientLabel(item, current.id);
-      return "<article class='notice-item " + (read ? "is-read" : "is-unread") + "' data-notice-id='" + escapeHtml(item.id) + "'><div class='notice-marker'>" + (read ? "✓" : "!") + "</div><div><div class='notice-meta'><span>" + escapeHtml(noticeTypeLabel(item.type)) + "</span><time>" + new Date(item.createdAt).toLocaleString("zh-CN") + "</time></div><div class='notice-recipient " + (to.mine ? "is-mine" : "is-other") + "'><b>发给谁</b><span>" + escapeHtml(to.label) + "</span><i>" + escapeHtml(to.detail) + "</i></div><h3>" + escapeHtml(item.title) + "</h3><p>" + escapeHtml(item.body) + "</p></div></article>";
+      return "<article class='notice-item " + (read ? "is-read" : "is-unread") + "' data-notice-id='" + escapeHtml(item.id) + "'><div class='notice-marker'>" + (read ? "✓" : "!") + "</div><div><div class='notice-meta'><span>" + escapeHtml(noticeTypeLabel(item.type)) + "</span><time>" + new Date(item.createdAt).toLocaleString("zh-CN") + "</time></div><div class='notice-recipient " + (to.mine ? "is-mine" : "is-other") + "'><b>发给谁</b><span>" + escapeHtml(to.label) + "</span><i>" + escapeHtml(to.detail) + "</i></div><h3>" + escapeHtml(item.title) + "</h3>" + noticeBodyHtml(item) + noticeReplyBlock(item) + "</div></article>";
     }).join("") || "<p>暂无通知</p>";
   };
   async function renderVote() {
@@ -197,6 +211,20 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
     noticeTimer = setInterval(() => { refreshNotices(); }, NOTICE_POLL_MS);
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshNotices(); });
+  // 通知中心的参与确认：点一下即写入回复，后台「通知与录取」会同步显示。
+  document.getElementById("notice-list")?.addEventListener("click", async event => {
+    const button = event.target?.closest?.(".notice-reply-button");
+    if (!button) return;
+    button.disabled = true;
+    try {
+      await api.request("/api/me/notices/reply", { method: "POST", body: JSON.stringify({ id: button.dataset.noticeId, value: button.dataset.value }) });
+      await refreshNotices({ force: true });
+      MinicampUI?.toast("已记录你的回复", { tone: "success" });
+    } catch (error) {
+      button.disabled = false;
+      MinicampUI?.toast(error.message, { tone: "error" });
+    }
+  });
   document.getElementById("mark-read")?.addEventListener("click", async () => {
     try {
       const result = await api.request("/api/me/notices/read", { method: "POST" });

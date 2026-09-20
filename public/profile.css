@@ -15,6 +15,12 @@
 .notice-item p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
 .notice-item.is-read h3 { color: #55554f; }
 .notice-item p { white-space: pre-wrap; }
+/* 通知正文：纯文本走 <p>，超文本（format=html）用 .rich-text 渲染，间距交给公共规则。 */
+.notice-item .notice-body { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
+/* 参与确认（录取结果通知）：首页弹窗只弹一次，通知中心保留补回复入口。 */
+.notice-reply-actions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 10px; }
+.notice-reply-actions .outline-button { min-height: 34px; padding: 0 14px; font-size: 11px; }
+.notice-reply-done { margin-top: 12px; display: inline-block; padding: 7px 12px; color: #07583e; background: #d9f2e8; border-radius: 4px; font-size: 11px; font-weight: 700; }
 
 @media (max-width: 960px) {
   .profile-login { grid-template-columns: 1fr; gap: 48px; }

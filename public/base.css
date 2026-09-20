@@ -135,8 +135,19 @@ select option:checked { background: #ffec99; color: var(--ink); }
 .ui-dialog.is-danger .section-kicker, .ui-dialog.is-error .section-kicker { color: var(--error); }
 .ui-dialog-title { margin: 0 0 10px; font-size: 21px; line-height: 1.3; }
 .ui-dialog-body { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.ui-dialog-body + .ui-dialog-body { margin-top: 10px; }
 .ui-dialog.is-danger .ui-dialog-body, .ui-dialog.is-error .ui-dialog-body { color: #7a3a33; }
-.ui-dialog-actions { margin-top: 22px; display: flex; justify-content: flex-end; gap: 10px; }
+.ui-dialog-actions { margin-top: 22px; display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+/* 主办方填写的超文本 */
+.rich-text > :first-child { margin-top: 0; }
+.rich-text > :last-child { margin-bottom: 0; }
+.rich-text p, .rich-text ul, .rich-text ol { margin: 0 0 8px; }
+.rich-text h3, .rich-text h4, .rich-text h5 { margin: 12px 0 6px; color: var(--ink); font-size: 14px; }
+.rich-text ul, .rich-text ol { padding-left: 20px; }
+.rich-text li { margin-bottom: 4px; }
+.rich-text a { color: var(--ink); font-weight: 800; text-decoration: none; border-bottom: 1px solid var(--ink); }
+.rich-text a:hover { color: var(--coral-strong); border-color: var(--coral-strong); }
+.rich-text code { padding: 1px 5px; background: #f2f2ec; border-radius: 3px; font: 700 12px Consolas, monospace; }
 
 @media (max-width: 520px) {
   .ui-dialog-card { padding: 22px 18px 18px; }
