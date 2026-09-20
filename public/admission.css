@@ -12,9 +12,9 @@
 }
 /* ---------- 顶部说明区 ---------- */
 .admission-hero {
-  padding: 92px 0 72px;
-  background: var(--paper);
-  border-bottom: 1px solid var(--line);
+  padding: 92px 0 18px;
+  background: var(--white);
+  border-bottom: 0;
 }
 .admission-hero .section-kicker {
   color: var(--coral);
@@ -27,39 +27,15 @@
 }
 .admission-lead {
   max-width: 680px;
-  margin: 0 0 48px;
+  margin: 0 0 12px;
   color: #3f3f39;
   font-size: 16px;
   line-height: 1.8;
 }
-.admission-stats {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  border-top: 1px solid var(--ink);
-  border-left: 1px solid var(--ink);
-}
-.admission-stats > div {
-  min-height: 106px;
-  padding: 20px 22px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 7px;
-  background: white;
-  border-right: 1px solid var(--ink);
-  border-bottom: 1px solid var(--ink);
-}
-.admission-stats strong {
-  font: 800 26px/1 Consolas, monospace;
-}
-.admission-stats span {
-  color: var(--muted);
-  font-size: 12px;
-}
 /* ---------- 名单区 ---------- */
 .admission-panel {
-  padding: 64px 0 112px;
-  background: white;
+  padding: 20px 0 112px;
+  background: var(--white);
 }
 .admission-toolbar {
   display: flex;
@@ -286,7 +262,7 @@
 /* ---------- 响应式 ---------- */
 @media (max-width: 960px) {
   .admission-hero {
-    padding: 72px 0 56px;
+    padding: 72px 0 18px;
   }
   .admission-grid {
     grid-template-columns: repeat(auto-fill, minmax(258px, 1fr));
@@ -294,7 +270,7 @@
 }
 @media (max-width: 620px) {
   .admission-hero {
-    padding: 54px 0 44px;
+    padding: 54px 0 16px;
   }
   .admission-title {
     font-size: 54px;
@@ -302,15 +278,8 @@
   .admission-lead {
     font-size: 15px;
   }
-  .admission-stats > div {
-    min-height: 88px;
-    padding: 16px;
-  }
-  .admission-stats strong {
-    font-size: 21px;
-  }
   .admission-panel {
-    padding: 44px 0 84px;
+    padding: 20px 0 84px;
   }
   .admission-search {
     flex: 1 1 100%;

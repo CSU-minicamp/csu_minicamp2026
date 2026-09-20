@@ -9,8 +9,6 @@
   var resetButton = document.getElementById('admission-reset');
   var emptyState = document.getElementById('admission-empty');
   var errorBox = document.getElementById('admission-error');
-  var statCount = document.getElementById('stat-count');
-  var statColleges = document.getElementById('stat-colleges');
   var students = [];
   var tagCounts = {};
   var activeTag = '';
@@ -129,15 +127,6 @@
     return result;
   }
   /* ---------- 渲染 ---------- */
-  function renderStats() {
-    var colleges = {};
-    students.forEach((student) => {
-      if (student.college)
-        colleges[student.college] = true;
-    });
-    statCount.textContent = String(students.length);
-    statColleges.textContent = String(Object.keys(colleges).length);
-  }
   function renderFilters() {
     var tags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a] || a.localeCompare(b, 'zh-Hans-CN'));
     var html = '<button class="admission-filter active" type="button" data-tag="">' + '全部 <b>' + students.length + '</b></button>';
@@ -235,7 +224,6 @@
       student.index = i + 1;
       student.tags.forEach((tag) => tagCounts[tag] = (tagCounts[tag] || 0) + 1);
     });
-    renderStats();
     renderFilters();
     applyFilters();
   }
