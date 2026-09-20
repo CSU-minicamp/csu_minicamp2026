@@ -121,8 +121,15 @@
             <p class="notice-compose-note">先选「通知类型」（这是什么通知）与「发送对象」（发给谁：所有人，或某一位报名者），再写标题和正文。发布后右侧列表会标明每条通知发给了谁。</p>
             <label>通知类型 <small class="field-help">这是什么通知，会显示在报名者通知中心</small><select name="type"><option>活动公告</option><option>报名进度</option><option>录取结果</option><option>资料复核</option><option>现场提醒</option><option>项目审核</option><option>问答回复</option></select></label>
             <label>发送对象 <small class="field-help">发给谁：所有人，或指定报名者（会带上姓名与报名编号）</small><select name="target" id="notice-target"><option value="ALL">所有人（所有报名者）</option></select></label>
-            <label>标题<input name="title" required placeholder="例如：minicamp 2026 录取结果通知"></label>
-            <label>内容<textarea name="body" required rows="6" placeholder="写清楚给谁、因为什么、需要对方做什么，例如：你提交的能力与经历已更新，主办方会在 2 个工作日内重新审核。"></textarea></label>
+            <label data-notice-default-field>标题<input name="title" required placeholder="例如：minicamp 2026 录取结果通知"></label>
+            <label data-notice-default-field>内容<textarea name="body" required rows="6" placeholder="写清楚给谁、因为什么、需要对方做什么，例如：你提交的能力与经历已更新，主办方会在 2 个工作日内重新审核。"></textarea></label>
+            <!-- 「录取结果」专用：按报名状态分别写标题与正文，留空的状态不发送（内容由 admin.js 动态渲染）。 -->
+            <div class="notice-status-panel" id="notice-status-panel" hidden>
+              <p class="notice-status-note">按报名状态分别填写：每个状态只会把下面这段内容发给该状态的人，<b>正文留空的状态不会发送</b>。正文里可以直接写链接。</p>
+              <label>正文格式<select name="format"><option value="html">超文本（可写html）</option><option value="text">纯文本</option></select></label>
+              <div class="notice-status-list" id="notice-status-list"></div>
+              <label class="notice-compose-toggle"><input type="checkbox" name="requiresReply"><span>需要已录取选手确认参与<small class="field-help">勾选后，收到这条通知的已录取参赛者可以在首页弹窗里选「我会参与 / 我不会参与」，回复会汇总到这条通知的卡片里，可导出 CSV。</small></span></label>
+            </div>
             <button class="button button-dark" type="submit">发布通知 <span>↗</span></button>
           </form>
           <div class="admin-card"><div class="admin-card-head"><h2>已发布通知</h2><span id="notice-total">0 条</span></div><p class="notice-list-note">每条通知都写明「发给谁」和通知类型；点「发送对象」下拉里的报名者视为定向通知。</p><div class="admin-notice-list" id="admin-notice-list"></div></div>

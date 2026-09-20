@@ -85,7 +85,7 @@
       const canJoin = !currentTeam && !team.locked && count < 5;
       const label = team.locked ? "\u5df2\u9501\u5b9a" : count >= 5 ? "\u5df2\u6ee1\u5458" : currentTeam ? "\u5148\u79bb\u5f00\u5f53\u524d\u961f\u4f0d" : "\u52a0\u5165\u8fd9\u652f\u961f\u4f0d";
       return "<article class='team-card-admin'><div class='team-card-head'><strong>" + escapeHtml(team.project || team.id) + "</strong><span>" + count + " / 5 \u4eba</span></div>" +
-        "<small class='team-code'>" + escapeHtml(team.id) + " \u00b7 \u9080\u8bf7\u7801 " + escapeHtml(team.code) + "</small>" +
+        "<small class='team-code'>" + escapeHtml(team.id) + "</small>" +
         "<ul>" + team.members.map(memberLabel).join("") + "</ul>" +
         "<button class='outline-button join-team' data-id='" + escapeHtml(team.id) + "' " + (canJoin ? "" : "disabled") + ">" + label + "</button></article>";
     }).join("") : "<p class='team-list-empty'>\u76ee\u524d\u6ca1\u6709\u5176\u4ed6\u5f00\u653e\u961f\u4f0d\u3002</p>";

@@ -1,0 +1,333 @@
+/* admission.css — 录取名单页（admission.html）专用样式 */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* ---------- 顶部说明区 ---------- */
+.admission-hero {
+  padding: 92px 0 72px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+.admission-hero .section-kicker {
+  color: var(--coral);
+}
+.admission-title {
+  margin: 0 0 28px;
+  font-size: clamp(52px, 8vw, 104px);
+  line-height: .95;
+  font-weight: 900;
+}
+.admission-lead {
+  max-width: 680px;
+  margin: 0 0 48px;
+  color: #3f3f39;
+  font-size: 16px;
+  line-height: 1.8;
+}
+.admission-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  border-top: 1px solid var(--ink);
+  border-left: 1px solid var(--ink);
+}
+.admission-stats > div {
+  min-height: 106px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  background: white;
+  border-right: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+.admission-stats strong {
+  font: 800 26px/1 Consolas, monospace;
+}
+.admission-stats span {
+  color: var(--muted);
+  font-size: 12px;
+}
+/* ---------- 名单区 ---------- */
+.admission-panel {
+  padding: 64px 0 112px;
+  background: white;
+}
+.admission-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+}
+.admission-search {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: block;
+}
+.admission-search input {
+  width: 100%;
+  padding: 13px 16px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.admission-search input::placeholder {
+  color: #9a9a92;
+}
+.admission-search input:focus-visible {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px var(--yellow);
+}
+.admission-filters {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.admission-filter {
+  padding: 8px 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, color .16s ease;
+}
+.admission-filter:hover {
+  border-color: var(--ink);
+}
+.admission-filter b {
+  color: var(--muted);
+  font: 800 10px Consolas, monospace;
+}
+.admission-filter.active {
+  color: white;
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.admission-filter.active b {
+  color: var(--yellow);
+}
+.admission-status {
+  padding: 22px 0 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.admission-reset {
+  flex: 0 0 auto;
+  font-size: 11px;
+}
+.admission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(292px, 1fr));
+  gap: 16px;
+}
+/* ---------- 单人卡片 ---------- */
+.admission-card {
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  background: white;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: 5px 5px 0 rgba(17, 17, 17, .12);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.admission-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 5px 5px 0 var(--ink);
+}
+.admission-card-index {
+  color: var(--muted);
+  font: 700 10px Consolas, monospace;
+  letter-spacing: .06em;
+}
+.admission-card-name {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+.admission-card-major {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.admission-card-tags {
+  margin-top: auto;
+  padding-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* ---------- 药丸标签 ---------- */
+.admission-pill {
+  padding: 6px 12px;
+  display: inline-block;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.admission-pill[data-tag="frontend"] {
+  color: #0d5b64;
+  background: #d7f1f4;
+  border-color: #1d8d9a;
+}
+.admission-pill[data-tag="backend"] {
+  color: #14523f;
+  background: #d9f2e8;
+  border-color: #247b63;
+}
+.admission-pill[data-tag="product"] {
+  color: #6b5200;
+  background: #fdeeb8;
+  border-color: #d8a92c;
+}
+.admission-pill[data-tag="design"] {
+  color: #8e3315;
+  background: #ffe1da;
+  border-color: #d85321;
+}
+.admission-pill[data-tag="hardware"] {
+  color: #3f3487;
+  background: #e4e0fb;
+  border-color: #6b5bd2;
+}
+.admission-pill[data-tag="ai-engineer"] {
+  color: var(--yellow);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.admission-pill[data-tag="media"] {
+  color: #3f3f39;
+  background: #ececE5;
+  border-color: #8a8a83;
+}
+/* ---------- 页脚 ---------- */
+.site-footer { padding: 56px 0 24px; color: white; background: var(--ink); }
+.footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1.4fr 1fr; gap: 34px; }
+.footer-grid span { color: #85857d; font-size: 11px; }
+.footer-grid p { margin: 8px 0 0; font-size: 13px; }
+.footer-brand-block { display: grid; grid-template-columns: 136px auto; align-items: center; justify-content: start; gap: 8px; }
+.footer-brand-block p { grid-column: 1 / -1; }
+.footer-wordmark { width: 136px; height: auto; display: block; filter: brightness(0) invert(1); }
+.footer-brand-block > span { color: var(--coral); font: 800 11px Consolas, monospace; }
+.footer-bottom { margin-top: 50px; padding-top: 18px; display: flex; justify-content: space-between; color: #77776f; border-top: 1px solid #ffffff22; font-size: 11px; }
+/* ---------- 空状态 / 错误 ---------- */
+.admission-empty {
+  padding: 56px 24px;
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  text-align: center;
+  font-size: 13px;
+}
+.admission-error {
+  padding: 24px 26px;
+  color: #7a2a1d;
+  background: #fff1ee;
+  border: 1px solid #f0b7ab;
+  border-left: 4px solid var(--error);
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.admission-error strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+.admission-error code {
+  padding: 2px 6px;
+  color: var(--ink);
+  background: white;
+  border: 1px solid #f0b7ab;
+  border-radius: 3px;
+  font: 700 11px Consolas, monospace;
+}
+.admission-error small {
+  display: block;
+  margin-top: 10px;
+  color: #9c6357;
+  font-size: 11px;
+}
+/* ---------- 响应式 ---------- */
+@media (max-width: 960px) {
+  .admission-hero {
+    padding: 72px 0 56px;
+  }
+  .admission-grid {
+    grid-template-columns: repeat(auto-fill, minmax(258px, 1fr));
+  }
+}
+@media (max-width: 620px) {
+  .admission-hero {
+    padding: 54px 0 44px;
+  }
+  .admission-title {
+    font-size: 54px;
+  }
+  .admission-lead {
+    font-size: 15px;
+  }
+  .admission-stats > div {
+    min-height: 88px;
+    padding: 16px;
+  }
+  .admission-stats strong {
+    font-size: 21px;
+  }
+  .admission-panel {
+    padding: 44px 0 84px;
+  }
+  .admission-search {
+    flex: 1 1 100%;
+  }
+  .admission-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .admission-card {
+    padding: 18px;
+  }
+  .admission-card-name {
+    font-size: 20px;
+  }
+  .admission-status {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
