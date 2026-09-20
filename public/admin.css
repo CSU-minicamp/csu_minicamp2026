@@ -129,6 +129,12 @@
 .notice-compose-note, .notice-list-note { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .notice-compose-note { padding: 10px 12px; background: #f7f7f3; border: 1px dashed #dcdcd4; border-radius: 4px; }
 .notice-list-note { margin: -8px 0 14px; }
+/* 通知列表的显示开关（上方）与分页按钮（下方）。 */
+.notice-list-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; }
+.notice-list-count { color: var(--muted); font: 700 10px Consolas, monospace; }
+.notice-list-tools .outline-button { min-height: 32px; font-size: 10px; }
+.notice-list-more { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 12px; }
+.notice-list-more .outline-button { min-height: 34px; font-size: 10px; }
 .admin-notice-list { border-top: 1px solid #ededE7; }
 .admin-notice-item { padding: 16px 0; border-bottom: 1px solid #ededE7; }
 .admin-notice-item:last-child { border-bottom: 0; }
@@ -136,13 +142,7 @@
 .admin-notice-item p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
 .admin-notice-item small { color: var(--muted); font-size: 9px; }
 .admin-notice-item .notice-foot { display: block; margin-top: 7px; }
-/* notice进度 */
-.notice-read { margin-top: 9px; display: flex; align-items: center; gap: 8px; }
-.notice-read-bar { flex: 1 1 auto; min-width: 60px; height: 6px; overflow: hidden; background: #efefe9; border-radius: 999px; }
-.notice-read-bar i { display: block; height: 100%; background: var(--green); }
-.admin-notice-item.is-direct .notice-read-bar i { background: var(--cyan); }
-.notice-read b { color: var(--ink); font-size: 10px; font-weight: 800; white-space: nowrap; }
-.notice-read em { color: var(--muted); font: 700 10px Consolas, monospace; font-style: normal; }
+/* 已读状态不再是进度条，改成标题后的药丸（样式在 base.css 的 .notice-read-pill）。 */
 .notice-edited { display: block; margin-top: 6px; color: var(--coral-strong); font-size: 9px; }
 /* 参与确认（需要回复的通知）：汇总 + 明细 + 导出 */
 .notice-reply { margin-top: 12px; padding: 12px; background: #f7f7f3; border-left: 3px solid var(--green); border-radius: 4px; }

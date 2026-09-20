@@ -654,8 +654,16 @@
     setHtml("vote-voters", voteRows ? voteRows : "<p class='empty-state'>暂无投票记录</p>");
   }
 
-  const NOTICE_TYPE_LABEL = { "资料复核": "资料复核", "问答": "问答回复", "项目审核": "项目审核", event: "活动公告", application: "报名进度", roadshow: "路演报名" };
+  // 服务端已经下发 typeLabel（唯一权威）；这张表只在老数据缺 typeLabel 时兜底。
+  const NOTICE_TYPE_LABEL = { "资料复核": "资料修改（自动）", "资料修改": "资料修改（自动）", "问答": "问答回复", "项目审核": "项目审核", event: "活动公告", application: "用户报名（自动）", "报名进度": "用户报名（自动）", "报名提交": "用户报名（自动）", roadshow: "用户报名（自动）", "路演报名": "用户报名（自动）", "用户报名": "用户报名（自动）", "状态修改": "状态修改（自动）" };
   const noticeType = value => NOTICE_TYPE_LABEL[String(value || "").trim()] || String(value || "").trim() || "通知";
+  // 服务端 auto 标记；老数据没这个字段时按类型名兜底判断（与 server.mjs 的 AUTO_NOTICE_TYPES 一致）。
+  const AUTO_NOTICE_TYPES = new Set(["报名提交", "roadshow", "application", "资料修改", "资料复核", "状态修改", "问答", "qa", "问答回复"]);
+  const isAutoNotice = item => (typeof item?.auto === "boolean" ? item.auto : AUTO_NOTICE_TYPES.has(String(item?.type || "").trim()) || String(item?.contextType || "") === "问答");
+  /** 后台通知列表：默认只显示人工发布的消息，「显示自动消息」开关展开后全显示；列表分页（每次 12 条）。 */
+  const NOTICE_PAGE_SIZE = 12;
+  const noticeListState = { showAuto: false, visible: NOTICE_PAGE_SIZE };
+  try { noticeListState.showAuto = localStorage.getItem("minicamp2026_admin_notice_show_auto") === "1"; } catch { /* 隐私模式读不到就用默认值 */ }
   const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
   /** 收件人展示：新数据用服务端算好的 recipientLabel，老数据在客户端兜底拼一次。 */
   function noticeRecipient(notice) {
@@ -712,7 +720,9 @@
       body: row.querySelector("textarea")?.value || ""
     })).filter(row => row.status && row.body.trim());
   }
-  /** 通知卡片的正文：普通通知一段，录取结果按状态分段展示，并标出没有发送的状态。 */
+  /**
+   * 通知卡片的正文：普通通知一段，录取结果按状态分段展示（每段自带标题，所以不再重复渲染标题行）。
+   */
   function noticeContentHtml(notice) {
     const rich = text => (notice.format === "html" ? MinicampUI.sanitizeHtml(text) : esc(text));
     if (!(notice.contentRows || []).length) return "<p>" + rich(notice.body || "") + "</p>";
@@ -721,7 +731,6 @@
     return notice.contentRows.map(row =>
       "<div class='notice-status-preview'>" +
         "<div class='notice-status-preview-head'><b>" + esc(row.status) + "</b><span>" + row.recipientCount + " 人</span></div>" +
-        "<h4>" + esc(row.title || "（无标题）") + "</h4>" +
         "<div class='rich-text'>" + rich(row.body) + "</div>" +
       "</div>").join("") +
       (skipped.length ? "<p class='notice-status-skipped'>未发送：" + esc(skipped.join(" / ")) + "</p>" : "");
@@ -745,28 +754,36 @@
       "</div>";
   }
   /**
-   * 已发布通知卡片：标题、发给谁、已读进度。
+   * 选手能不能看到这条通知：看不到的（用户报名 / 资料修改 / 状态修改）就不该显示「已读」
+   */
+  const noticeTracksRead = item => !isAutoNotice(item) || String(item?.contextType || "") === "问答";
+  /**
+   * 已读药丸：跟在标题后面。未读用蓝色、全部读完用绿色；选手看不到的通知不渲染。
+   */
+  function noticeReadPill(notice) {
+    if (!noticeTracksRead(notice)) return "";
+    const recipients = Number.isFinite(notice.recipientCount) ? notice.recipientCount : (state.applications || []).length;
+    const readers = Number.isFinite(notice.readCount) ? notice.readCount : (notice.readBy || []).length;
+    const unread = Math.max(0, recipients - readers);
+    const done = recipients > 0 && unread === 0;
+    return "<span class='notice-read-pill " + (done ? "is-done" : "is-pending") + "' title='选手打开通知中心后会自动标为已读'>" + (done ? "全部已读 ": "未读 " + unread + " / " + recipients) + "</span>";
+  }
+  /**
+   * 已发布通知卡片：标题（+ 已读药丸）、发给谁、正文、回复汇总。
    * 已读数据来自服务端 adminNoticeView（readBy 是实时落库的），
    * 每 15 秒全量刷新一次，所以选手标为已读后这里会跟着变。
    */
   function noticeItemHtml(notice) {
     const to = noticeRecipient(notice);
-    const recipients = Number.isFinite(notice.recipientCount) ? notice.recipientCount : (state.applications || []).length;
-    const readers = Number.isFinite(notice.readCount) ? notice.readCount : (notice.readBy || []).length;
     const updated = notice.updatedAt && notice.updatedAt !== notice.createdAt ? "<small class='notice-edited'>内容更新于 " + esc(fmt(notice.updatedAt)) + "</small>" : "";
     const skipped = notice.skippedCount ? "<div class='notice-skipped'>另有 " + notice.skippedCount + " 人不在本次发送范围（状态未填写内容）</div>" : "";
     return "<article class='admin-notice-item " + (to.all ? "is-broadcast" : "is-direct") + "'>" +
       "<div class='notice-meta'><span>" + esc(notice.typeLabel || noticeType(notice.type)) + "</span><time>" + esc(fmt(notice.createdAt)) + "</time></div>" +
-      "<h3>" + esc(notice.title) + "</h3>" +
-      "<div class='notice-recipient'><b>发给谁</b><span>" + esc(to.label) + "</span></div>" +
+      "<h3>" + (notice.type === "录取结果"? "录取通知": esc(notice.title)) + noticeReadPill(notice) + "</h3>" +
+      "<div class='notice-subtitle'><b>发给谁</b><span>" + esc(to.label) + "</span></div>" +
       noticeContentHtml(notice) +
       skipped +
       noticeReplyHtml(notice) +
-      "<div class='notice-read' title='选手打开通知中心后会立即标记为已读'>" +
-        "<span class='notice-read-bar'><i style='width:" + pct(readers, recipients) + "%'></i></span>" +
-        "<b>已读 " + readers + " / " + recipients + " 人</b>" +
-        "<em>" + pct(readers, recipients) + "%</em>" +
-      "</div>" +
       updated + "</article>";
   }
   /** 导出某条通知的回复：报名编号 / 姓名 / 学院 / 专业 / 回复 / 时间。 */
@@ -796,9 +813,38 @@
     if (select) select.innerHTML = "<option value='ALL'>所有人（所有报名者）</option>" + (state.applications || []).map(x => "<option value='" + esc(x.id) + "'>" + esc(x.name) + " · " + esc(x.id) + "</option>").join("");
     preserveForm(document.getElementById("notice-form"), draftOf("notice"));
     renderNoticeStatusPanel();
-    setHtml("admin-notice-list", (state.notices || []).slice(0, 12).map(noticeItemHtml).join("") || "<p class='empty-state'>暂无通知</p>");
-    const total = document.getElementById("notice-total"); if (total) total.textContent = (state.notices || []).length + " 条";
+    // 默认隐藏系统自动生成的消息；隐藏了哪些、还剩多少都写在开关旁边。
+    const all = state.notices || [];
+    const autoNotices = all.filter(isAutoNotice);
+    const shown = noticeListState.showAuto ? all : all.filter(item => !isAutoNotice(item));
+    const visible = shown.slice(0, noticeListState.visible);
+    // 列表为空时给一句能解释原因的话，而不是干巴巴的「暂无通知」。
+    const empty = all.length === shown.length
+      ? "<p class='empty-state'>暂无通知</p>"
+      : "<p class='empty-state'>当前没有人工发布的通知。点上方「显示自动消息（" + autoNotices.length + "）」查看系统自动生成的报名 / 资料 / 状态消息。</p>";
+    setHtml("admin-notice-list", visible.map(noticeItemHtml).join("") || empty);
+    const total = document.getElementById("notice-total");
+    if (total) total.textContent = all.length + " 条" + (noticeListState.showAuto ? "" : "（已隐藏 " + autoNotices.length + " 条自动消息）");
+    setHtml("notice-list-status",
+      "<span class='notice-list-count'>显示 " + visible.length + " / " + shown.length + " 条</span>" +
+      "<button type='button' class='outline-button' id='notice-toggle-auto'>" + (noticeListState.showAuto ? "隐藏自动消息（" + autoNotices.length + "）" : "显示自动消息（" + autoNotices.length + "）") + "</button>");
+    const rest = shown.length - visible.length;
+    setHtml("notice-list-more", rest > 0 || noticeListState.visible > NOTICE_PAGE_SIZE
+      ? (rest > 0 ? "<button type='button' class='outline-button primary' id='notice-more'>加载更多（还有 " + rest + " 条）</button>" : "") +
+        (noticeListState.visible > NOTICE_PAGE_SIZE ? "<button type='button' class='outline-button' id='notice-collapse'>收起，只看最新 " + NOTICE_PAGE_SIZE + " 条</button>" : "")
+      : "");
   }
+  // 分页与显示开关的事件：用事件委托绑定一次，列表每次重绘都不受影响。
+  document.addEventListener("click", event => {
+    if (event.target?.closest?.("#notice-more")) { noticeListState.visible += NOTICE_PAGE_SIZE; renderNotices(); return; }
+    if (event.target?.closest?.("#notice-collapse")) { noticeListState.visible = NOTICE_PAGE_SIZE; renderNotices(); return; }
+    if (event.target?.closest?.("#notice-toggle-auto")) {
+      noticeListState.showAuto = !noticeListState.showAuto;
+      noticeListState.visible = NOTICE_PAGE_SIZE;
+      try { localStorage.setItem("minicamp2026_admin_notice_show_auto", noticeListState.showAuto ? "1" : "0"); } catch { /* 写不了就只在本次会话生效 */ }
+      renderNotices();
+    }
+  });
 
   function renderConfig() {
     const box = document.getElementById("config-editor"); if (!box) return;

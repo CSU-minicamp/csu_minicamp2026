@@ -119,7 +119,7 @@
           <form class="admin-card notice-compose" id="notice-form">
             <div class="admin-card-head"><h2>发送通知 / 录取结果</h2><span id="notice-form-state">写入报名者收件箱</span></div>
             <p class="notice-compose-note">先选「通知类型」（这是什么通知）与「发送对象」（发给谁：所有人，或某一位报名者），再写标题和正文。发布后右侧列表会标明每条通知发给了谁。</p>
-            <label>通知类型 <small class="field-help">这是什么通知，会显示在报名者通知中心</small><select name="type"><option>活动公告</option><option>报名进度</option><option>录取结果</option><option>资料复核</option><option>现场提醒</option><option>项目审核</option><option>问答回复</option></select></label>
+            <label>通知类型 <small class="field-help">这是什么通知，会显示在报名者通知中心（「…（自动）」的消息由系统按事件生成，不能手工发送）</small><select name="type"><option>活动公告</option><option>录取结果</option><option>现场提醒</option><option>项目审核</option></select></label>
             <label>发送对象 <small class="field-help">发给谁：所有人，或指定报名者（会带上姓名与报名编号）</small><select name="target" id="notice-target"><option value="ALL">所有人（所有报名者）</option></select></label>
             <label data-notice-default-field>标题<input name="title" required placeholder="例如：minicamp 2026 录取结果通知"></label>
             <label data-notice-default-field>内容<textarea name="body" required rows="6" placeholder="写清楚给谁、因为什么、需要对方做什么，例如：你提交的能力与经历已更新，主办方会在 2 个工作日内重新审核。"></textarea></label>
@@ -132,7 +132,7 @@
             </div>
             <button class="button button-dark" type="submit">发布通知 <span>↗</span></button>
           </form>
-          <div class="admin-card"><div class="admin-card-head"><h2>已发布通知</h2><span id="notice-total">0 条</span></div><p class="notice-list-note">每条通知都写明「发给谁」和通知类型；点「发送对象」下拉里的报名者视为定向通知。</p><div class="admin-notice-list" id="admin-notice-list"></div></div>
+          <div class="admin-card"><div class="admin-card-head"><h2>已发布通知</h2><span id="notice-total">0 条</span></div><p class="notice-list-note">每条通知都写明「发给谁」和通知类型；点「发送对象」下拉里的报名者视为定向通知。<br>系统自动生成的消息（用户报名 / 资料修改 / 状态修改 / 问答回复）默认收起，需要时用下面的按钮展开。</p><div id="notice-list-status" class="notice-list-tools"></div><div class="admin-notice-list" id="admin-notice-list"></div><div id="notice-list-more" class="notice-list-more"></div></div>
         </div>
       </section>
 
