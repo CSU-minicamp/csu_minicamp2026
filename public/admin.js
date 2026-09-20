@@ -6,11 +6,17 @@
   // 「能力结构」每个能力标签一种颜色，样式在 admin.css 的 .tone-* 里（浅=报名人数，深=已录取）。
   const SKILL_TONE = { "Frontend": "green", "Backend": "teal", "Product": "amber", "Design": "coral", "Hardware": "violet", "AI Engineer": "blue", "Media": "magenta" };
   const STATUSES = ["待审核", "已录取", "已通过", "候补", "待复审", "未通过"];
-  const STATUS_CLASS = { "待审核": "status-pending", "已录取": "status-accepted", "候补": "status-waitlist", "待复审": "status-pending" };
+  // 「已通过」是路演报名（RO）固定状态，配色与「已录取」一致，详情弹窗的头部徽标才不会显示成灰色的待审核。
+  const STATUS_CLASS = { "待审核": "status-pending", "已录取": "status-accepted", "已通过": "status-accepted", "候补": "status-waitlist", "待复审": "status-pending" };
   const isRoadshow = a => (a.registration_type || a.registrationType || "contestant") === "roadshow";
   const statusCell = a => isRoadshow(a)
     ? "<button type='button' class='status status-accepted status-locked' data-locked-status='" + esc(a.id) + "' title='路演报名固定为「已通过」，不可更改'>已通过 <span aria-hidden='true'>锁</span></button>"
     : "<select class='status-select' data-id='" + esc(a.id) + "'>" + STATUSES.map(s => "<option " + (s === a.status ? "selected" : "") + ">" + s + "</option>").join("") + "</select>";
+  // 姓名下面那行说明：参赛者 = 学院 · 专业，路演报名 = 身份类型 · 学校/单位。报名列表与详情弹窗共用，
+  // filter(Boolean) 保证路演（没有学院/专业）不会渲染出孤零零的「 · 」。
+  const subtitleOf = a => (isRoadshow(a) ? [a.identity_type, a.school_or_company] : [a.grade, a.college, a.major]).filter(Boolean).join(" · ");
+  // 路演报名的两个勾选项（参加现场路演 / 接收活动通知）默认勾选：老数据可能没有该字段，缺省按「是」处理（与 profile 页、服务端一致）。
+  const yesNo = value => (value === false || value === "false" ? "否" : "是");
   // 报名状态 → 配色代号：队伍卡片的成员底色（浅色）与报名总览的进度条（深色）共用同一套色系。
   const STATUS_TONE = { "待审核": "pending", "已录取": "approved", "已通过": "approved", "候补": "waitlist", "待复审": "review", "未通过": "rejected" };
   const statusTone = status => STATUS_TONE[String(status || "").trim()] || "pending";
@@ -531,26 +537,38 @@
   }
   function renderRows(list) {
     const tbody = document.getElementById("applicants-table"); if (!tbody) return;
-    tbody.innerHTML = list.map(x => "<tr><td class='name-cell'><span class='mini-avatar'>" + esc((x.name || "?").slice(0, 1)) + "</span><div><strong>" + esc(x.name) + "</strong><br><small>" + esc(x.college) + " · " + esc(x.major) + "</small></div></td><td>" + (isRoadshow(x) ? "路演报名" : "参赛报名") + "</td><td>" + esc(x.id) + "</td><td><small>" + esc(x.phone || "—") + "<br>" + esc(x.email || "—") + "</small></td><td>" + ((x.skills || []).map(s => "<span class='tag'>" + esc(s) + "</span>").join(" ") || "—") + "</td><td><small>" + fmt(x.createdAt) + "</small></td><td class='status-cell'>" + statusCell(x) + "</td><td><button class='row-action' data-view='" + esc(x.id) + "'>查看</button></td></tr>").join("") || "<tr><td colspan='8'><div class='empty-state'>没有符合条件的报名</div></td></tr>";
+    tbody.innerHTML = list.map(x => "<tr><td class='name-cell'><span class='mini-avatar'>" + esc((x.name || "?").slice(0, 1)) + "</span><div><strong>" + esc(x.name) + "</strong><br><small>" + esc(subtitleOf(x)) + "</small></div></td><td>" + (isRoadshow(x) ? "路演报名" : "参赛报名") + "</td><td>" + esc(x.id) + "</td><td><small>" + esc(x.phone || "—") + "<br>" + esc(x.email || "—") + "</small></td><td>" + ((x.skills || []).map(s => "<span class='tag'>" + esc(s) + "</span>").join(" ") || "—") + "</td><td><small>" + fmt(x.createdAt) + "</small></td><td class='status-cell'>" + statusCell(x) + "</td><td><button class='row-action' data-view='" + esc(x.id) + "'>查看</button></td></tr>").join("") || "<tr><td colspan='8'><div class='empty-state'>没有符合条件的报名</div></td></tr>";
     tbody.querySelectorAll(".status-select").forEach(sel => sel.onchange = async () => { try { await api.request("/api/admin/applications", { method: "PATCH", body: JSON.stringify({ id: sel.dataset.id, status: sel.value }) }); toast("已更新为「" + sel.value + "」", "success"); await load(); } catch (e) { toast(e.message, "error"); await load(); } });
     tbody.querySelectorAll("[data-locked-status]").forEach(b => b.onclick = () => toast("路演报名固定为「已通过」，无法更改。", "info"));
     tbody.querySelectorAll("[data-view]").forEach(b => b.onclick = () => openDetail(b.dataset.view));
   }
 
+  /**
+   * 报名详情弹窗：参赛（MC）与路演（RO）是两套字段，按报名类型分别渲染。
+   * 参赛者看学号 / 年级 / 能力标签 / 动机经历 / 作品集；
+   * 路演报名没有这些报名资料，改为身份类型、学校单位、年级职位与两个活动选项。
+   */
   function openDetail(id) {
     const x = (state.applications || []).find(a => a.id === id);
     const box = document.getElementById("applicant-detail");
     if (!x || !box || !modal) return;
+    const roadshow = isRoadshow(x);
     const row = (dt, dd) => "<div><dt>" + dt + "</dt><dd>" + esc(dd || "—") + "</dd></div>";
     const blk = (h, body) => "<div class='admin-detail-block'><h3>" + h + "</h3><p>" + (body ? esc(body) : "<span class='muted'>未填写</span>") + "</p></div>";
+    // 头部副标题与列表第二行共用 subtitleOf：参赛者 = 学院 · 专业，路演 = 身份类型 · 学校/单位。
+    const facts = roadshow
+      ? row("报名类型", "路演报名") + row("身份类型", x.identity_type) + row("学校 / 单位", x.school_or_company) + row("年级 / 职位", x.grade_or_position) + row("手机号", x.phone) + row("邮箱", x.email) + row("参加现场路演", yesNo(x.attend_roadshow)) + row("接收活动通知", yesNo(x.receive_notifications)) + row("提交时间", fmt(x.createdAt)) + row("最近更新", x.updatedAt ? fmt(x.updatedAt) : "—")
+      : row("学号", x.studentId) + row("手机号", x.phone) + row("邮箱", x.email) + row("年级", x.grade) + row("能力标签", (x.skills || []).join(" / ")) + row("提交时间", fmt(x.createdAt)) + row("最近更新", x.updatedAt ? fmt(x.updatedAt) : "—");
+    const extra = roadshow
+      ? "<div class='admin-detail-block'><h3>路演报名说明</h3><p>路演报名提交后自动通过，不参与组队、项目提交与投票。如需参赛、组队并提交项目，请让 TA 从首页重新选择「报名参赛」。</p></div>"
+      : blk("参与动机", x.motivation) + blk("做过的项目 / 经历", x.experience) + blk("可以来找 TA 聊什么", x.askMeAbout) + blk("可以帮助别人做什么", x.canHelpWith) + blk("想探索什么", x.explore) +
+        "<div class='admin-detail-block'><h3>作品集 / GitHub / 主页</h3><p>" + (x.portfolio ? "<a href='" + esc(x.portfolio) + "' target='_blank' rel='noreferrer'>" + esc(x.portfolio) + " ↗</a>" : "<span class='muted'>未填写</span>") + "</p></div>";
     box.innerHTML =
-      "<div class='admin-detail-head'><div><p class='section-kicker'>APPLICATION · " + esc(x.id) + "</p><h2 id='applicant-detail-name'>" + esc(x.name) + "</h2><span>" + esc(x.college) + " · " + esc(x.major) + "</span></div><span class='status " + (STATUS_CLASS[x.status] || "status-pending") + "'>" + esc(x.status) + "</span></div>" +
-      (isRoadshow(x)
+      "<div class='admin-detail-head'><div><p class='section-kicker'>" + (roadshow ? "ROADSHOW" : "APPLICATION") + " · " + esc(x.id) + "</p><h2 id='applicant-detail-name'>" + esc(x.name) + "</h2><span>" + esc(subtitleOf(x)) + "</span></div><span class='status " + (STATUS_CLASS[x.status] || "status-pending") + "'>" + esc(x.status) + "</span></div>" +
+      (roadshow
         ? "<div class='admin-detail-status is-locked'><span>报名状态</span><b class='status status-accepted status-locked'>已通过</b><small>路演报名提交后自动通过，主办方不可更改状态。</small></div>"
         : "<div class='admin-detail-status'><span>快速设置状态</span>" + STATUSES.map(s => "<button type='button' class='outline-button" + (s === x.status ? " primary" : "") + "' data-set-status='" + s + "'>" + s + "</button>").join("") + "</div>") +
-      "<dl class='admin-detail-grid'>" + row("学号", x.studentId) + row("手机号", x.phone) + row("邮箱", x.email) + row("年级", x.grade) + row("能力标签", (x.skills || []).join(" / ")) + row("提交时间", fmt(x.createdAt)) + row("最近更新", x.updatedAt ? fmt(x.updatedAt) : "—") + "</dl>" +
-      blk("参与动机", x.motivation) + blk("做过的项目 / 经历", x.experience) + blk("可以来找 TA 聊什么", x.askMeAbout) + blk("可以帮助别人做什么", x.canHelpWith) + blk("想探索什么", x.explore) +
-      "<div class='admin-detail-block'><h3>作品集 / GitHub / 主页</h3><p>" + (x.portfolio ? "<a href='" + esc(x.portfolio) + "' target='_blank' rel='noreferrer'>" + esc(x.portfolio) + " ↗</a>" : "<span class='muted'>未填写</span>") + "</p></div>";
+      "<dl class='admin-detail-grid'>" + facts + "</dl>" + extra;
     box.querySelectorAll("[data-set-status]").forEach(btn => btn.onclick = async () => { try { await api.request("/api/admin/applications", { method: "PATCH", body: JSON.stringify({ id: x.id, status: btn.dataset.setStatus }) }); modal.close(); toast("已更新为「" + btn.dataset.setStatus + "」", "success"); await load(); } catch (e) { toast(e.message, "error"); } });
     modal.showModal();
   }
@@ -872,7 +890,10 @@
   }
 
   function exportCsv() {
-    const cols = [["报名类型", a => (a.registration_type || "contestant") === "roadshow" ? "路演报名" : "参赛报名"], ["报名编号", "id"], ["姓名", "name"], ["学号", "studentId"], ["学院", "college"], ["专业", "major"], ["年级", "grade"], ["手机号", "phone"], ["邮箱", "email"], ["能力标签", a => (a.skills || []).join(" / ")], ["参与动机", "motivation"], ["经历", "experience"], ["作品集", "portfolio"], ["能帮助", "canHelpWith"], ["想探索", "explore"], ["找我聊", "askMeAbout"], ["状态", "status"], ["提交时间", a => fmt(a.createdAt)]];
+    // 参赛（MC）与路演（RO）共用一份表格：列取两者字段的并集，各类型只填自己那几列，另一类型的列留空。
+    // 学号 / 学院 / 专业 / 年级 / 能力标签 / 报名资料只属于参赛者；身份类型、学校单位、年级职位、两个活动选项只属于路演。
+    // 两个活动选项只在路演行里写「是 / 否」，参赛行留空（避免默认值把参赛者误标成「是」）。
+    const cols = [["报名类型", a => isRoadshow(a) ? "路演报名" : "参赛报名"], ["报名编号", "id"], ["姓名", "name"], ["学号", "studentId"], ["学院", "college"], ["专业", "major"], ["年级", "grade"], ["身份类型", "identity_type"], ["学校 / 单位", "school_or_company"], ["年级 / 职位", "grade_or_position"], ["参加现场路演", a => isRoadshow(a) ? yesNo(a.attend_roadshow) : ""], ["接收活动通知", a => isRoadshow(a) ? yesNo(a.receive_notifications) : ""], ["手机号", "phone"], ["邮箱", "email"], ["能力标签", a => (a.skills || []).join(" / ")], ["参与动机", "motivation"], ["经历", "experience"], ["作品集", "portfolio"], ["能帮助", "canHelpWith"], ["想探索", "explore"], ["找我聊", "askMeAbout"], ["状态", "status"], ["提交时间", a => fmt(a.createdAt)]];
     const cell = v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
     const head = cols.map(c => cell(c[0])).join(",");
     const rows = (state.applications || []).map(a => cols.map(c => cell(typeof c[1] === "function" ? c[1](a) : a[c[1]])).join(","));
