@@ -11,7 +11,8 @@
   document.querySelectorAll('input[name="studentId"]').forEach(input => input.addEventListener("input", () => { const digits = input.value.replace(/\D/g, "").slice(0, 10); if (input.value !== digits) input.value = digits; }));
   const activatePanel = id => { document.querySelectorAll("[data-profile-panel]").forEach(item => item.classList.toggle("active", item.dataset.profilePanel === id)); document.querySelectorAll(".profile-panel").forEach(panel => panel.classList.toggle("active", panel.id === id)); };
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
-  const NOTICE_TYPE_LABEL = { "资料复核": "资料复核", "问答": "问答回复", "活动公告": "活动公告", "报名进度": "报名进度", "录取结果": "录取结果", "现场提醒": "现场提醒", event: "活动公告", application: "报名进度", roadshow: "路演报名" };
+  // 服务端已经下发 typeLabel；这张表只兜底（自动消息不到选手端，正常不会出现在收件箱里）。
+  const NOTICE_TYPE_LABEL = { "资料复核": "资料修改（自动）", "资料修改": "资料修改（自动）", "问答": "问答回复", "问答回复": "问答回复", "活动公告": "活动公告", "报名进度": "用户报名（自动）", "用户报名": "用户报名（自动）", "报名提交": "用户报名（自动）", "状态修改": "状态修改（自动）", "录取结果": "录取结果", "现场提醒": "现场提醒", event: "活动公告", application: "用户报名（自动）", roadshow: "用户报名（自动）" };
   const noticeTypeLabel = value => NOTICE_TYPE_LABEL[String(value || "").trim()] || String(value || "").trim() || "通知";
   /** 这条通知是给谁的：所有人，还是只发给我（主办方定向发送时带上报名编号）。 */
   const noticeRecipientLabel = (notice, mineId) => {
@@ -108,7 +109,10 @@
     list.innerHTML = notices.map(item => {
       const read = (item.readBy || []).includes(current.id);
       const to = noticeRecipientLabel(item, current.id);
-      return "<article class='notice-item " + (read ? "is-read" : "is-unread") + "' data-notice-id='" + escapeHtml(item.id) + "'><div class='notice-marker'>" + (read ? "✓" : "!") + "</div><div><div class='notice-meta'><span>" + escapeHtml(noticeTypeLabel(item.type)) + "</span><time>" + new Date(item.createdAt).toLocaleString("zh-CN") + "</time></div><div class='notice-recipient " + (to.mine ? "is-mine" : "is-other") + "'><b>发给谁</b><span>" + escapeHtml(to.label) + "</span><i>" + escapeHtml(to.detail) + "</i></div><h3>" + escapeHtml(item.title) + "</h3>" + noticeBodyHtml(item) + noticeReplyBlock(item) + "</div></article>";
+      // 录取结果按状态分发：标题与正文重复，这里只显示正文。
+      const title = item.hideTitle ? "" : "<h3>" + escapeHtml(item.title) + "</h3>";
+      const recipient = "<div class='notice-subtitle " + (to.mine ? "is-mine" : "is-other") + "'><b>发给谁</b><span>" + escapeHtml(to.label) + "</span><small>" + escapeHtml(to.detail) + "</small></div>";
+      return "<article class='notice-item " + (read ? "is-read" : "is-unread") + "' data-notice-id='" + escapeHtml(item.id) + "'><div class='notice-marker'>" + (read ? "✓" : "!") + "</div><div><div class='notice-meta'><span>" + escapeHtml(noticeTypeLabel(item.typeLabel || item.type)) + "</span><time>" + new Date(item.createdAt).toLocaleString("zh-CN") + "</time></div>" + recipient + title + noticeBodyHtml(item) + noticeReplyBlock(item) + "</div></article>";
     }).join("") || "<p>暂无通知</p>";
   };
   async function renderVote() {

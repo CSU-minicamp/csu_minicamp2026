@@ -3,23 +3,26 @@
   let state;
   const root = document.querySelector(".admin-main");
   const SKILLS = ["Frontend", "Backend", "Product", "Design", "Hardware", "AI Engineer", "Media"];
+  // 「能力结构」每个能力标签一种颜色，样式在 admin.css 的 .tone-* 里（浅=报名人数，深=已录取）。
+  const SKILL_TONE = { "Frontend": "green", "Backend": "teal", "Product": "amber", "Design": "coral", "Hardware": "violet", "AI Engineer": "blue", "Media": "magenta" };
   const STATUSES = ["待审核", "已录取", "已通过", "候补", "待复审", "未通过"];
-  const STATUS_CLASS = { "待审核": "status-pending", "已录取": "status-accepted", "候补": "status-waitlist", "待复审": "status-pending" };
+  // 「已通过」是路演报名（RO）固定状态，配色与「已录取」一致，详情弹窗的头部徽标才不会显示成灰色的待审核。
+  const STATUS_CLASS = { "待审核": "status-pending", "已录取": "status-accepted", "已通过": "status-accepted", "候补": "status-waitlist", "待复审": "status-pending" };
   const isRoadshow = a => (a.registration_type || a.registrationType || "contestant") === "roadshow";
   const statusCell = a => isRoadshow(a)
     ? "<button type='button' class='status status-accepted status-locked' data-locked-status='" + esc(a.id) + "' title='路演报名固定为「已通过」，不可更改'>已通过 <span aria-hidden='true'>锁</span></button>"
     : "<select class='status-select' data-id='" + esc(a.id) + "'>" + STATUSES.map(s => "<option " + (s === a.status ? "selected" : "") + ">" + s + "</option>").join("") + "</select>";
+  // 姓名下面那行说明：参赛者 = 学院 · 专业，路演报名 = 身份类型 · 学校/单位。报名列表与详情弹窗共用，
+  // filter(Boolean) 保证路演（没有学院/专业）不会渲染出孤零零的「 · 」。
+  const subtitleOf = a => (isRoadshow(a) ? [a.identity_type, a.school_or_company] : [a.grade, a.college, a.major]).filter(Boolean).join(" · ");
+  // 路演报名的两个勾选项（参加现场路演 / 接收活动通知）默认勾选：老数据可能没有该字段，缺省按「是」处理（与 profile 页、服务端一致）。
+  const yesNo = value => (value === false || value === "false" ? "否" : "是");
+  // 报名状态 → 配色代号：队伍卡片的成员底色（浅色）与报名总览的进度条（深色）共用同一套色系。
+  const STATUS_TONE = { "待审核": "pending", "已录取": "approved", "已通过": "approved", "候补": "waitlist", "待复审": "review", "未通过": "rejected" };
+  const statusTone = status => STATUS_TONE[String(status || "").trim()] || "pending";
   // 队伍卡片里每个成员按报名状态上色：已录取/已通过=浅绿、待审核=纸色、待复审=浅蓝、未通过=浅红、候补=黄。
   const MEMBER_TONE = { approved: "is-approved", pending: "is-pending", review: "is-review", rejected: "is-rejected", waitlist: "is-waitlist" };
-  const memberTone = member => {
-    if (isRoadshow(member)) return "approved";
-    const s = String(member?.status || "").trim();
-    if (s === "已录取" || s === "已通过") return "approved";
-    if (s === "待复审") return "review";
-    if (s === "未通过") return "rejected";
-    if (s === "候补") return "waitlist";
-    return "pending";
-  };
+  const memberTone = member => (isRoadshow(member) ? "approved" : statusTone(member?.status));
   const memberToneClass = member => MEMBER_TONE[memberTone(member)] || "is-pending";
   const PANEL_META = {
     overview: ["报名总览", "集中管理报名、审核、录取与通知。"],
@@ -134,10 +137,10 @@
     if (!keepDrafts) formDrafts.forEach(entry => { entry.draft = null; });
     return sync({ withQa, reason: "manual", notify: false, automatic });
   }
-  function bar(label, value, max) { return "<div><div class='status-bar-label'><span>" + esc(label) + "</span><b>" + value + "</b></div><div class='status-bar-track'><i style='width:" + (value / Math.max(max, 1) * 100) + "%'></i></div></div>"; }
-  function stackedBar(label, value, acceptedCount, max) {
+  function bar(label, value, max, tone) { return "<div><div class='status-bar-label'><span>" + esc(label) + "</span><b>" + value + "</b></div><div class='status-bar-track'><i" + (tone ? " class='is-" + tone + "'" : "") + " style='width:" + (value / Math.max(max, 1) * 100) + "%'></i></div></div>"; }
+  function stackedBar(label, value, acceptedCount, max, tone) {
     const width = inner => Math.max(inner > 0 ? 3 : 0, inner / Math.max(max, 1) * 100);
-    return "<div class='status-bar-stack'><div class='status-bar-label'><span>" + esc(label) + "</span><b>" + acceptedCount + " / " + value + "</b></div><div class='status-bar-track'><i class='is-total' style='width:" + width(value) + "%'></i><i class='is-accepted' style='width:" + width(acceptedCount) + "%'></i></div></div>";
+    return "<div class='status-bar-stack" + (tone ? " tone-" + tone : "") + "'><div class='status-bar-label'><span>" + esc(label) + "</span><b>" + acceptedCount + " / " + value + "</b></div><div class='status-bar-track'><i class='is-total' style='width:" + width(value) + "%'></i><i class='is-accepted' style='width:" + width(acceptedCount) + "%'></i></div></div>";
   }
 
   /**
@@ -236,7 +239,7 @@
   }
   // 图表交给 Chart.js（本地 vendor/chart.umd.min.js），标签冲突由它自动换行/旋转处理。
   let categoryChart = null;
-  const CHART_COLORS = { total: "#dfe3dc", accepted: "#247b63", axis: "#a2a29a", grid: "#ececE5" };
+  const CHART_COLORS = { total: "#d9f2e8", accepted: "#14513f", axis: "#a2a29a", grid: "#ececE5" };
   function renderCategoryChart() {
     pickDefaultCategory();
     const rows = categoryCounts(categoryKey);
@@ -335,14 +338,14 @@
     const facetAccepted = facetApps.filter(x => x.status === "已录取");
     const total = apps.length;
     setHtml("metrics-grid", [["报名总数", total + "<em>（MC " + contestants + " / RO " + roadshows + "）</em>", "报名 / 路演"], ["待审核", count("待审核"), "需处理"], ["已录取", acceptedApps.length, "正式名额"], ["候补", count("候补"), "备选名单"]].map(x => "<div class='metric-card'><span>" + x[0] + "</span><strong>" + x[1] + "</strong><small>" + x[2] + "</small></div>").join(""));
-    setHtml("status-bars", STATUSES.map(s => bar(s, count(s), total)).join(""));
+    setHtml("status-bars", STATUSES.map(s => bar(s, count(s), total, statusTone(s))).join(""));
     const skillRows = SKILLS.map(s => {
       const all = facetApps.filter(a => (a.skills || []).includes(s)).length;
       const acceptedCount = facetAccepted.filter(a => (a.skills || []).includes(s)).length;
       return {label: s, all, accepted: acceptedCount};
     });
     const skillMax = Math.max(1, ...skillRows.map(row => row.all));
-    setHtml("skill-bars", skillRows.map(row => stackedBar(row.label, row.all, row.accepted, skillMax)).join(""));
+    setHtml("skill-bars", skillRows.map(row => stackedBar(row.label, row.all, row.accepted, skillMax, SKILL_TONE[row.label])).join(""));
     const skillScope = document.getElementById("skill-scope");
     if (skillScope) skillScope.textContent = filter.active ? "筛选结果 " + facetApps.length + " 条 · 深色为已录取" : "浅色为报名人数 · 深色为已录取";
     setHtml("accepted-major-bars", (() => {
@@ -353,7 +356,7 @@
       });
       const rows = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
       const max = Math.max(1, ...rows.map(row => row[1]));
-      return rows.map(row => bar(row[0], row[1], max)).join("") || "<p class='empty-state'>暂无已录取报名</p>";
+      return rows.map(row => bar(row[0], row[1], max, "approved")).join("") || "<p class='empty-state'>暂无已录取报名</p>";
     })());
     renderCategoryChart();
     renderFilterBuilder();
@@ -534,26 +537,38 @@
   }
   function renderRows(list) {
     const tbody = document.getElementById("applicants-table"); if (!tbody) return;
-    tbody.innerHTML = list.map(x => "<tr><td class='name-cell'><span class='mini-avatar'>" + esc((x.name || "?").slice(0, 1)) + "</span><div><strong>" + esc(x.name) + "</strong><br><small>" + esc(x.college) + " · " + esc(x.major) + "</small></div></td><td>" + (isRoadshow(x) ? "路演报名" : "参赛报名") + "</td><td>" + esc(x.id) + "</td><td><small>" + esc(x.phone || "—") + "<br>" + esc(x.email || "—") + "</small></td><td>" + ((x.skills || []).map(s => "<span class='tag'>" + esc(s) + "</span>").join(" ") || "—") + "</td><td><small>" + fmt(x.createdAt) + "</small></td><td class='status-cell'>" + statusCell(x) + "</td><td><button class='row-action' data-view='" + esc(x.id) + "'>查看</button></td></tr>").join("") || "<tr><td colspan='8'><div class='empty-state'>没有符合条件的报名</div></td></tr>";
+    tbody.innerHTML = list.map(x => "<tr><td class='name-cell'><span class='mini-avatar'>" + esc((x.name || "?").slice(0, 1)) + "</span><div><strong>" + esc(x.name) + "</strong><br><small>" + esc(subtitleOf(x)) + "</small></div></td><td>" + (isRoadshow(x) ? "路演报名" : "参赛报名") + "</td><td>" + esc(x.id) + "</td><td><small>" + esc(x.phone || "—") + "<br>" + esc(x.email || "—") + "</small></td><td>" + ((x.skills || []).map(s => "<span class='tag'>" + esc(s) + "</span>").join(" ") || "—") + "</td><td><small>" + fmt(x.createdAt) + "</small></td><td class='status-cell'>" + statusCell(x) + "</td><td><button class='row-action' data-view='" + esc(x.id) + "'>查看</button></td></tr>").join("") || "<tr><td colspan='8'><div class='empty-state'>没有符合条件的报名</div></td></tr>";
     tbody.querySelectorAll(".status-select").forEach(sel => sel.onchange = async () => { try { await api.request("/api/admin/applications", { method: "PATCH", body: JSON.stringify({ id: sel.dataset.id, status: sel.value }) }); toast("已更新为「" + sel.value + "」", "success"); await load(); } catch (e) { toast(e.message, "error"); await load(); } });
     tbody.querySelectorAll("[data-locked-status]").forEach(b => b.onclick = () => toast("路演报名固定为「已通过」，无法更改。", "info"));
     tbody.querySelectorAll("[data-view]").forEach(b => b.onclick = () => openDetail(b.dataset.view));
   }
 
+  /**
+   * 报名详情弹窗：参赛（MC）与路演（RO）是两套字段，按报名类型分别渲染。
+   * 参赛者看学号 / 年级 / 能力标签 / 动机经历 / 作品集；
+   * 路演报名没有这些报名资料，改为身份类型、学校单位、年级职位与两个活动选项。
+   */
   function openDetail(id) {
     const x = (state.applications || []).find(a => a.id === id);
     const box = document.getElementById("applicant-detail");
     if (!x || !box || !modal) return;
+    const roadshow = isRoadshow(x);
     const row = (dt, dd) => "<div><dt>" + dt + "</dt><dd>" + esc(dd || "—") + "</dd></div>";
     const blk = (h, body) => "<div class='admin-detail-block'><h3>" + h + "</h3><p>" + (body ? esc(body) : "<span class='muted'>未填写</span>") + "</p></div>";
+    // 头部副标题与列表第二行共用 subtitleOf：参赛者 = 学院 · 专业，路演 = 身份类型 · 学校/单位。
+    const facts = roadshow
+      ? row("报名类型", "路演报名") + row("身份类型", x.identity_type) + row("学校 / 单位", x.school_or_company) + row("年级 / 职位", x.grade_or_position) + row("手机号", x.phone) + row("邮箱", x.email) + row("参加现场路演", yesNo(x.attend_roadshow)) + row("接收活动通知", yesNo(x.receive_notifications)) + row("提交时间", fmt(x.createdAt)) + row("最近更新", x.updatedAt ? fmt(x.updatedAt) : "—")
+      : row("学号", x.studentId) + row("手机号", x.phone) + row("邮箱", x.email) + row("年级", x.grade) + row("能力标签", (x.skills || []).join(" / ")) + row("提交时间", fmt(x.createdAt)) + row("最近更新", x.updatedAt ? fmt(x.updatedAt) : "—");
+    const extra = roadshow
+      ? "<div class='admin-detail-block'><h3>路演报名说明</h3><p>路演报名提交后自动通过，不参与组队、项目提交与投票。如需参赛、组队并提交项目，请让 TA 从首页重新选择「报名参赛」。</p></div>"
+      : blk("参与动机", x.motivation) + blk("做过的项目 / 经历", x.experience) + blk("可以来找 TA 聊什么", x.askMeAbout) + blk("可以帮助别人做什么", x.canHelpWith) + blk("想探索什么", x.explore) +
+        "<div class='admin-detail-block'><h3>作品集 / GitHub / 主页</h3><p>" + (x.portfolio ? "<a href='" + esc(x.portfolio) + "' target='_blank' rel='noreferrer'>" + esc(x.portfolio) + " ↗</a>" : "<span class='muted'>未填写</span>") + "</p></div>";
     box.innerHTML =
-      "<div class='admin-detail-head'><div><p class='section-kicker'>APPLICATION · " + esc(x.id) + "</p><h2 id='applicant-detail-name'>" + esc(x.name) + "</h2><span>" + esc(x.college) + " · " + esc(x.major) + "</span></div><span class='status " + (STATUS_CLASS[x.status] || "status-pending") + "'>" + esc(x.status) + "</span></div>" +
-      (isRoadshow(x)
+      "<div class='admin-detail-head'><div><p class='section-kicker'>" + (roadshow ? "ROADSHOW" : "APPLICATION") + " · " + esc(x.id) + "</p><h2 id='applicant-detail-name'>" + esc(x.name) + "</h2><span>" + esc(subtitleOf(x)) + "</span></div><span class='status " + (STATUS_CLASS[x.status] || "status-pending") + "'>" + esc(x.status) + "</span></div>" +
+      (roadshow
         ? "<div class='admin-detail-status is-locked'><span>报名状态</span><b class='status status-accepted status-locked'>已通过</b><small>路演报名提交后自动通过，主办方不可更改状态。</small></div>"
         : "<div class='admin-detail-status'><span>快速设置状态</span>" + STATUSES.map(s => "<button type='button' class='outline-button" + (s === x.status ? " primary" : "") + "' data-set-status='" + s + "'>" + s + "</button>").join("") + "</div>") +
-      "<dl class='admin-detail-grid'>" + row("学号", x.studentId) + row("手机号", x.phone) + row("邮箱", x.email) + row("年级", x.grade) + row("能力标签", (x.skills || []).join(" / ")) + row("提交时间", fmt(x.createdAt)) + row("最近更新", x.updatedAt ? fmt(x.updatedAt) : "—") + "</dl>" +
-      blk("参与动机", x.motivation) + blk("做过的项目 / 经历", x.experience) + blk("可以来找 TA 聊什么", x.askMeAbout) + blk("可以帮助别人做什么", x.canHelpWith) + blk("想探索什么", x.explore) +
-      "<div class='admin-detail-block'><h3>作品集 / GitHub / 主页</h3><p>" + (x.portfolio ? "<a href='" + esc(x.portfolio) + "' target='_blank' rel='noreferrer'>" + esc(x.portfolio) + " ↗</a>" : "<span class='muted'>未填写</span>") + "</p></div>";
+      "<dl class='admin-detail-grid'>" + facts + "</dl>" + extra;
     box.querySelectorAll("[data-set-status]").forEach(btn => btn.onclick = async () => { try { await api.request("/api/admin/applications", { method: "PATCH", body: JSON.stringify({ id: x.id, status: btn.dataset.setStatus }) }); modal.close(); toast("已更新为「" + btn.dataset.setStatus + "」", "success"); await load(); } catch (e) { toast(e.message, "error"); } });
     modal.showModal();
   }
@@ -639,8 +654,16 @@
     setHtml("vote-voters", voteRows ? voteRows : "<p class='empty-state'>暂无投票记录</p>");
   }
 
-  const NOTICE_TYPE_LABEL = { "资料复核": "资料复核", "问答": "问答回复", "项目审核": "项目审核", event: "活动公告", application: "报名进度", roadshow: "路演报名" };
+  // 服务端已经下发 typeLabel（唯一权威）；这张表只在老数据缺 typeLabel 时兜底。
+  const NOTICE_TYPE_LABEL = { "资料复核": "资料修改（自动）", "资料修改": "资料修改（自动）", "问答": "问答回复", "项目审核": "项目审核", event: "活动公告", application: "用户报名（自动）", "报名进度": "用户报名（自动）", "报名提交": "用户报名（自动）", roadshow: "用户报名（自动）", "路演报名": "用户报名（自动）", "用户报名": "用户报名（自动）", "状态修改": "状态修改（自动）" };
   const noticeType = value => NOTICE_TYPE_LABEL[String(value || "").trim()] || String(value || "").trim() || "通知";
+  // 服务端 auto 标记；老数据没这个字段时按类型名兜底判断（与 server.mjs 的 AUTO_NOTICE_TYPES 一致）。
+  const AUTO_NOTICE_TYPES = new Set(["报名提交", "roadshow", "application", "资料修改", "资料复核", "状态修改", "问答", "qa", "问答回复"]);
+  const isAutoNotice = item => (typeof item?.auto === "boolean" ? item.auto : AUTO_NOTICE_TYPES.has(String(item?.type || "").trim()) || String(item?.contextType || "") === "问答");
+  /** 后台通知列表：默认只显示人工发布的消息，「显示自动消息」开关展开后全显示；列表分页（每次 12 条）。 */
+  const NOTICE_PAGE_SIZE = 12;
+  const noticeListState = { showAuto: false, visible: NOTICE_PAGE_SIZE };
+  try { noticeListState.showAuto = localStorage.getItem("minicamp2026_admin_notice_show_auto") === "1"; } catch { /* 隐私模式读不到就用默认值 */ }
   const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
   /** 收件人展示：新数据用服务端算好的 recipientLabel，老数据在客户端兜底拼一次。 */
   function noticeRecipient(notice) {
@@ -697,7 +720,9 @@
       body: row.querySelector("textarea")?.value || ""
     })).filter(row => row.status && row.body.trim());
   }
-  /** 通知卡片的正文：普通通知一段，录取结果按状态分段展示，并标出没有发送的状态。 */
+  /**
+   * 通知卡片的正文：普通通知一段，录取结果按状态分段展示（每段自带标题，所以不再重复渲染标题行）。
+   */
   function noticeContentHtml(notice) {
     const rich = text => (notice.format === "html" ? MinicampUI.sanitizeHtml(text) : esc(text));
     if (!(notice.contentRows || []).length) return "<p>" + rich(notice.body || "") + "</p>";
@@ -706,7 +731,6 @@
     return notice.contentRows.map(row =>
       "<div class='notice-status-preview'>" +
         "<div class='notice-status-preview-head'><b>" + esc(row.status) + "</b><span>" + row.recipientCount + " 人</span></div>" +
-        "<h4>" + esc(row.title || "（无标题）") + "</h4>" +
         "<div class='rich-text'>" + rich(row.body) + "</div>" +
       "</div>").join("") +
       (skipped.length ? "<p class='notice-status-skipped'>未发送：" + esc(skipped.join(" / ")) + "</p>" : "");
@@ -730,28 +754,36 @@
       "</div>";
   }
   /**
-   * 已发布通知卡片：标题、发给谁、已读进度。
+   * 选手能不能看到这条通知：看不到的（用户报名 / 资料修改 / 状态修改）就不该显示「已读」
+   */
+  const noticeTracksRead = item => !isAutoNotice(item) || String(item?.contextType || "") === "问答";
+  /**
+   * 已读药丸：跟在标题后面。未读用蓝色、全部读完用绿色；选手看不到的通知不渲染。
+   */
+  function noticeReadPill(notice) {
+    if (!noticeTracksRead(notice)) return "";
+    const recipients = Number.isFinite(notice.recipientCount) ? notice.recipientCount : (state.applications || []).length;
+    const readers = Number.isFinite(notice.readCount) ? notice.readCount : (notice.readBy || []).length;
+    const unread = Math.max(0, recipients - readers);
+    const done = recipients > 0 && unread === 0;
+    return "<span class='notice-read-pill " + (done ? "is-done" : "is-pending") + "' title='选手打开通知中心后会自动标为已读'>" + (done ? "全部已读 ": "未读 " + unread + " / " + recipients) + "</span>";
+  }
+  /**
+   * 已发布通知卡片：标题（+ 已读药丸）、发给谁、正文、回复汇总。
    * 已读数据来自服务端 adminNoticeView（readBy 是实时落库的），
    * 每 15 秒全量刷新一次，所以选手标为已读后这里会跟着变。
    */
   function noticeItemHtml(notice) {
     const to = noticeRecipient(notice);
-    const recipients = Number.isFinite(notice.recipientCount) ? notice.recipientCount : (state.applications || []).length;
-    const readers = Number.isFinite(notice.readCount) ? notice.readCount : (notice.readBy || []).length;
     const updated = notice.updatedAt && notice.updatedAt !== notice.createdAt ? "<small class='notice-edited'>内容更新于 " + esc(fmt(notice.updatedAt)) + "</small>" : "";
     const skipped = notice.skippedCount ? "<div class='notice-skipped'>另有 " + notice.skippedCount + " 人不在本次发送范围（状态未填写内容）</div>" : "";
     return "<article class='admin-notice-item " + (to.all ? "is-broadcast" : "is-direct") + "'>" +
       "<div class='notice-meta'><span>" + esc(notice.typeLabel || noticeType(notice.type)) + "</span><time>" + esc(fmt(notice.createdAt)) + "</time></div>" +
-      "<h3>" + esc(notice.title) + "</h3>" +
-      "<div class='notice-recipient'><b>发给谁</b><span>" + esc(to.label) + "</span></div>" +
+      "<h3>" + (notice.type === "录取结果"? "录取通知": esc(notice.title)) + noticeReadPill(notice) + "</h3>" +
+      "<div class='notice-subtitle'><b>发给谁</b><span>" + esc(to.label) + "</span></div>" +
       noticeContentHtml(notice) +
       skipped +
       noticeReplyHtml(notice) +
-      "<div class='notice-read' title='选手打开通知中心后会立即标记为已读'>" +
-        "<span class='notice-read-bar'><i style='width:" + pct(readers, recipients) + "%'></i></span>" +
-        "<b>已读 " + readers + " / " + recipients + " 人</b>" +
-        "<em>" + pct(readers, recipients) + "%</em>" +
-      "</div>" +
       updated + "</article>";
   }
   /** 导出某条通知的回复：报名编号 / 姓名 / 学院 / 专业 / 回复 / 时间。 */
@@ -781,9 +813,38 @@
     if (select) select.innerHTML = "<option value='ALL'>所有人（所有报名者）</option>" + (state.applications || []).map(x => "<option value='" + esc(x.id) + "'>" + esc(x.name) + " · " + esc(x.id) + "</option>").join("");
     preserveForm(document.getElementById("notice-form"), draftOf("notice"));
     renderNoticeStatusPanel();
-    setHtml("admin-notice-list", (state.notices || []).slice(0, 12).map(noticeItemHtml).join("") || "<p class='empty-state'>暂无通知</p>");
-    const total = document.getElementById("notice-total"); if (total) total.textContent = (state.notices || []).length + " 条";
+    // 默认隐藏系统自动生成的消息；隐藏了哪些、还剩多少都写在开关旁边。
+    const all = state.notices || [];
+    const autoNotices = all.filter(isAutoNotice);
+    const shown = noticeListState.showAuto ? all : all.filter(item => !isAutoNotice(item));
+    const visible = shown.slice(0, noticeListState.visible);
+    // 列表为空时给一句能解释原因的话，而不是干巴巴的「暂无通知」。
+    const empty = all.length === shown.length
+      ? "<p class='empty-state'>暂无通知</p>"
+      : "<p class='empty-state'>当前没有人工发布的通知。点上方「显示自动消息（" + autoNotices.length + "）」查看系统自动生成的报名 / 资料 / 状态消息。</p>";
+    setHtml("admin-notice-list", visible.map(noticeItemHtml).join("") || empty);
+    const total = document.getElementById("notice-total");
+    if (total) total.textContent = all.length + " 条" + (noticeListState.showAuto ? "" : "（已隐藏 " + autoNotices.length + " 条自动消息）");
+    setHtml("notice-list-status",
+      "<span class='notice-list-count'>显示 " + visible.length + " / " + shown.length + " 条</span>" +
+      "<button type='button' class='outline-button' id='notice-toggle-auto'>" + (noticeListState.showAuto ? "隐藏自动消息（" + autoNotices.length + "）" : "显示自动消息（" + autoNotices.length + "）") + "</button>");
+    const rest = shown.length - visible.length;
+    setHtml("notice-list-more", rest > 0 || noticeListState.visible > NOTICE_PAGE_SIZE
+      ? (rest > 0 ? "<button type='button' class='outline-button primary' id='notice-more'>加载更多（还有 " + rest + " 条）</button>" : "") +
+        (noticeListState.visible > NOTICE_PAGE_SIZE ? "<button type='button' class='outline-button' id='notice-collapse'>收起，只看最新 " + NOTICE_PAGE_SIZE + " 条</button>" : "")
+      : "");
   }
+  // 分页与显示开关的事件：用事件委托绑定一次，列表每次重绘都不受影响。
+  document.addEventListener("click", event => {
+    if (event.target?.closest?.("#notice-more")) { noticeListState.visible += NOTICE_PAGE_SIZE; renderNotices(); return; }
+    if (event.target?.closest?.("#notice-collapse")) { noticeListState.visible = NOTICE_PAGE_SIZE; renderNotices(); return; }
+    if (event.target?.closest?.("#notice-toggle-auto")) {
+      noticeListState.showAuto = !noticeListState.showAuto;
+      noticeListState.visible = NOTICE_PAGE_SIZE;
+      try { localStorage.setItem("minicamp2026_admin_notice_show_auto", noticeListState.showAuto ? "1" : "0"); } catch { /* 写不了就只在本次会话生效 */ }
+      renderNotices();
+    }
+  });
 
   function renderConfig() {
     const box = document.getElementById("config-editor"); if (!box) return;
@@ -875,7 +936,10 @@
   }
 
   function exportCsv() {
-    const cols = [["报名类型", a => (a.registration_type || "contestant") === "roadshow" ? "路演报名" : "参赛报名"], ["报名编号", "id"], ["姓名", "name"], ["学号", "studentId"], ["学院", "college"], ["专业", "major"], ["年级", "grade"], ["手机号", "phone"], ["邮箱", "email"], ["能力标签", a => (a.skills || []).join(" / ")], ["参与动机", "motivation"], ["经历", "experience"], ["作品集", "portfolio"], ["能帮助", "canHelpWith"], ["想探索", "explore"], ["找我聊", "askMeAbout"], ["状态", "status"], ["提交时间", a => fmt(a.createdAt)]];
+    // 参赛（MC）与路演（RO）共用一份表格：列取两者字段的并集，各类型只填自己那几列，另一类型的列留空。
+    // 学号 / 学院 / 专业 / 年级 / 能力标签 / 报名资料只属于参赛者；身份类型、学校单位、年级职位、两个活动选项只属于路演。
+    // 两个活动选项只在路演行里写「是 / 否」，参赛行留空（避免默认值把参赛者误标成「是」）。
+    const cols = [["报名类型", a => isRoadshow(a) ? "路演报名" : "参赛报名"], ["报名编号", "id"], ["姓名", "name"], ["学号", "studentId"], ["学院", "college"], ["专业", "major"], ["年级", "grade"], ["身份类型", "identity_type"], ["学校 / 单位", "school_or_company"], ["年级 / 职位", "grade_or_position"], ["参加现场路演", a => isRoadshow(a) ? yesNo(a.attend_roadshow) : ""], ["接收活动通知", a => isRoadshow(a) ? yesNo(a.receive_notifications) : ""], ["手机号", "phone"], ["邮箱", "email"], ["能力标签", a => (a.skills || []).join(" / ")], ["参与动机", "motivation"], ["经历", "experience"], ["作品集", "portfolio"], ["能帮助", "canHelpWith"], ["想探索", "explore"], ["找我聊", "askMeAbout"], ["状态", "status"], ["提交时间", a => fmt(a.createdAt)]];
     const cell = v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
     const head = cols.map(c => cell(c[0])).join(",");
     const rows = (state.applications || []).map(a => cols.map(c => cell(typeof c[1] === "function" ? c[1](a) : a[c[1]])).join(","));
