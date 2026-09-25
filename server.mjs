@@ -12,6 +12,8 @@ const port = Number(process.env.MINICAMP_PORT || 4173);
 const dbPath = path.join(root, "data", "minicamp.json");
 const qaPath = path.join(root, "data", "qa.json");
 const adminPassword = process.env.MINICAMP_ADMIN_PASSWORD || "123456";
+/** 空库（app_state 里没有 main 行）时是否允许从本地 data/*.json 载入数据。默认拒绝，避免把本机旧数据写进库里。 */
+const ALLOW_JSON_SEED = process.env.MINICAMP_ALLOW_JSON_SEED === "1";
 const mysqlConfig = { host: process.env.MYSQL_HOST || "127.0.0.1", port: Number(process.env.MYSQL_PORT || 3306), user: process.env.MYSQL_USER || "root", password: process.env.MYSQL_PASSWORD || "", database: process.env.MYSQL_DATABASE || "minicamp2026", waitForConnections: true, connectionLimit: Number(process.env.MYSQL_CONNECTION_LIMIT || 10), charset: "utf8mb4" };
 const mime = {".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg"};
 const vendorFiles = new Map([["/vendor/chart.umd.min.js","chart.js/dist/chart.umd.js"]]);
@@ -142,7 +144,17 @@ async function loadDb(){
     pool=mysql.createPool(mysqlConfig);
     await pool.query("CREATE TABLE IF NOT EXISTS app_state (state_key VARCHAR(64) NOT NULL PRIMARY KEY, state_json JSON NOT NULL, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB");
     const [rows]=await pool.query("SELECT state_json FROM app_state WHERE state_key = 'main'");
-    db=rows.length ? (typeof rows[0].state_json === "string" ? JSON.parse(rows[0].state_json) : rows[0].state_json) : await readJsonDb();
+    if(rows.length)db=typeof rows[0].state_json === "string" ? JSON.parse(rows[0].state_json) : rows[0].state_json;
+    else if(ALLOW_JSON_SEED){console.warn("[warn] app_state 里没有 main 行，按 MINICAMP_ALLOW_JSON_SEED=1 从 "+dbPath+" 载入本地数据。");db=await readJsonDb();}
+    else {
+      console.error([
+        "[fatal] 数据库 "+mysqlConfig.database+" 连得上，但 app_state 里没有 state_key='main' 那一行。",
+        "        为免把本机旧数据写进库里，这里不会去读 "+dbPath+"。",
+        "        新库请先导入镜像：mysql -u "+mysqlConfig.user+" -p < storage/minicamp2026-init.sql",
+        "        确实要用本地 JSON 数据启动，请设 MINICAMP_ALLOW_JSON_SEED=1 后重试。"
+      ].join("\n"));
+      process.exit(1);
+    }
   } catch(error) {
     pool=undefined;
     db=await readJsonDb();

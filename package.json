@@ -8,10 +8,8 @@
     "test-data": "node scripts/test-data.mjs seed",
     "clear-test-data": "node scripts/test-data.mjs clear",
     "qa-store-test": "node scripts/qa-store-test.mjs",
-    "privacy-test": "node scripts/privacy.test.mjs",
-    "qa-import": "node scripts/qa-import.mjs",
-    "migrate-notice-types": "node --env-file-if-exists=.env scripts/migrate-notice-types.mjs",
-    "migrate-notice-types:apply": "node --env-file-if-exists=.env scripts/migrate-notice-types.mjs --yes"
+    "privacy-test": "node scripts/privacy-test.mjs",
+    "qa-import": "node scripts/qa-import.mjs"
   },
   "dependencies": {
     "chart.js": "4.4.7",
