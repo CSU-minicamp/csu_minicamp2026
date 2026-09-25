@@ -77,8 +77,9 @@
   else window.MinicampAPI.request("/api/me").then(({participant}) => {
     const type = participant.registration_type || participant.registrationType || "contestant";
     signIn(participant);
-    // 路演观众不参与组队，去掉组队工作区入口。
-    if (type === "roadshow") header.querySelector('a[href="team.html"]')?.remove();
+    // 只有状态为「已录取」的参赛者能进入组队工作区：路演观众与 待审核/待复审/候补/未通过 都不显示入口。
+    // 未登录访客仍然保留入口，点击后再走登录流程，由 team.html 自己按状态给出说明。
+    if (type !== "contestant" || String(participant.status || "") !== "已录取") header.querySelector('a[href="team.html"]')?.remove();
   }).catch(signOut);
   window.MinicampAPI?.request("/api/config").then(({ config }) => {
     if (config.voteOpen) return;

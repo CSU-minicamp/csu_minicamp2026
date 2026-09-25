@@ -14,34 +14,34 @@
     <section class="profile-header">
       <div>
         <p class="section-kicker">MEET / TEAM UP</p>
-        <h1>先组好队，开赛一起做。</h1>
-        <p>现在是预组队阶段。报名成功且资料完整即可由队长填写成员编号，形成意向队伍；正式开赛前都可以调整成员。</p>
-        <span class="team-phase-badge">预组队进行中 · 正式确认尚未开启</span>
+        <h1>组好队，把想法做成作品。</h1>
+        <p>现在是组队阶段。只有状态为「已录取」的参赛者可以进入：队长可以创建队伍、填写成员编号或发布公开招募；其他同学申请加入后，需要队长在队伍面板确认。</p>
+        <span class="team-phase-badge">组队进行中 · 正式确认尚未开启</span>
       </div>
       <a class="button button-dark" href="profile.html">进入个人主页</a>
     </section>
     <section class="team-market admin-card">
       <div class="admin-card-head">
-        <div><h2>Team Market</h2><p class="team-market-caption">我的预组队与可加入的队伍</p></div>
+        <div><h2>Team Market</h2><p class="team-market-caption">我的队伍与正在招募的队伍</p></div>
         <span>3–5 人锁定</span>
       </div>
-      <p class="team-market-intro">队长填写队员报名编号后，会把队长和队员关联为意向队伍；正式确认开启且成员都已录取后，再由队长提交最终队伍。</p>
+      <p class="team-market-intro">队长填写队员报名编号后，队员即加入队伍；发布公开招募后，其他同学可以申请加入，由队长在队伍面板确认。正式组队确认开启、且成员都已录取后，再由队长提交最终队伍。</p>
       <p class="team-feedback" id="team-feedback" role="status" aria-live="polite"></p>
       <div id="my-team" class="team-focus" aria-live="polite"></div>
       <form id="create-team-form" class="team-create-form">
         <label for="team-project-name">队伍暂定名称</label>
         <div class="input-action">
           <input id="team-project-name" name="projectName" required maxlength="80" placeholder="例如：校园好去处发现计划">
-          <button class="button button-dark" type="submit">提交预组队</button>
+          <button class="button button-dark" type="submit">提交组队</button>
         </div>
-        <label for="team-member-ids">成员报名编号</label>
-        <textarea id="team-member-ids" name="memberIds" required rows="4" placeholder="每行填写一个，例如：TEST-APP-02&#10;TEST-APP-03"></textarea>
-        <small>队长本人会自动加入；请填写 1–4 个已报名成员编号，最多组成 5 人预组队。</small>
+        <label for="team-member-ids">成员报名编号（选填）</label>
+        <textarea id="team-member-ids" name="memberIds" rows="4" placeholder="每行填写一个，例如：TEST-APP-02&#10;TEST-APP-03"></textarea>
+        <small>队长本人会自动加入；可以现在填写最多 4 个已录取成员的报名编号，也可以先创建队伍、发布公开招募，再确认其他同学的入队申请。</small>
       </form>
       <form id="join-by-code-form" class="team-code-form">
         <div>
           <strong>收到队长邀请？</strong>
-          <small>输入队长分享的队伍邀请码，加入这支预组队。</small>
+          <small>输入队长分享的队伍邀请码即可直接加入组队（无需队长审批）。</small>
         </div>
         <label class="sr-only" for="team-invite-code">队伍邀请码</label>
         <div class="input-action">
@@ -49,7 +49,7 @@
           <button type="submit">凭邀请码加入</button>
         </div>
       </form>
-      <div class="team-market-list-head"><h3>正在招募的队伍</h3><span>加入后需补齐 3–5 人才能锁定</span></div>
+      <div class="team-market-list-head"><h3>正在招募的队伍</h3><span>申请加入需队长确认；未公开招募的队伍只能凭邀请码加入</span></div>
       <div id="team-list" class="team-board compact"></div>
     </section>
   </main>
