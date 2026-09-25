@@ -46,7 +46,7 @@
 
 | 方法与路径 | 权限 | 说明 |
 | --- | --- | --- |
-| `GET /api/qa/public` | 公开 | 只返回会话根（置顶 + 已回答，置顶在最前），每条根带 `followUps` 追问树（只含公开状态的追问）；**响应不含 `asker_id`**，避免泄露报名编号（`/api/qa/answered` 是等价别名） |
+| `GET /api/qa/public` | 公开 | 只返回会话根（置顶 + 已回答，置顶在最前），每条根带 `followUps` 追问树（只含公开状态的追问）；**响应不含 `asker_id`**，避免泄露报名编号 |
 | `POST /api/qa` | 参与者登录 | 提问，body：`{ "question": "..." }`；带 `parentQuestionId` 即追问，响应含 `rootQuestionId` 与 `depth`；相同内容的待回答问题返回 409 |
 | `GET /api/qa` | 参与者 / 主办方 | 参与者：查看自己的提问与追问（含 `pending` / `hidden`，返回 `parent_question_id` / `root_question_id` / `depth`）；主办方：查看全部问答，`?status=pending,hidden` 逗号分隔可多选状态，返回 `stats`（含 `roots` / `followUps`）、`threads`（追问条数、待回答追问数、最后活动时间）与 `storage` |
 | `GET /api/qa/threads/{rootQuestionId}` | 主办方 | 单条会话的完整树（含未公开的追问），按层级与时间排列 |

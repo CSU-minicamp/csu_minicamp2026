@@ -75,7 +75,7 @@
   profileLink.classList.add("nav-account");
   if (!window.MinicampAPI?.getToken()) signOut();
   else window.MinicampAPI.request("/api/me").then(({participant}) => {
-    const type = participant.registration_type || participant.registrationType || "contestant";
+    const type = participant.registrationType || "contestant";
     signIn(participant);
     // 只有状态为「已录取」的参赛者能进入组队工作区：路演观众与 待审核/待复审/候补/未通过 都不显示入口。
     // 未登录访客仍然保留入口，点击后再走登录流程，由 team.html 自己按状态给出说明。

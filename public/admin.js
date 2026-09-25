@@ -8,7 +8,7 @@
   const STATUSES = ["待审核", "已录取", "已通过", "候补", "待复审", "未通过"];
   // 「已通过」是路演报名（RO）固定状态，配色与「已录取」一致，详情弹窗的头部徽标才不会显示成灰色的待审核。
   const STATUS_CLASS = { "待审核": "status-pending", "已录取": "status-accepted", "已通过": "status-accepted", "候补": "status-waitlist", "待复审": "status-pending" };
-  const isRoadshow = a => (a.registration_type || a.registrationType || "contestant") === "roadshow";
+  const isRoadshow = a => (a.registrationType || "contestant") === "roadshow";
   const statusCell = a => isRoadshow(a)
     ? "<button type='button' class='status status-accepted status-locked' data-locked-status='" + esc(a.id) + "' title='路演报名固定为「已通过」，不可更改'>已通过 <span aria-hidden='true'>锁</span></button>"
     : "<select class='status-select' data-id='" + esc(a.id) + "'>" + STATUSES.map(s => "<option " + (s === a.status ? "selected" : "") + ">" + s + "</option>").join("") + "</select>";
@@ -150,7 +150,7 @@
    */
   const FILTER_DIMENSIONS = [
     { key: "status", label: "状态" },
-    { key: "registration_type", label: "报名类型" },
+    { key: "registrationType", label: "报名类型" },
     { key: "grade", label: "年级" },
     { key: "major", label: "专业" },
     { key: "college", label: "学院" }
@@ -168,9 +168,9 @@
   /** chips 里保存的是「单个取值」的条件，上限防止多选后条件过多（存 localStorage 也够小）。 */
   const FILTER_CHIP_LIMIT = 24;
   const filterState = { active: false, chips: [] };
-  const appValue = (app, key) => key === "registration_type" ? (isRoadshow(app) ? "roadshow" : "contestant") : String(app[key] ?? "").trim();
+  const appValue = (app, key) => key === "registrationType" ? (isRoadshow(app) ? "roadshow" : "contestant") : String(app[key] ?? "").trim();
   const displayValue = (key, value) => {
-    if (key === "registration_type") return value === "roadshow" ? "路演报名" : "参赛报名";
+    if (key === "registrationType") return value === "roadshow" ? "路演报名" : "参赛报名";
     return value || "未填写";
   };
   /** 按维度归并条件：维度内多选 → 并集；维度之间 → 交集。 */
@@ -529,7 +529,7 @@
     const type = document.getElementById("applicant-type")?.value || "全部";
     const list = (state.applications || []).filter(a => {
       const okStatus = status === "全部" || a.status === status;
-      const okType = type === "全部" || (a.registration_type || "contestant") === type;
+      const okType = type === "全部" || (isRoadshow(a) ? "roadshow" : "contestant") === type;
       const okQ = !q || [a.name, a.college, a.major, a.id, a.email, a.phone].some(v => String(v || "").toLowerCase().includes(q));
       return okStatus && okType && okQ;
     });

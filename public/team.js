@@ -23,11 +23,11 @@
   const uiConfirm = options => (window.MinicampUI?.confirm ? window.MinicampUI.confirm(options) : Promise.resolve(window.confirm(dialogText(options))));
   /** 与 server.mjs 的 isTeamEligible 保持一致：只有状态为「已录取」的参赛者可以使用组队工作区。 */
   const isEligible = participant => Boolean(participant)
-    && (participant.registration_type || participant.registrationType || "contestant") === "contestant"
+    && (participant.registrationType || "contestant") === "contestant"
     && String(participant.status || "") === "已录取";
   /** 被挡在门外时按当前状态解释原因，并告诉对方下一步去哪。 */
   function accessReason(participant) {
-    const isRoadshow = (participant.registration_type || participant.registrationType || "contestant") === "roadshow";
+    const isRoadshow = (participant.registrationType || "contestant") === "roadshow";
     if (isRoadshow) return {
       title: "路演报名不参与组队",
       body: [

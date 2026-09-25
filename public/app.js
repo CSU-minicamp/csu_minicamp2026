@@ -166,7 +166,7 @@
     error.textContent = "";
     if (reportMissing(roadshowForm, error)) return;
     const data = new FormData(roadshowForm), payload = Object.fromEntries(data.entries());
-    payload.registration_type = "roadshow";
+    payload.registrationType = "roadshow";
     payload.attend_roadshow = data.get("attend_roadshow") === "true";
     payload.receive_notifications = data.get("receive_notifications") === "true";
     submit.disabled = true;
@@ -267,7 +267,7 @@
   form.querySelectorAll('input[name="skills"]').forEach(input => input.addEventListener("change", () => { const checked = form.querySelectorAll('input[name="skills"]:checked'); if (checked.length > 2) input.checked = false; }));
   form.addEventListener("submit", async event => {
     event.preventDefault(); if (blockWhenClosed(error)) return; if (!validate(3)) return;
-    const data = new FormData(form), payload = Object.fromEntries(data.entries()); payload.entryType = "个人报名"; payload.skills = data.getAll("skills"); payload.participationMode = isFreshman(payload.grade) ? "仅参与路演及后续投票等阶段，不参与开发环节" : "可参与完整活动流程"; delete payload.consent;
+    const data = new FormData(form), payload = Object.fromEntries(data.entries()); payload.entryType = "个人报名"; payload.registrationType = "contestant"; payload.skills = data.getAll("skills"); payload.participationMode = isFreshman(payload.grade) ? "仅参与路演及后续投票等阶段，不参与开发环节" : "可参与完整活动流程"; delete payload.consent;
     submit.disabled = true; error.textContent = "";
     try {
       const result = await api.request("/api/applications",{method:"POST",body:JSON.stringify(payload)});

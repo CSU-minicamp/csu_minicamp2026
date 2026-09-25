@@ -54,7 +54,7 @@
   const show = async () => {
     try {
       const data = localPreview ? {participant: api.getPreviewParticipant(), team: null} : await api.request("/api/me"); current = data.participant; if (login) login.hidden = true; if (dashboard) dashboard.hidden = false;
-      const roadshow = (current.registration_type || current.registrationType || "contestant") === "roadshow";
+      const roadshow = (current.registrationType || "contestant") === "roadshow";
       const roadshowBox = document.getElementById("roadshow-profile");
       if (roadshowBox) {
         roadshowBox.hidden = !roadshow;
@@ -143,7 +143,7 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
     const saveState = document.getElementById("edit-save-state");
     const editError = document.getElementById("edit-error");
     editError.textContent = "";
-    const roadshow = (current.registration_type || current.registrationType) === "roadshow";
+    const roadshow = current.registrationType === "roadshow";
     const fail = (field, message) => { form.querySelectorAll(".field-error").forEach(el => el.classList.remove("field-error")); if (field) { field.classList.add("field-error"); field.focus(); } editError.textContent = message; };
     if (!roadshow) {
       const legacyContestantProfile = splitLegacyMajor(current);
