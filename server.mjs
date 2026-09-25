@@ -28,7 +28,7 @@ const seed = {
   ideas:[{id:"IDEA-01",title:"Discover better campus places",summary:"Make campus life easier to start exploring.",theme:"Build for Humans",authorId:"MC26-1001",needs:["Product","Design"],status:"open",createdAt:"2026-08-20T10:00:00+08:00"}],
   projects:[{id:"PROJECT-01",teamId:"TEAM 03",projectName:"Campus Pulse",theme:"Build for Humans",tagline:"Make real campus needs easier to see.",problem:"Campus needs and helpers often miss each other.",solution:"Connect needs, skills and people who can help.",members:[{name:"design-user",role:"design"},{name:"hardware-user",role:"engineering"}],demoUrl:"https://example.com",githubUrl:"",coverUrl:"",aiTools:["Codex"],status:"published",createdAt:"2026-08-20T16:00:00+08:00"}],
   notices:[{id:"NOTICE-01",title:"Welcome to minicamp 2026",body:"After submitting, use your participant page to update details and read notices.",type:"event",target:"ALL",readBy:[],createdAt:"2026-08-20T08:00:00+08:00"}],
-  votes:[],sessions:{}
+  votes:[],teamRequests:[],sessions:{}
 };
 let db;
 let pool;
@@ -213,7 +213,7 @@ function testFixtureMode(){return Boolean(db.testFixtures?.active);}
 /** 主办方视角的收件人：定向通知是一位报名者，广播通知是全部报名者。 */
 const noticeRecipients=target=>String(target||"ALL")==="ALL"?(db.applications||[]).map(item=>item.id):[String(target)];
 /** 通知标题按视角区分：提问者看到「你的提问已回答」，主办方看到「已回答提问」。 */
-const NOTICE_TYPE_LABEL={"问答":"问答回复","问答回复":"问答回复","资料复核":"资料修改（自动）","资料修改":"资料修改（自动）","项目审核":"项目审核",event:"活动公告","活动公告":"活动公告",application:"用户报名（自动）","报名进度":"用户报名（自动）","报名提交":"用户报名（自动）",roadshow:"用户报名（自动）","路演报名":"用户报名（自动）","用户报名":"用户报名（自动）","状态修改":"状态修改（自动）","录取结果":"录取结果","现场提醒":"现场提醒"};
+const NOTICE_TYPE_LABEL={"问答":"问答回复","问答回复":"问答回复","资料复核":"资料修改（自动）","资料修改":"资料修改（自动）","项目审核":"项目审核",event:"活动公告","活动公告":"活动公告",application:"用户报名（自动）","报名进度":"用户报名（自动）","报名提交":"用户报名（自动）",roadshow:"用户报名（自动）","路演报名":"用户报名（自动）","用户报名":"用户报名（自动）","状态修改":"状态修改（自动）","录取结果":"录取结果","现场提醒":"现场提醒","组队消息":"组队消息（自动）"};
 /**
  * 系统自动生成的消息（三合一后的类型）。
  * 这些消息对选手一律不显示（只进主办方列表，由后台开关决定默认是否展开），
@@ -226,7 +226,7 @@ const NOTICE_TYPE_LABEL={"问答":"问答回复","问答回复":"问答回复","
  * 其中三类（用户报名 / 资料修改 / 状态修改）对选手完全不可见，
  * 问答回复虽然也是自动生成，但它是主办方对「你的提问」的回复，选手端照常显示。
  */
-const AUTO_NOTICE_TYPES=new Set(["报名提交","roadshow","application","资料修改","资料复核","状态修改"]);
+const AUTO_NOTICE_TYPES=new Set(["报名提交","roadshow","application","资料修改","资料复核","状态修改","组队消息"]);
 const PARTICIPANT_HIDDEN_NOTICE_TYPES=new Set(["报名提交","roadshow","application","资料修改","资料复核","状态修改"]);
 const noticeTypeOf=notice=>String(notice?.type||"");
 const isQaNotice=notice=>notice?.contextType==="问答"||noticeTypeOf(notice)==="问答"||noticeTypeOf(notice)==="问答回复";
@@ -517,7 +517,7 @@ function normalizeContestantProfile(participant){
   const legacy=String(participant?.grade||"").trim()?null:splitLegacyMajor(participant?.major);
   return {name:String(participant?.name||""),studentId:String(participant?.studentId||""),college:String(participant?.college||""),major:legacy?legacy.major:String(participant?.major||""),grade:legacy?legacy.grade:String(participant?.grade||""),phone:String(participant?.phone||""),email:String(participant?.email||"")};
 }
-// 老数据可能缺少 grade（报名表加入年级之前提交的记录），身份与联系方式齐全即可加入预组队。
+// 老数据可能缺少 grade（报名表加入年级之前提交的记录），身份与联系方式齐全即可被加入队伍（成员同样必须是已录取状态）。
 const memberProfileGaps=p=>{if(!p)return identityFields.slice();const normalized=normalizeContestantProfile(p);return identityFields.filter(key=>!String(normalized[key]||"").trim());};
 function isProfileComplete(participant){
   if(!participant)return false;
@@ -541,23 +541,57 @@ function patchContestantProfile(participant,data){
   for(const key of contestantEditableFields)if(Object.hasOwn(data,key))participant[key]=next[key];
   participant.entryType="个人报名";
   participant.participationMode=participationModeFor(participant.grade);
-  if(isAccepted(participant))participant.status="待复审";
+  // 选手修改个人资料只更新资料本身，不改动录取状态（保留原有 status）。
   participant.updatedAt=new Date().toISOString();
   return {changed:contestantEditableFields.filter(key=>Object.hasOwn(data,key)&&JSON.stringify(before[key]??"")!==JSON.stringify(participant[key]??""))};
 }
 function isAccepted(p){return Boolean(p&&(p.status==="已录取"||p.status==="已通过"));}
 function nextRoadshowCode(){const year=new Date().getFullYear();const max=(db.applications||[]).reduce((n,x)=>{const m=String(x.id||"").match(/^RO-\d{4}-(\d{6})$/);return m?Math.max(n,Number(m[1])):n;},0);return "RO-"+year+"-"+String(max+1).padStart(6,"0");}
-function canPreTeam(p){return Boolean(p&&isContestant(p)&&isProfileComplete(p));}
+/**
+ * 组队工作区的准入门槛：只有状态为「已录取」的参赛者可以进入、加入与锁定。
+ * 路演报名（已通过）与参赛报名里的其他状态（待审核 / 待复审 / 候补 / 未通过）都不算。
+ */
+function isTeamEligible(p){return Boolean(p&&isContestant(p)&&String(p.status||"")==="已录取");}
+const TEAM_MESSAGE_TYPE="组队消息";
+function teamRequests(){if(!Array.isArray(db.teamRequests))db.teamRequests=[];return db.teamRequests;}
+const teamOf=p=>db.teams.find(team=>(team.memberIds||[]).includes(p?.id));
+const displayNameOf=id=>String(db.applications.find(item=>String(item.id)===String(id))?.name||id||"");
+/** 消息里提到队伍时统一用「队伍名 / 队伍编号」，老数据可能没有 project 字段。 */
+const teamTitleOf=team=>String(team?.project||team?.id||"队伍");
+/** 组队消息（自动）：发给某个参与者的定向通知，后台默认收在「自动消息」里。 */
+const notifyTeamParticipant=(id,title,bodyText)=>{if(id)addNotice(title,bodyText,TEAM_MESSAGE_TYPE,String(id),{contextType:"组队"});};
+/** 关闭一支队伍的所有待处理申请，并逐条给申请人发组队消息。 */
+function closeTeamRequests(teamId,status,title,bodyText){
+  const rows=teamRequests().filter(row=>row.teamId===teamId&&row.status==="pending");
+  const at=new Date().toISOString();
+  for(const row of rows){row.status=status;row.closedAt=at;notifyTeamParticipant(row.applicantId,title,typeof bodyText==="function"?bodyText(row):bodyText);}
+  return rows.length;
+}
+/** 关闭某个申请人的所有待处理申请（例如他已经加入别的队伍 / 已经建队）。 */
+function closeApplicantRequests(applicantId,status,title,bodyText){
+  const rows=teamRequests().filter(row=>row.applicantId===applicantId&&row.status==="pending");
+  const at=new Date().toISOString();
+  for(const row of rows){row.status=status;row.closedAt=at;notifyTeamParticipant(row.applicantId,title,typeof bodyText==="function"?bodyText(row):bodyText);}
+  return rows.length;
+}
+const pendingRequestOf=applicantId=>teamRequests().find(row=>row.applicantId===applicantId&&row.status==="pending");
+/** 入队申请视图：带上队伍摘要与申请人公开资料，前端不必再查一遍。 */
+function requestView(row){
+  const team=db.teams.find(item=>item.id===row.teamId),applicant=db.applications.find(item=>String(item.id)===String(row.applicantId)),owner=db.applications.find(item=>String(item.id)===String(team?.ownerId));
+  return {...row,team:team?{id:team.id,project:team.project,code:team.code,memberCount:(team.memberIds||[]).length,locked:Boolean(team.locked),published:Boolean(team.published)}:null,applicant:applicant?memberView(applicant):null,owner:owner?{id:owner.id,name:owner.name||""}:null};
+}
 function parseTeamMemberIds(value){return [...new Set(String(value??"").split(/[\s,，;；]+/).map(item=>item.trim().toUpperCase()).filter(Boolean))];}
 function createPreTeam(owner,data){
   const ids=parseTeamMemberIds(data.memberIds);
-  if(!ids.length)return {error:"member ids required",status:400};
+  // 允许先建一支只有队长的队伍：再用「发布公开招募 + 队长确认入队申请」补充成员。
   if(ids.length>4)return {error:"too many members",status:400};
   if(ids.includes(String(owner.id).toUpperCase()))return {error:"cannot include yourself",status:400};
   if(owner.teamId||db.teams.some(item=>(item.memberIds||[]).includes(owner.id)))return {error:"already belongs to a team",status:409};
   const members=ids.map(id=>db.applications.find(item=>String(item.id||"").toUpperCase()===id));
   if(members.some(member=>!member))return {error:"member not found",status:404};
   if(members.some(member=>!isContestant(member)))return {error:"member must be contestant",status:400};
+  const notAdmitted=members.filter(member=>!isTeamEligible(member));
+  if(notAdmitted.length)return {error:"member not admitted: "+notAdmitted.map(member=>member.id).join("、"),status:400};
   const incomplete=members.filter(member=>memberProfileGaps(member).length);
   if(incomplete.length)return {error:"member profile incomplete: "+incomplete.map(member=>member.id+" 缺少 "+memberProfileGaps(member).map(key=>fieldLabels[key]||key).join("、")).join("；"),status:400};
   if(members.some(member=>member.teamId||db.teams.some(item=>(item.memberIds||[]).includes(member.id))))return {error:"member already belongs to a team",status:409};
@@ -584,6 +618,7 @@ function deleteParticipantAccount(participant){
     return [{...team,memberIds:remaining,ownerId:team.ownerId===id?remaining[0]:team.ownerId}];
   });
   for(const application of db.applications||[])if(removedTeamIds.has(application.teamId)){application.teamId="";application.teamCode="";}
+  db.teamRequests=(db.teamRequests||[]).filter(row=>String(row.applicantId)!==id&&!removedTeamIds.has(row.teamId));
   db.projects=(db.projects||[]).filter(project=>!removedTeamIds.has(project.teamId)).map(project=>Array.isArray(project.members)?{...project,members:project.members.filter(member=>member?.id!==id&&member?.name!==name)}:project);
   db.ideas=(db.ideas||[]).filter(idea=>String(idea.authorId||"")!==id);
   db.votes=(db.votes||[]).filter(vote=>String(vote.voterId||"")!==id);
@@ -606,26 +641,30 @@ async function api(req,res,url){
   const me=person(req);
   const voter=publicVoter(req);
   if(url.pathname==="/api/me"&&method==="DELETE"){if(!me)return fail(res,401,"login required");deleteParticipantAccount(me);await saveDb();return send(res,200,{ok:true});}
-  if(url.pathname==="/api/teams"&&method==="POST"&&me&&canPreTeam(me)){const result=createPreTeam(me,await body(req));if(result.error)return fail(res,result.status,result.error);await saveDb();return send(res,201,{team:teamView(result.team,{includeCode:true})});}
-  if(url.pathname==="/api/teams"&&method==="POST"&&me&&canPreTeam(me)&&!isAccepted(me)){if(me.teamId||db.teams.some(item=>item.memberIds.includes(me.id)))return fail(res,409,"already belongs to a team");const d=await body(req);const team={id:"TEAM "+String(db.teams.length+1).padStart(2,"0"),ownerId:me.id,code:"MC26-"+crypto.randomBytes(2).toString("hex").toUpperCase(),project:d.project||"Untitled",theme:d.theme||"TBD",memberIds:[me.id],status:"draft",locked:false,published:false,testFixture:testFixtureMode()};db.teams.push(team);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,201,{team:teamView(team,{includeCode:true})});}
-  if(url.pathname==="/api/teams/join-by-code"&&method==="POST"&&me&&canPreTeam(me)&&!isAccepted(me)){const d=await body(req),code=String(d.code||"").trim().toUpperCase();if(!code)return fail(res,400,"team code required");const team=db.teams.find(x=>String(x.code||"").toUpperCase()===code);if(!team)return fail(res,404,"team code not found");if(team.locked||team.memberIds.length>=5)return fail(res,409,"team is locked or full");const currentTeam=db.teams.find(item=>item.memberIds.includes(me.id)||item.id===me.teamId);if(currentTeam)return fail(res,409,"already belongs to a team");team.memberIds.push(me.id);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,200,{team:teamView(team,{includeCode:true})});}
-  const preTeamJoin=url.pathname.match(/^\/api\/teams\/([^/]+)\/join$/);if(preTeamJoin&&method==="POST"&&me&&canPreTeam(me)&&!isAccepted(me)){const team=db.teams.find(x=>x.id===decodeURIComponent(preTeamJoin[1]));if(!team)return fail(res,404,"team not found");if(team.locked||team.memberIds.length>=5)return fail(res,409,"team is locked or full");const currentTeam=db.teams.find(item=>item.memberIds.includes(me.id)||item.id===me.teamId);if(currentTeam)return fail(res,409,currentTeam.id===team.id?"already in team":"leave current team first");team.memberIds.push(me.id);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,200,{team:teamView(team,{includeCode:true})});}
+  if(url.pathname==="/api/teams"&&method==="POST"&&me&&isTeamEligible(me)){
+    if(!isProfileComplete(me))return fail(res,400,"profile incomplete");
+    const result=createPreTeam(me,await body(req));
+    if(result.error)return fail(res,result.status,result.error);
+    closeApplicantRequests(me.id,"closed","入队申请已自动关闭","你已经创建了自己的队伍，之前提交的入队申请已自动关闭。");
+    await saveDb();
+    return send(res,201,{team:teamView(result.team,{includeCode:true})});
+  }
   if(url.pathname==="/api/me"&&method==="PATCH"&&me&&isContestant(me)){const d=await body(req),result=patchContestantProfile(me,d);
     // patchContestantProfile 失败时返回 {status,message}（没有 error 字段），成功时返回 {changed}；
     // 所以这里按「有没有 status」判断失败，不能只认 result.error（否则 403/400 会被吞掉、静默成功）。
     if(result.status)return fail(res,result.status,result.message);
     // 「资料修改（自动）」：正文带上这次改了哪些字段；key 去重，重复保存同样的内容不产生新消息。
     const changed=result.changed||[];
-    if(changed.length)addNotice("资料已修改","你的资料有改动："+changedFieldText(changed,noticeFieldLabels)+"。主办方将重新审核。","资料修改",me.id,{key:AUTO_NOTICE_KEY.profile(me.id)});
+    if(changed.length)addNotice("资料已修改","你的资料有改动："+changedFieldText(changed,noticeFieldLabels)+"。主办方会同步看到你的最新资料。","资料修改",me.id,{key:AUTO_NOTICE_KEY.profile(me.id)});
     await saveDb();return send(res,200,{participant:safe(me)});}
   if(url.pathname==="/api/me"&&method==="GET"){if(!me)return fail(res,401,"login required");return send(res,200,{participant:safe(me),team:teamView(db.teams.find(x=>x.id===me.teamId),{includeCode:true})});}
   if(url.pathname==="/api/me/vote"&&method==="GET"){if(me&&!isContestant(me))return fail(res,403,"roadshow participants do not have voting access");if(!me&&!voter)return fail(res,401,"login required");const voterId=voter?.userId||me.id;return send(res,200,{voter:voter?.voter||{code:me.id,name:me.name,grade:me.grade,college:me.college,teamId:me.teamId},vote:voteView(db.votes.find(item=>item.role==="participant"&&(item.voterId===voterId||voter&&(item.voterIdentityHash===voter.userId)))),voteOpen:votingIsOpen()});}
   if(url.pathname==="/api/me"&&method==="PATCH"){if(!me)return fail(res,401,"login required");const d=await body(req);if(!isContestant(me)){if(!["name","phone","email","identity_type","school_or_company","grade_or_position"].every(key=>String(d[key]||"").trim()))return fail(res,400,"required fields missing");Object.assign(me,{name:d.name,phone:d.phone,email:d.email,identity_type:d.identity_type,school_or_company:d.school_or_company,grade_or_position:d.grade_or_position,attend_roadshow:d.attend_roadshow===undefined?me.attend_roadshow:d.attend_roadshow!==false&&d.attend_roadshow!=="false",receive_notifications:d.receive_notifications===undefined?me.receive_notifications:d.receive_notifications!==false&&d.receive_notifications!=="false",updatedAt:new Date().toISOString()});await saveDb();return send(res,200,{participant:safe(me)});}if(!d.name||!d.studentId||!d.college||!d.major||!d.grade||!d.phone||!d.email||!d.motivation)return fail(res,400,"required fields missing");if(d.studentId&&d.studentId!==me.studentId&&db.applications.some(item=>item.id!==me.id&&item.studentId===d.studentId))return fail(res,409,"student id already exists");
     // 保存前先对比快照：内容没变就不生成「资料修改（自动）」消息。
     const profileBefore=profileFieldSnapshot(me);
-    d.entryType="个人报名";d.participationMode=participationModeFor(d.grade);d.teamCode=me.teamCode;Object.assign(me,d,{id:me.id,registration_type:me.registration_type,registrationType:me.registrationType,status:isAccepted(me)?"待复审":me.status,teamId:me.teamId});me.updatedAt=new Date().toISOString();
+    d.entryType="个人报名";d.participationMode=participationModeFor(d.grade);d.teamCode=me.teamCode;Object.assign(me,d,{id:me.id,registration_type:me.registration_type,registrationType:me.registrationType,status:me.status,teamId:me.teamId});me.updatedAt=new Date().toISOString();
     const changed=changedProfileFields(d,me,profileBefore);
-    if(changed.length)addNotice("资料已修改","你的资料有改动："+changedFieldText(changed,noticeFieldLabels)+"。主办方将重新审核。","资料修改",me.id,{key:AUTO_NOTICE_KEY.profile(me.id)});
+    if(changed.length)addNotice("资料已修改","你的资料有改动："+changedFieldText(changed,noticeFieldLabels)+"。主办方会同步看到你的最新资料。","资料修改",me.id,{key:AUTO_NOTICE_KEY.profile(me.id)});
     await saveDb();return send(res,200,{participant:safe(me)});}
   if(url.pathname==="/api/me/notices"&&method==="GET"){if(!me)return fail(res,401,"login required");return send(res,200,{notices:db.notices.filter(x=>(x.target==="ALL"||x.target===me.id)&&noticeVisibleToParticipant(x)).map(x=>participantNoticeView(x,me)).filter(Boolean)});}
   // 标记已读：body.id 省略时把「我可见的全部通知」标为已读；带 id 时只标记那一条。
@@ -656,11 +695,152 @@ async function api(req,res,url){
     return send(res,200,{ok:true,changed});}
   if(url.pathname==="/api/me/notices/reply"&&method==="POST"){if(!me)return fail(res,401,"login required");const d=await body(req).catch(()=>({}));const notice=db.notices.find(x=>String(x.id)===String(d.id||""));if(!notice)return fail(res,404,"notice not found");if(notice.target!=="ALL"&&String(notice.target)!==me.id)return fail(res,403,"notice not addressed to you");if(!notice.requiresReply)return fail(res,400,"notice does not accept replies");if(!noticeContentFor(notice,me))return fail(res,403,"notice not sent to your status");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");const options=replyOptionsOf(notice);const value=String(d.value||"");if(!options.some(option=>String(option.value)===value))return fail(res,400,"invalid reply value");const at=new Date().toISOString();notice.replies={...(notice.replies||{}),[me.id]:{value,at}};const readers=new Set((notice.readBy||[]).map(String));readers.add(String(me.id));notice.readBy=[...readers];notice.readAt={...(notice.readAt||{}),[me.id]:at};await saveDb();return send(res,200,{ok:true,reply:notice.replies[me.id]});}
   // 公开招募列表：匿名可见，成员走展示白名单，且不下发队伍邀请码（只有本队成员 / 主办方看得到）。
-  if(url.pathname==="/api/teams"&&method==="GET"){if(me&&!isContestant(me))return fail(res,403,"roadshow participants do not have team access");return send(res,200,{teams:db.teams.filter(team=>team.published&&!team.locked).map(team=>teamView(team))});}
-  if(url.pathname==="/api/teams/join-by-code"&&method==="POST"){if(!me)return fail(res,401,"login required");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");if(!isProfileComplete(me))return fail(res,400,"profile incomplete");const currentTeam=db.teams.find(item=>item.memberIds.includes(me.id)||item.id===me.teamId);if(currentTeam)return fail(res,409,"already belongs to a team");const d=await body(req),code=String(d.code||"").trim().toUpperCase();if(!code)return fail(res,400,"team code required");const team=db.teams.find(item=>String(item.code||"").toUpperCase()===code);if(!team)return fail(res,404,"team code not found");if(team.locked||team.memberIds.length>=5)return fail(res,409,"team is locked or full");team.memberIds.push(me.id);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,200,{team:teamView(team,{includeCode:true})});}
-  if(url.pathname==="/api/teams"&&method==="POST"){if(!me)return fail(res,401,"login required");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");if(!isProfileComplete(me))return fail(res,400,"profile incomplete");if(me.teamId||db.teams.some(item=>item.memberIds.includes(me.id)))return fail(res,409,"already belongs to a team");const d=await body(req);const team={id:"TEAM "+String(db.teams.length+1).padStart(2,"0"),ownerId:me.id,code:"MC26-"+crypto.randomBytes(2).toString("hex").toUpperCase(),project:d.project||"Untitled",theme:d.theme||"TBD",memberIds:[me.id],status:"draft",locked:false,published:false,testFixture:testFixtureMode()};db.teams.push(team);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,201,{team:teamView(team,{includeCode:true})});}
-  const tm=url.pathname.match(/^\/api\/teams\/([^/]+)\/(join|lock|leave|recruit)$/);
-  if(tm){const team=db.teams.find(x=>x.id===decodeURIComponent(tm[1]));if(!team)return fail(res,404,"team not found");if(tm[2]==="recruit"&&method==="PATCH"){if(!me||team.ownerId!==me.id||!team.memberIds.includes(me.id))return fail(res,403,"team owner required");if(team.locked)return fail(res,409,"locked team cannot be changed");team.published=!team.published;await saveDb();return send(res,200,{team:teamView(team,{includeCode:true})});}if(tm[2]==="join"&&method==="POST"){if(!me)return fail(res,401,"login required");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");if(!isProfileComplete(me))return fail(res,400,"profile incomplete");if(team.locked||team.memberIds.length>=5)return fail(res,409,"team is locked or full");const currentTeam=db.teams.find(item=>item.memberIds.includes(me.id)||item.id===me.teamId);if(currentTeam)return fail(res,409,currentTeam.id===team.id?"already in team":"leave current team first");team.memberIds.push(me.id);me.teamId=team.id;me.teamCode=team.code;await saveDb();return send(res,200,{team:teamView(team,{includeCode:true})});}if(tm[2]==="leave"&&method==="POST"){if(!me||!team.memberIds.includes(me.id))return fail(res,403,"team member required");if(team.locked)return fail(res,409,"locked team cannot be changed");if(team.memberIds.length===1&&db.projects.some(project=>project.teamId===team.id))return fail(res,409,"submitter must keep the project team");team.memberIds=team.memberIds.filter(memberId=>memberId!==me.id);if(team.ownerId===me.id)team.ownerId=team.memberIds[0]||"";me.teamId="";me.teamCode="";if(!team.memberIds.length)db.teams=db.teams.filter(item=>item.id!==team.id);await saveDb();return send(res,200,{ok:true});}if(tm[2]==="lock"&&method==="PATCH"){if(!db.config.teamConfirmOpen)return fail(res,403,"team confirmation not open");if(!me||team.ownerId!==me.id||!team.memberIds.includes(me.id))return fail(res,403,"team owner required");if(team.memberIds.length<3||team.memberIds.length>5)return fail(res,400,"team must have 3 to 5 members");if(team.memberIds.some(id=>{const p=db.applications.find(x=>x.id===id);return !isContestant(p)||!isAccepted(p)||!isProfileComplete(p);}))return fail(res,400,"all members must be accepted and complete");team.locked=true;team.status="locked";await saveDb();return send(res,200,{team:teamView(team,{includeCode:true})});}}
+  if(url.pathname==="/api/teams"&&method==="GET"){
+    // 匿名访客仍可读公开招募列表（隐私测试覆盖）；已登录但不是已录取状态一律 403。
+    if(me&&!isTeamEligible(me))return fail(res,403,"not admitted");
+    return send(res,200,{teams:db.teams.filter(team=>team.published&&!team.locked).map(team=>teamView(team))});
+  }
+  // ---- 入队申请：公开招募的队伍需要队长确认；申请 / 审批 / 拒绝 / 撤回 / 退出 / 移出都发「组队消息（自动）」----
+  if(url.pathname==="/api/teams/requests"&&method==="GET"){
+    if(!me)return fail(res,401,"login required");
+    if(!isTeamEligible(me))return fail(res,403,"not admitted");
+    const myTeam=teamOf(me);
+    return send(res,200,{
+      outgoing:teamRequests().filter(row=>row.applicantId===me.id&&row.status==="pending").map(row=>requestView(row)),
+      incoming:myTeam&&myTeam.ownerId===me.id?teamRequests().filter(row=>row.teamId===myTeam.id&&row.status==="pending").map(row=>requestView(row)):[]
+    });
+  }
+  if(url.pathname==="/api/teams/requests"&&method==="POST"){
+    if(!me)return fail(res,401,"login required");
+    if(!isTeamEligible(me))return fail(res,403,"not admitted");
+    if(!isProfileComplete(me))return fail(res,400,"profile incomplete");
+    if(teamOf(me))return fail(res,409,"already belongs to a team");
+    // 同一时间只允许一份待处理申请：撤回或被处理之后才能申请下一支队伍。
+    if(pendingRequestOf(me.id))return fail(res,409,"request already pending");
+    const d=await body(req);
+    const team=db.teams.find(item=>item.id===decodeURIComponent(String(d.teamId||"")));
+    if(!team)return fail(res,404,"team not found");
+    if(!team.published)return fail(res,409,"team is not recruiting");
+    if(team.locked||team.memberIds.length>=5)return fail(res,409,"team is locked or full");
+    const message=String(d.message||"").trim().slice(0,200);
+    const row={id:makeId("TEAMREQ"),teamId:team.id,applicantId:me.id,message,status:"pending",createdAt:new Date().toISOString(),decidedAt:"",decidedBy:""};
+    teamRequests().push(row);
+    notifyTeamParticipant(team.ownerId,"新的入队申请","「"+displayNameOf(me.id)+"（"+me.id+"）」申请加入队伍「"+teamTitleOf(team)+"」。"+(message?"留言："+message+" ":"")+"请到组队工作区确认。");
+    await saveDb();
+    return send(res,201,{request:requestView(row)});
+  }
+  const teamRequestAction=url.pathname.match(/^\/api\/teams\/requests\/([^/]+)\/(approve|reject|withdraw)$/);
+  if(teamRequestAction){
+    if(!me)return fail(res,401,"login required");
+    const row=teamRequests().find(item=>item.id===decodeURIComponent(teamRequestAction[1]));
+    if(!row)return fail(res,404,"request not found");
+    if(row.status!=="pending")return fail(res,409,"request already handled");
+    const team=db.teams.find(item=>item.id===row.teamId);
+    // 申请人自己撤回：不需要队长权限。
+    if(teamRequestAction[2]==="withdraw"){
+      if(row.applicantId!==me.id)return fail(res,403,"request owner required");
+      row.status="withdrawn";row.decidedAt=new Date().toISOString();row.decidedBy=me.id;
+      if(team)notifyTeamParticipant(team.ownerId,"入队申请已撤回","「"+displayNameOf(me.id)+"（"+me.id+"）」撤回了加入队伍「"+teamTitleOf(team)+"」的申请。");
+      await saveDb();
+      return send(res,200,{request:requestView(row)});
+    }
+    if(!team)return fail(res,404,"team not found");
+    if(!(team.ownerId===me.id&&team.memberIds.includes(me.id)))return fail(res,403,"team owner required");
+    if(teamRequestAction[2]==="reject"){
+      row.status="rejected";row.decidedAt=new Date().toISOString();row.decidedBy=me.id;
+      notifyTeamParticipant(row.applicantId,"入队申请未通过","队长暂未同意你加入队伍「"+teamTitleOf(team)+"」。你仍然可以申请其他正在招募的队伍。");
+      await saveDb();
+      return send(res,200,{request:requestView(row)});
+    }
+    const applicant=db.applications.find(item=>String(item.id)===String(row.applicantId));
+    if(team.locked||team.memberIds.length>=5)return fail(res,409,"team is locked or full");
+    if(!isTeamEligible(applicant)||!isProfileComplete(applicant))return fail(res,409,"applicant is not eligible");
+    if(teamOf(applicant))return fail(res,409,"applicant already belongs to a team");
+    team.memberIds.push(applicant.id);applicant.teamId=team.id;applicant.teamCode=team.code;
+    row.status="approved";row.decidedAt=new Date().toISOString();row.decidedBy=me.id;
+    notifyTeamParticipant(applicant.id,"入队申请已通过","队长已同意你加入队伍「"+teamTitleOf(team)+"」，队伍现在 "+team.memberIds.length+" 人。去组队工作区确认成员与招募状态。");
+    closeApplicantRequests(applicant.id,"approved","入队申请已自动关闭","你已经加入队伍「"+teamTitleOf(team)+"」，其余待处理的入队申请已自动关闭。");
+    if(team.memberIds.length>=5)closeTeamRequests(team.id,"closed","队伍已满员","队伍「"+teamTitleOf(team)+"」已满员，你的入队申请已自动关闭。");
+    await saveDb();
+    return send(res,200,{request:requestView(row),team:teamView(team,{includeCode:true})});
+  }
+  if(url.pathname==="/api/teams/join-by-code"&&method==="POST"){
+    if(!me)return fail(res,401,"login required");
+    if(!isTeamEligible(me))return fail(res,403,"not admitted");
+    if(!isProfileComplete(me))return fail(res,400,"profile incomplete");
+    if(teamOf(me))return fail(res,409,"already belongs to a team");
+    const d=await body(req);
+    const code=String(d.code||"").trim().toUpperCase();
+    if(!code)return fail(res,400,"team code required");
+    const team=db.teams.find(item=>String(item.code||"").toUpperCase()===code);
+    if(!team)return fail(res,404,"team code not found");
+    if(team.locked||team.memberIds.length>=5)return fail(res,409,"team is locked or full");
+    // 邀请码由队长主动发出，免审批直接进队。
+    team.memberIds.push(me.id);me.teamId=team.id;me.teamCode=team.code;
+    closeApplicantRequests(me.id,"closed","入队申请已自动关闭","你已经凭邀请码加入队伍「"+teamTitleOf(team)+"」，之前提交的入队申请已自动关闭。");
+    if(team.memberIds.length>=5)closeTeamRequests(team.id,"closed","队伍已满员","队伍「"+teamTitleOf(team)+"」已满员，你的入队申请已自动关闭。");
+    await saveDb();
+    return send(res,200,{team:teamView(team,{includeCode:true})});
+  }
+  if(url.pathname==="/api/teams"&&method==="POST"){
+    if(!me)return fail(res,401,"login required");
+    return fail(res,403,"not admitted");
+  }
+  const tm=url.pathname.match(/^\/api\/teams\/([^/]+)\/(lock|leave|recruit|kick)$/);
+  if(tm){
+    const team=db.teams.find(x=>x.id===decodeURIComponent(tm[1]));
+    if(!team)return fail(res,404,"team not found");
+    const isOwner=Boolean(me&&team.ownerId===me.id&&team.memberIds.includes(me.id));
+    // 发布 / 停止公开招募：只有队长可以操作，锁定后不能改。
+    if(tm[2]==="recruit"&&method==="PATCH"){
+      if(!isOwner)return fail(res,403,"team owner required");
+      if(team.locked)return fail(res,409,"locked team cannot be changed");
+      team.published=!team.published;
+      await saveDb();
+      return send(res,200,{team:teamView(team,{includeCode:true})});
+    }
+    // 离开队伍：未锁定即可离开；非队长离开时给队长发一条组队消息。
+    if(tm[2]==="leave"&&method==="POST"){
+      if(!me||!team.memberIds.includes(me.id))return fail(res,403,"team member required");
+      if(team.locked)return fail(res,409,"locked team cannot be changed");
+      if(team.memberIds.length===1&&db.projects.some(project=>project.teamId===team.id))return fail(res,409,"submitter must keep the project team");
+      const wasOwner=team.ownerId===me.id,leaverName=displayNameOf(me.id);
+      team.memberIds=team.memberIds.filter(memberId=>memberId!==me.id);
+      if(wasOwner)team.ownerId=team.memberIds[0]||"";
+      me.teamId="";me.teamCode="";
+      if(!team.memberIds.length)db.teams=db.teams.filter(item=>item.id!==team.id);
+      if(!wasOwner&&team.ownerId)notifyTeamParticipant(team.ownerId,"队员退出队伍","「"+leaverName+"（"+me.id+"）」退出了队伍「"+teamTitleOf(team)+"」，队伍现在 "+team.memberIds.length+" 人。");
+      await saveDb();
+      return send(res,200,{ok:true});
+    }
+    // 队长移出队员：仅未锁定的队伍；队长本人不能被移出；被移出的人会收到组队消息。
+    if(tm[2]==="kick"&&method==="POST"){
+      if(!isOwner)return fail(res,403,"team owner required");
+      if(team.locked)return fail(res,409,"locked team cannot be changed");
+      const memberId=String((await body(req)).memberId||"").trim();
+      if(!memberId)return fail(res,400,"team member required");
+      if(memberId===team.ownerId)return fail(res,400,"cannot remove the team owner");
+      if(!team.memberIds.includes(memberId))return fail(res,404,"team member not found");
+      const target=db.applications.find(item=>String(item.id)===String(memberId));
+      team.memberIds=team.memberIds.filter(id=>id!==memberId);
+      if(target){target.teamId="";target.teamCode="";}
+      notifyTeamParticipant(memberId,"你已被移出队伍","队长已将你移出队伍「"+teamTitleOf(team)+"」。你可以重新创建或加入其他队伍。");
+      await saveDb();
+      return send(res,200,{team:teamView(team,{includeCode:true})});
+    }
+    // 正式锁定：需要主办方开启「正式组队确认」，且 3–5 名成员全部已录取、资料完整。
+    if(tm[2]==="lock"&&method==="PATCH"){
+      if(!db.config.teamConfirmOpen)return fail(res,403,"team confirmation not open");
+      if(!isOwner)return fail(res,403,"team owner required");
+      if(!isTeamEligible(me))return fail(res,403,"not admitted");
+      if(team.memberIds.length<3||team.memberIds.length>5)return fail(res,400,"team must have 3 to 5 members");
+      if(team.memberIds.some(id=>{const p=db.applications.find(x=>x.id===id);return !isTeamEligible(p)||!isProfileComplete(p);}))return fail(res,400,"all members must be admitted and complete");
+      team.locked=true;team.status="locked";
+      closeTeamRequests(team.id,"closed","队伍已锁定","队伍「"+teamTitleOf(team)+"」已锁定，你的入队申请已自动关闭。");
+      await saveDb();
+      return send(res,200,{team:teamView(team,{includeCode:true})});
+    }
+  }
   // ---- 问答信息（qa_questions + qa_threads）：参与者提问/追问，主办方回答 / 置顶 / 隐藏 ----
   if(url.pathname==="/api/qa"&&method==="POST"){
     if(!me)return fail(res,401,"login required");
@@ -740,6 +920,7 @@ async function api(req,res,url){
     const previousStatus=String(a.status||"");
     a.status=d.status;if(d.teamId){a.teamId=d.teamId;const t=db.teams.find(x=>x.id===d.teamId);if(t&&!t.memberIds.includes(a.id))t.memberIds.push(a.id);}
     if(previousStatus!==String(a.status))addNotice("报名状态已更新","你的报名状态已更新："+previousStatus+" → "+a.status+"。","状态修改",a.id,{key:AUTO_NOTICE_KEY.status(a.id,Date.now())});
+    if(previousStatus!==String(a.status)&&!isTeamEligible(a))closeApplicantRequests(a.id,"closed","入队申请已自动关闭","你的录取状态已变更为「"+a.status+"」，待处理的入队申请已自动关闭。");
     await saveDb();return send(res,200,{participant:safe(a)});}
   if(url.pathname==="/api/admin/config"&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");Object.assign(db.config,await body(req));await saveDb();return send(res,200,{config:{...db.config,voteOpen:votingIsOpen()}});}
   if(url.pathname==="/api/admin/notices"&&method==="POST"){if(!admin(req))return fail(res,401,"admin required");const d=await body(req);
@@ -757,7 +938,7 @@ async function api(req,res,url){
     addNotice(d.title||"",d.body||"",d.type||"event",d.target||"ALL",{requiresReply,format:d.format,contents});
     await saveDb();return send(res,201,{ok:true});}
   if(url.pathname==="/api/admin/projects"&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const d=await body(req),p=db.projects.find(x=>x.id===d.id);if(!p)return fail(res,404,"project not found");p.status=d.status;await saveDb();return send(res,200,{project:projectView(p,{includeCode:true})});}
-  const adminTeam=url.pathname.match(/^\/api\/admin\/teams\/([^/]+)$/);if(adminTeam&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const team=db.teams.find(item=>item.id===decodeURIComponent(adminTeam[1]));if(!team)return fail(res,404,"team not found");const d=await body(req);if(typeof d.locked!=="boolean")return fail(res,400,"locked flag required");if(d.locked&&!db.config.teamConfirmOpen)return fail(res,403,"team confirmation not open");team.locked=d.locked;team.status=d.locked?"locked":"draft";await saveDb();return send(res,200,{team:teamView(team,{includeCode:true})});}
+  const adminTeam=url.pathname.match(/^\/api\/admin\/teams\/([^/]+)$/);if(adminTeam&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const team=db.teams.find(item=>item.id===decodeURIComponent(adminTeam[1]));if(!team)return fail(res,404,"team not found");const d=await body(req);if(typeof d.locked!=="boolean")return fail(res,400,"locked flag required");if(d.locked&&!db.config.teamConfirmOpen)return fail(res,403,"team confirmation not open");team.locked=d.locked;team.status=d.locked?"locked":"draft";if(d.locked)closeTeamRequests(team.id,"closed","队伍已锁定","队伍「"+teamTitleOf(team)+"」已锁定，你的入队申请已自动关闭。");await saveDb();return send(res,200,{team:teamView(team,{includeCode:true})});}
   const adminIdea=url.pathname.match(/^\/api\/admin\/ideas\/([^/]+)$/);if(adminIdea&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const idea=db.ideas.find(item=>item.id===decodeURIComponent(adminIdea[1]));if(!idea)return fail(res,404,"idea not found");const d=await body(req);if(!["open","closed"].includes(d.status))return fail(res,400,"invalid idea status");idea.status=d.status;await saveDb();return send(res,200,{idea});}
   if(url.pathname==="/api/admin/results"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{results:calcResults(),awards:resolvedAwards(),votes:db.votes});}
   return fail(res,404,"API not found");

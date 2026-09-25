@@ -592,9 +592,10 @@
       ].filter(chip => chip[2] > 0);
       const stats = statChips.length ? "<div class='team-card-stats'>" + statChips.map(chip => "<span class='team-stat " + chip[0] + "'>" + chip[1] + " <b>" + chip[2] + "</b></span>").join("") + "</div>" : "";
       const locked = Boolean(team.locked);
-      const statusText = locked ? "正式队伍 · 已锁定" : (state.config?.teamConfirmOpen ? "正式确认已开启 · 等待队长提交" : "预组队中 · 可继续招募");
+      const statusText = locked ? "正式队伍 · 已锁定" : (state.config?.teamConfirmOpen ? "正式确认已开启 · 等待队长提交" : "组队中 · 可继续招募");
       const owner = team.ownerId ? "<span>队长 <b>" + esc(team.ownerId) + "</b></span>" : "";
-      return "<article class='team-card-admin" + (locked ? " is-locked" : "") + "'><header class='team-card-head'><strong class='team-card-name'>" + esc(team.project || team.id) + "</strong><span class='team-card-count'>" + teamMembers.length + " / 5 人</span></header><div class='team-card-meta'><span>队伍码 <b>" + esc(team.code) + "</b></span><span>编号 <b>" + esc(team.id) + "</b></span>" + owner + "</div><p class='team-card-status'><i class='status-dot-mark'></i>" + statusText + "</p>" + stats + "<ul class='team-member-list'>" + members + "</ul><button class='outline-button admin-team-lock' data-id='" + esc(team.id) + "' data-locked='" + String(!locked) + "'>" + (locked ? "解除正式锁定" : (state.config?.teamConfirmOpen ? "管理员锁定队伍" : "预览锁定（确认开启后生效）")) + "</button></article>";
+      const recruit = locked ? "" : "<span>" + (team.published ? "公开招募中" : "仅邀请码加入") + "</span>";
+      return "<article class='team-card-admin" + (locked ? " is-locked" : "") + "'><header class='team-card-head'><strong class='team-card-name'>" + esc(team.project || team.id) + "</strong><span class='team-card-count'>" + teamMembers.length + " / 5 人</span></header><div class='team-card-meta'><span>队伍码 <b>" + esc(team.code) + "</b></span><span>编号 <b>" + esc(team.id) + "</b></span>" + owner + recruit + "</div><p class='team-card-status'><i class='status-dot-mark'></i>" + statusText + "</p>" + stats + "<ul class='team-member-list'>" + members + "</ul><button class='outline-button admin-team-lock' data-id='" + esc(team.id) + "' data-locked='" + String(!locked) + "'>" + (locked ? "解除正式锁定" : (state.config?.teamConfirmOpen ? "管理员锁定队伍" : "预览锁定（确认开启后生效）")) + "</button></article>";
     }).join("") || "<p class='empty-state'>暂无队伍</p>");
     if(board){
       board.querySelectorAll("button.team-member-name").forEach(el => el.onclick = () => openDetail(el.dataset.view));
@@ -655,10 +656,10 @@
   }
 
   // 服务端已经下发 typeLabel（唯一权威）；这张表只在老数据缺 typeLabel 时兜底。
-  const NOTICE_TYPE_LABEL = { "资料复核": "资料修改（自动）", "资料修改": "资料修改（自动）", "问答": "问答回复", "项目审核": "项目审核", event: "活动公告", application: "用户报名（自动）", "报名进度": "用户报名（自动）", "报名提交": "用户报名（自动）", roadshow: "用户报名（自动）", "路演报名": "用户报名（自动）", "用户报名": "用户报名（自动）", "状态修改": "状态修改（自动）" };
+  const NOTICE_TYPE_LABEL = { "资料复核": "资料修改（自动）", "资料修改": "资料修改（自动）", "问答": "问答回复", "项目审核": "项目审核", event: "活动公告", application: "用户报名（自动）", "报名进度": "用户报名（自动）", "报名提交": "用户报名（自动）", roadshow: "用户报名（自动）", "路演报名": "用户报名（自动）", "用户报名": "用户报名（自动）", "状态修改": "状态修改（自动）", "组队消息": "组队消息（自动）" };
   const noticeType = value => NOTICE_TYPE_LABEL[String(value || "").trim()] || String(value || "").trim() || "通知";
   // 服务端 auto 标记；老数据没这个字段时按类型名兜底判断（与 server.mjs 的 AUTO_NOTICE_TYPES 一致）。
-  const AUTO_NOTICE_TYPES = new Set(["报名提交", "roadshow", "application", "资料修改", "资料复核", "状态修改", "问答", "qa", "问答回复"]);
+  const AUTO_NOTICE_TYPES = new Set(["报名提交", "roadshow", "application", "资料修改", "资料复核", "状态修改", "问答", "qa", "问答回复", "组队消息"]);
   const isAutoNotice = item => (typeof item?.auto === "boolean" ? item.auto : AUTO_NOTICE_TYPES.has(String(item?.type || "").trim()) || String(item?.contextType || "") === "问答");
   /** 后台通知列表：默认只显示人工发布的消息，「显示自动消息」开关展开后全显示；列表分页（每次 12 条）。 */
   const NOTICE_PAGE_SIZE = 12;

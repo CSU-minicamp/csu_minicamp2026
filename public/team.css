@@ -49,3 +49,51 @@
 .team-recruit-panel {margin-top:16px;padding:14px;background:#f5f4ee;border:1px solid var(--line);font-size:12px}
 .team-recruit-panel p {margin:6px 0;color:var(--muted)}
 .team-recruit-panel code {font:700 13px Consolas,monospace}
+
+/* ---- 公开招募：正在招募的队伍用琥珀色卡片区分，已满员 / 已锁定收成灰色 ---- */
+.team-board.compact .team-card-admin.is-recruiting { background: #fffaf0; border-color: #dcb44f; box-shadow: inset 0 0 0 1px #f3e2b4; }
+.team-board.compact .team-card-admin.is-full { background: #faf9f5; border-color: #dedcd4; }
+.team-card-badge { margin: 10px 0 0; display: inline-block; padding: 4px 9px; border-radius: 999px; font: 700 10px Consolas, monospace; letter-spacing: .04em; }
+.team-card-badge.is-recruiting { color: #6b4f00; background: var(--yellow); border: 1px solid #d9ab2f; }
+.team-card-badge.is-quiet { color: var(--muted); background: #f1f0ea; border: 1px solid #e2e1da; }
+.team-card-admin .outline-button { margin-top: 12px; }
+.team-apply-form { margin-top: 10px; display: grid; gap: 8px; }
+.team-apply-form label { display: grid; gap: 6px; font-size: 11px; font-weight: 700; }
+.team-apply-form textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; font: 400 12px/1.5 inherit; resize: vertical; }
+.team-apply-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.team-apply-actions .button { padding: 8px 14px; }
+
+/* ---- 我的队伍：招募状态、成员行与移出按钮 ---- */
+.team-status-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.team-status-chip { padding: 4px 9px; border-radius: 999px; font: 700 10px Consolas, monospace; letter-spacing: .04em; }
+.team-status-chip.is-recruiting { color: #6b4f00; background: var(--yellow); border: 1px solid #d9ab2f; }
+.team-status-chip.is-private { color: var(--muted); background: #f1f0ea; border: 1px solid #e2e1da; }
+.team-member-main { display: flex; align-items: baseline; gap: 6px; }
+.team-owner-tag, .team-self-tag { padding: 2px 6px; border-radius: 999px; font-size: 9px; font-style: normal; font-weight: 700; }
+.team-owner-tag { color: #07583e; background: #d9f2e8; }
+.team-self-tag { color: var(--muted); background: #f1f0ea; }
+.team-member-side { display: flex; align-items: center; gap: 8px; }
+.team-member-skills { color: var(--muted); font-size: 11px; }
+.kick-member { padding: 0; border: 0; border-bottom: 1px solid currentColor; color: var(--error); background: transparent; font-size: 11px; cursor: pointer; }
+
+/* ---- 入队申请：队长审批面板 ---- */
+.team-request-panel { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+.team-request-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; }
+.team-request-head strong { font-size: 13px; }
+.team-request-head span { color: var(--muted); font-size: 11px; }
+.team-request-empty { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+.team-request-row { margin-top: 12px; padding: 12px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; background: #fffaf0; border: 1px solid #e8d9a8; border-radius: 4px; }
+.team-request-who { display: grid; gap: 3px; min-width: 0; }
+.team-request-who strong { font-size: 13px; }
+.team-request-who span, .team-request-who em { color: var(--muted); font-size: 11px; font-style: normal; }
+.team-request-message { margin: 4px 0 0; color: var(--ink); font-size: 12px; line-height: 1.5; }
+.team-request-actions { display: flex; align-items: center; gap: 8px; }
+
+/* ---- 我的待处理申请 ---- */
+.team-apply-pending { margin-top: 18px; padding: 14px; background: #fffaf0; border: 1px solid #e8d9a8; border-radius: 4px; }
+.team-apply-pending-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.team-apply-pending-row + .team-apply-pending-row { margin-top: 12px; padding-top: 12px; border-top: 1px solid #efe3c2; }
+.team-apply-pending-row strong { display: block; font-size: 13px; }
+.team-apply-pending-row span, .team-apply-pending-row p { color: var(--muted); font-size: 11px; }
+.team-apply-pending-row p { margin: 4px 0 0; }
+.team-apply-pending-note { margin: 12px 0 0; color: var(--muted); font-size: 11px; }

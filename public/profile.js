@@ -12,14 +12,14 @@
   const activatePanel = id => { document.querySelectorAll("[data-profile-panel]").forEach(item => item.classList.toggle("active", item.dataset.profilePanel === id)); document.querySelectorAll(".profile-panel").forEach(panel => panel.classList.toggle("active", panel.id === id)); };
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
   // 服务端已经下发 typeLabel；这张表只兜底（自动消息不到选手端，正常不会出现在收件箱里）。
-  const NOTICE_TYPE_LABEL = { "资料复核": "资料修改（自动）", "资料修改": "资料修改（自动）", "问答": "问答回复", "问答回复": "问答回复", "活动公告": "活动公告", "报名进度": "用户报名（自动）", "用户报名": "用户报名（自动）", "报名提交": "用户报名（自动）", "状态修改": "状态修改（自动）", "录取结果": "录取结果", "现场提醒": "现场提醒", event: "活动公告", application: "用户报名（自动）", roadshow: "用户报名（自动）" };
+  const NOTICE_TYPE_LABEL = { "资料复核": "资料修改（自动）", "资料修改": "资料修改（自动）", "问答": "问答回复", "问答回复": "问答回复", "活动公告": "活动公告", "报名进度": "用户报名（自动）", "用户报名": "用户报名（自动）", "报名提交": "用户报名（自动）", "状态修改": "状态修改（自动）", "录取结果": "录取结果", "现场提醒": "现场提醒", "组队消息": "组队消息（自动）", event: "活动公告", application: "用户报名（自动）", roadshow: "用户报名（自动）" };
   const noticeTypeLabel = value => NOTICE_TYPE_LABEL[String(value || "").trim()] || String(value || "").trim() || "通知";
   /** 这条通知是给谁的：所有人，还是只发给我（主办方定向发送时带上报名编号）。 */
   const noticeRecipientLabel = (notice, mineId) => {
     const target = String(notice?.target || "ALL");
-    if (target === "ALL" || !target) return { mine: true, label: "发给所有人", detail: "所有报名者都会收到这条通知。" };
-    if (target === mineId) return { mine: true, label: "只发给你", detail: "这是主办方单独发给你的通知。" };
-    return { mine: false, label: "发给报名编号 " + target, detail: "这条通知由主办方定向发送给该报名者。" };
+    if (target === "ALL" || !target) return { mine: true, label: "发给所有人" };
+    if (target === mineId) return { mine: true, label: "只发给你" };
+    return { mine: false, label: "发给报名编号 " + target };
   };
   const renderIntendedTeammates = team => {
     const container = document.getElementById("profile-intended-teammates");
@@ -35,7 +35,7 @@
     const statusLabel = member => member.status || "已报名";
     container.hidden = false;
     container.className = "profile-intended-teammates";
-    container.innerHTML = "<div class='profile-intended-head'><div><p class='section-kicker'>预组队 / 意向关系</p><h3>意向队友</h3><p>队长提交成员编号后，队伍关系会同步出现在相关成员的个人主页。</p></div><div class='profile-intended-meta'><span>队伍人数</span><strong>" + team.members.length + " 人</strong></div></div>" +
+    container.innerHTML = "<div class='profile-intended-head'><div><p class='section-kicker'>组队 / 意向关系</p><h3>意向队友</h3><p>队长提交成员编号后，队伍关系会同步出现在相关成员的个人主页。</p></div><div class='profile-intended-meta'><span>队伍人数</span><strong>" + team.members.length + " 人</strong></div></div>" +
       "<div class='profile-intended-captain-card'><span class='profile-intended-role'>队长</span><div><strong>" + escapeHtml(captain?.name || "待确认") + "</strong><span>报名编号 " + escapeHtml(captain?.id || "待确认") + " · " + escapeHtml(statusLabel(captain || {})) + "</span></div><em>已建立意向</em></div>" +
       "<div class='profile-intended-subhead'><span>意向队友</span><small>" + otherMembers.length + " 位意向队友</small></div><ul class='profile-intended-list'>" + otherMembers.map((member, index) => "<li><span class='profile-intended-index'>" + String(index + 1).padStart(2, "0") + "</span><div><strong>" + escapeHtml(member.name) + "</strong><span>报名编号 " + escapeHtml(member.id) + "</span></div><em>" + escapeHtml(statusLabel(member)) + "</em></li>").join("") + "</ul>";
   };
@@ -50,7 +50,7 @@
       field.setAttribute("aria-readonly", String(!editable));
     });
   };
-  if (login && accountDeleted) document.getElementById("login-success").textContent = "账号已注销，报名、预组队及其他关联记录已删除。";
+  if (login && accountDeleted) document.getElementById("login-success").textContent = "账号已注销，报名、组队及其他关联记录已删除。";
   const show = async () => {
     try {
       const data = localPreview ? {participant: api.getPreviewParticipant(), team: null} : await api.request("/api/me"); current = data.participant; if (login) login.hidden = true; if (dashboard) dashboard.hidden = false;
@@ -111,7 +111,7 @@
       const to = noticeRecipientLabel(item, current.id);
       // 录取结果按状态分发：标题与正文重复，这里只显示正文。
       const title = item.hideTitle ? "" : "<h3>" + escapeHtml(item.title) + "</h3>";
-      const recipient = "<div class='notice-subtitle " + (to.mine ? "is-mine" : "is-other") + "'><b>发给谁</b><span>" + escapeHtml(to.label) + "</span><small>" + escapeHtml(to.detail) + "</small></div>";
+      const recipient = "<div class='notice-subtitle " + (to.mine ? "is-mine" : "is-other") + "'><b>发给谁</b><span>" + escapeHtml(to.label) + "</span></div>";
       return "<article class='notice-item " + (read ? "is-read" : "is-unread") + "' data-notice-id='" + escapeHtml(item.id) + "'><div class='notice-marker'>" + (read ? "✓" : "!") + "</div><div><div class='notice-meta'><span>" + escapeHtml(noticeTypeLabel(item.typeLabel || item.type)) + "</span><time>" + new Date(item.createdAt).toLocaleString("zh-CN") + "</time></div>" + recipient + title + noticeBodyHtml(item) + noticeReplyBlock(item) + "</div></article>";
     }).join("") || "<p>暂无通知</p>";
   };
@@ -239,7 +239,7 @@ document.getElementById("profile-edit-form")?.addEventListener("submit", async e
   document.getElementById("profile-logout")?.addEventListener("click", () => { api.logout(); location.reload(); });
   document.getElementById("profile-delete-account")?.addEventListener("click", async event => {
     const button = event.currentTarget;
-    const ok = await MinicampUI.confirm({kicker: "ACCOUNT / DELETE", tone: "danger", title: "确定注销账号？", body: "注销后将永久删除你的报名资料、预组队、项目成员记录、创意、投票、通知和登录会话，且无法恢复。", confirmText: "永久注销"});
+    const ok = await MinicampUI.confirm({kicker: "ACCOUNT / DELETE", tone: "danger", title: "确定注销账号？", body: "注销后将永久删除你的报名资料、组队、项目成员记录、创意、投票、通知和登录会话，且无法恢复。", confirmText: "永久注销"});
     if (!ok) return;
     button.disabled = true;
     try {
