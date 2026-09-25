@@ -11,9 +11,9 @@
       make("09:10–09:35", "AI Coding Quickstart", "看一次完整示范：如何把模糊想法变成可以运行的第一步。", 25, true, { timed: false, script: "展示一次完整的 AI Coding 工作流：描述需求、拆任务、运行、面对报错。", actions: ["演示真实的 AI Coding 对话", "提醒：AI 是开发方式，不是比赛题目"] }),
       make("09:35–09:45", "Rules", "先了解两天怎么玩：时间、组队、提交、展示和投票。", 10, true, { timed: false, script: "说明两天节奏、组队人数、项目提交、路演与投票节点。", actions: ["公布关键时间点", "强调不要求预先会编程，也不审查 Prompt"] }),
       make("09:45–09:50", "Theme Reveal", "三个主题，任选一个作为你们的出发点。", 5, true, { timed: false, script: "公布三个灵感主题。主题是起点，不是限制；从真实的人和校园问题出发。", actions: ["依次揭示三个主题", "给参与者留下拍照和记忆的时间"] }),
-      make("09:50–10:00", "Idea Spark", "写下一个脑海中的有趣的点子", 10, true, { cues: ["THINK ABOUT", "PROBLEM", "NEED", "OBSERVATION", "CRAZY THOUGHT"], script: "提醒大家先写问题，不急着讨论技术，也不需要证明 Idea 现在就能做出来。", actions: ["展示 Think About / Problem / Need / Observation / Crazy Thought", "09:56 提示选择一个最想继续聊的 Spark"], referenceTitle: "IDEA SPARK / KEEP THIS VISIBLE", reference: { themes: ["Reimagine Campus", "Build for Humans", "Create the Unexpected"], items: [{ label: "What bothers you?", text: "什么事情让你觉得：它本来可以更好？" }, { label: "What do people actually need?", text: "你或身边的人，正在被什么不方便困扰？" }, { label: "What have you always wanted to build?", text: "有没有一个东西，你一直想亲手做出来？" }, { label: "What sounds ridiculous but interesting?", text: "有没有一个听起来离谱，却让你忍不住想试试的点子？" }] } }),
-      make("10:00–10:15", "Idea Collision", "把你的想法讲给别人听，也让它在交流中变得更清楚。", 15, true, { script: "Idea 不属于某个人。先交流，再决定；这里还不是正式组队。", actions: ["提醒所有人站起来，优先找到刚才没有交流过的人", "Mentor 主动连接落单者，打散封闭小圈子", "10:13 开始收集希望进入 Lightning Pitch 的 Idea"], referenceTitle: "IDEA COLLISION / LIVE FLOW", reference: { items: [{ label: "IDEAS CAN CHANGE", text: "你可以追问、补充、挑战、合并，甚至放下原来的想法。" }, { label: "NOT TEAM FORMATION", text: "现在先交流和探索，正式组队会在 Team Market。" }, { label: "TALK TO 2–3 PEOPLE", text: "至少和两到三位不同的参与者聊聊。" }] }, phases: [{ label: "01 / RULES", title: "STAND UP / GO TALK", text: "先站起来，找到还没聊过的人。现在还不是正式组队。", seconds: 60, cues: ["IDEAS CAN CHANGE", "NOT TEAM FORMATION YET"] }, { label: "02 / ROUND 1", title: "EXCHANGE", text: "先听懂，再评价。分享你最想继续探索的 Spark。", seconds: 240, cues: ["LISTEN FIRST", "WHY?", "WHO NEEDS THIS?"] }, { label: "03 / ROUND 2", title: "SWITCH / CHALLENGE", text: "换一位伙伴，为对方的 Idea 加一个新的可能。", seconds: 240, cues: ["NEW USER", "ONE FEATURE", "CRAZY TWIST"] }, { label: "04 / ROUND 3", title: "FREE COLLISION", text: "两到四人自由交流，看看哪些方向可以连接起来。", seconds: 240, cues: ["COMBINE", "REWRITE", "KEEP EXPLORING"] }, { label: "05 / COLLECT", title: "CHOOSE A DIRECTION", text: "留下最想继续探索的方向，为 Lightning Pitch 做准备。", seconds: 120, cues: ["ONE SENTENCE", "PITCH IF YOU NEED PEOPLE"] }] }),
-      make("10:15–10:30", "Lightning Pitch", "用 45 秒说清你的想法，以及你希望找到什么伙伴。", 15, true, { cues: ["PROBLEM · 10s", "IDEA · 15s", "WHY · 10s", "NEED · 10s", "45s / IDEA"], script: "每个 Pitch 45 秒：Problem 10s · Idea 15s · Why 10s · Need 10s。", actions: ["给每个 Idea 临时编号", "记录 Pitcher、Idea 一句话和主要需求", "提醒不要把 Pitch 讲成完整路演"], referenceTitle: "LIGHTNING PITCH / 45 SECONDS", reference: { items: [{ label: "PROBLEM · 10s", text: "谁遇到了什么问题？" }, { label: "IDEA · 15s", text: "你想做什么？" }, { label: "WHY · 10s", text: "为什么现在值得做？" }, { label: "NEED · 10s", text: "你需要什么伙伴或能力？" }] } }),
+      make("09:50–10:00", "Idea Spark", "写下一个脑海中的有趣的点子", 10, true, { cues: ["THINK ABOUT", "PROBLEM", "NEED", "OBSERVATION", "CRAZY THOUGHT"], script: "提醒大家先写问题，不急着讨论技术，也不需要证明 Idea 现在就能做出来。", actions: ["展示 Think About / Problem / Need / Observation / Crazy Thought", "09:56 提示选好一个准备上台分享的 Spark"], referenceTitle: "IDEA SPARK / KEEP THIS VISIBLE", reference: { themes: ["Reimagine Campus", "Build for Humans", "Create the Unexpected"], items: [{ label: "What bothers you?", text: "什么事情让你觉得：它本来可以更好？" }, { label: "What do people actually need?", text: "你或身边的人，正在被什么不方便困扰？" }, { label: "What have you always wanted to build?", text: "有没有一个东西，你一直想亲手做出来？" }, { label: "What sounds ridiculous but interesting?", text: "有没有一个听起来离谱，却让你忍不住想试试的点子？" }] } }),
+      make("10:00–10:15", "Lightning Pitch", "上台用 45 秒说清你的想法。", 15, true, { cues: ["PROBLEM · 10s", "IDEA · 20s", "WHY · 15s", "45s / IDEA"], script: "每个 Pitch 45 秒：Problem 10s · Idea 20s · Why 15s。", actions: ["给每个 Idea 临时编号", "记录 Pitcher 和 Idea 一句话", "提醒不要把 Pitch 讲成完整路演"], referenceTitle: "LIGHTNING PITCH / 45 SECONDS", reference: { items: [{ label: "PROBLEM · 10s", text: "谁遇到了什么问题？" }, { label: "IDEA · 20s", text: "你想做什么？" }, { label: "WHY · 15s", text: "为什么现在值得做？" }] } }),
+      make("10:15–10:30", "Idea Collision", "下台把你的想法讲给别人听，也让它在交流中变得更清楚。", 15, true, { script: "Idea 不属于某个人。先交流，再决定；这里还不是正式组队。", actions: ["提醒所有人站起来，优先找到刚才没有交流过的人", "Mentor 主动连接落单者，打散封闭小圈子", "10:28 开始收敛方向，准备进入 Team Market"], referenceTitle: "IDEA COLLISION / LIVE FLOW", reference: { items: [{ label: "IDEAS CAN CHANGE", text: "你可以追问、补充、挑战、合并，甚至放下原来的想法。" }, { label: "NOT TEAM FORMATION", text: "现在先交流和探索，正式组队会在 Team Market。" }, { label: "TALK TO 2–3 PEOPLE", text: "至少和两到三位不同的参与者聊聊。" }] }, phases: [{ label: "01 / RULES", title: "STAND UP / GO TALK", text: "先站起来，找到还没聊过的人。现在还不是正式组队。", seconds: 60, cues: ["IDEAS CAN CHANGE", "NOT TEAM FORMATION YET"] }, { label: "02 / ROUND 1", title: "EXCHANGE", text: "先听懂，再评价。讲清你刚才在台上讲的 Spark。", seconds: 240, cues: ["LISTEN FIRST", "WHY?", "WHO NEEDS THIS?"] }, { label: "03 / ROUND 2", title: "SWITCH / CHALLENGE", text: "换一位伙伴，为对方的 Idea 加一个新的可能。", seconds: 240, cues: ["NEW USER", "ONE FEATURE", "CRAZY TWIST"] }, { label: "04 / ROUND 3", title: "FREE COLLISION", text: "两到四人自由交流，看看哪些方向可以连接起来。", seconds: 240, cues: ["COMBINE", "REWRITE", "KEEP EXPLORING"] }, { label: "05 / COLLECT", title: "CHOOSE A DIRECTION", text: "留下最想继续探索的方向，为 Team Market 做准备。", seconds: 120, cues: ["ONE SENTENCE", "READY FOR TEAM MARKET"] }] }),
       make("10:30–10:45", "Team Market", "找到想一起做两天的人，组建一支互补的队伍。", 15, true, { cues: ["WHAT?", "WHY?", "YOU?", "NEED?", "10:32 EXPLORE · 10:37 FORM · 10:41 BALANCE · 10:44 FREEZE"], script: "先聊再锁队。问 What / Why / You / Need，鼓励主动连接，不替大家分配队伍。", actions: ["10:32 Explore · 先聊", "10:37 Form · 形成候选团队", "10:41 Balance · 连接落单者与缺口", "10:44 Freeze Movement"], referenceTitle: "TEAM MARKET / FIND YOUR PEOPLE", reference: { items: [{ label: "WHAT?", text: "你们想一起做什么？" }, { label: "WHY?", text: "这个问题为什么值得解决？" }, { label: "YOU?", text: "你能带来什么兴趣、经验或技能？" }, { label: "NEED?", text: "你们还缺什么伙伴或能力？" }] } }),
       make("10:45–10:50", "Team Lock-in", "确认队友和方向，接下来把想法做成可以展示的成果。", 5, true, { script: "确认每队 3–5 人。项目名称、方向和功能仍可在开发中收敛。", actions: ["打开 Team Lock-in 提交入口", "检查单人队、2 人队和超过 5 人的队伍", "宣布进入 Hack Block"] }),
       make("10:50–21:10", "Hack Block", "专注开发，把最重要的功能做成明天能体验的作品。", 620, false, { timed: false, script: "这是参与者的连续开发时段。午餐、晚餐和自由交流在现场安排中穿插，主办方只需关注场地、网络和 Mentor 支持。", actions: ["不打断团队开发，按需提供 Mentor 支持", "午餐与晚餐按现场安排穿插", "20:55 提醒开始整理 Demo", "21:05 提醒准备 Day 1 Wrap"] }),
@@ -37,8 +37,8 @@
   const ideaCollisionTimerVersion = 1;
   if (ideaCollision) {
     ideaCollision.phases = null;
-    ideaCollision.cues = ["STAND UP", "TALK TO 2–3 PEOPLE", "IDEAS CAN CHANGE", "NOT TEAM FORMATION", "10:13 COLLECT"];
-    ideaCollision.script = "这是一个连续 15 分钟的交流环节：先站起来找到没聊过的人，互相讲清 Spark，追问、补充、挑战或合并想法，最后留下最想继续探索的方向。现在还不是正式组队，10:13 开始收集准备进入 Lightning Pitch 的 Idea。";
+    ideaCollision.cues = ["STAND UP", "TALK TO 2–3 PEOPLE", "IDEAS CAN CHANGE", "NOT TEAM FORMATION", "10:28 COLLECT"];
+    ideaCollision.script = "这是一个连续 15 分钟的交流环节：听完台上的 Pitch 后站起来，找到还没聊过的人，互相讲清 Spark，追问、补充、挑战或合并想法，最后留下最想继续探索的方向。现在还不是正式组队，10:28 开始收敛，准备进入 Team Market。";
   }
 
   const clone = value => JSON.parse(JSON.stringify(value));
@@ -49,7 +49,16 @@
     if (!value || typeof value !== "object") return merged;
     for (const day of stageDays) {
       if (!Array.isArray(value[day])) continue;
-      merged[day] = merged[day].map((item, index) => ({ ...item, ...(value[day][index] || {}) }));
+      const saved = value[day];
+      // 只按标题带回管理员改过的主持人提示与现场动作：页面顺序、时间和大屏文案始终以最新默认流程为准。
+      merged[day] = merged[day].map(item => {
+        const stored = saved.find(entry => entry && entry.title === item.title);
+        if (!stored) return item;
+        const next = { ...item };
+        if (typeof stored.script === "string") next.script = stored.script;
+        if (Array.isArray(stored.actions)) next.actions = stored.actions;
+        return next;
+      });
     }
     return merged;
   };
@@ -67,10 +76,13 @@
   const defaults = { day: "day1", index: 0, phase: 0, remaining: null, endsAt: null, running: false };
   const getState = () => { try { return { ...defaults, ...(JSON.parse(localStorage.getItem(key)) || {}) }; } catch { return { ...defaults }; } };
   let state = getState();
-  const scheduleVersion = 2;
+  const scheduleVersion = 3;
   try {
     if (state.scheduleVersion !== scheduleVersion) {
-      if (state.day === "day2" && state.index > 0) state.index -= 1;
+      if (Number(state.scheduleVersion || 0) < 2 && state.day === "day2" && state.index > 0) state.index -= 1;
+      // v3：Lightning Pitch 移到 Idea Collision 之前，换页后保持停在同一环节。
+      if (state.scheduleVersion === 2 && state.day === "day1" && state.index === 5) state.index = 6;
+      else if (state.scheduleVersion === 2 && state.day === "day1" && state.index === 6) state.index = 5;
       state.scheduleVersion = scheduleVersion;
       localStorage.setItem(key, JSON.stringify(state));
     }
@@ -341,7 +353,7 @@
       "Rules": ["MAKE THE RULES VISIBLE", "每队 3–5 人，4 人协作最方便", "不限制专业，也不要求你提前会编程", "第二天提交、展示、体验并投票"],
       "Theme Reveal": ["START WITH WHAT IS REAL", "从你真实遇到的人和校园问题出发"],
       "Idea Spark": ["INDIVIDUAL SPARK", "先独立写下一个问题或想法", "不需要成熟，真实和有趣就够了"],
-      "Lightning Pitch": ["30–45 SECONDS", "不用 PPT · 不设现场 Q&A", "说清你想做什么、需要什么伙伴"],
+      "Lightning Pitch": ["45 SECONDS", "不用 PPT · 不设现场 Q&A", "说清你的问题、想法和它为什么值得做"],
       "Team Market": ["TEAM TARGET", "先聊再锁队 · 目标 3–5 人", "找到能互相补位的队友"],
       "Stage Demo": ["SHOW THE CORE", "说清问题 · 展示产品 · 介绍团队"],
       "Demo Fair": ["WALK · TRY · VOTE", "找到展位 · 亲手体验 · 投出喜欢的作品"]
