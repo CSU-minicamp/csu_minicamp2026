@@ -6,6 +6,9 @@ import mysql from "mysql2/promise";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dbPath = path.join(root, "data", "minicamp.json");
 const action = process.argv[2];
+/** 生产护栏：默认只预览不写入；且拒绝静默改写本地 JSON 文件。 */
+const confirmed = process.argv.includes("--yes") || process.env.MINICAMP_TESTDATA_YES === "1";
+const allowJson = process.argv.includes("--allow-json");
 const mysqlConfig = {
   host: process.env.MYSQL_HOST || "127.0.0.1",
   port: Number(process.env.MYSQL_PORT || 3306),
@@ -45,17 +48,20 @@ async function openStore() {
     return {
       state,
       kind: "MySQL",
+      target: `${mysqlConfig.user}@${mysqlConfig.host}:${mysqlConfig.port}/${mysqlConfig.database}`,
       save: async value => {
         await pool.query("INSERT INTO app_state (state_key, state_json) VALUES ('main', ?) ON DUPLICATE KEY UPDATE state_json = VALUES(state_json)", [JSON.stringify(value)]);
         await pool.end();
       }
     };
-  } catch {
+  } catch (error) {
     let state = emptyState();
     try { state = JSON.parse(await fs.readFile(dbPath, "utf8")); } catch {}
     return {
       state,
       kind: "JSON",
+      target: dbPath,
+      reason: error?.message || String(error),
       save: async value => {
         await fs.mkdir(path.dirname(dbPath), { recursive: true });
         await fs.writeFile(dbPath, JSON.stringify(value, null, 2), "utf8");
@@ -164,7 +170,7 @@ function createFixtures(state) {
     fixture({ id: testId(24), name: "未通过同学", studentId: "2026000024", college: "体育教研部", ...splitMajorGrade("运动训练 · 大二"), phone: "1390001024", email: "test-rejected@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["Media"], motivation: "【测试数据】未通过的报名。", experience: "", portfolio: "", askMeAbout: "赛事运营", canHelpWith: "现场执行", explore: "运动科技", status: "未通过", teamId: "", createdAt: timestamp(24) }),
     // 路演报名：前台固定显示「已通过」，报名总览的「已通过」进度条靠它填色。
     fixture({
-      id: "TEST-RO-01", name: "路演观众", registration_type: "roadshow", registrationType: "roadshow", entryType: "路演报名",
+      id: "TEST-RO-01", name: "路演观众", registrationType: "roadshow", entryType: "路演报名",
       identity_type: "校外人员", school_or_company: "【测试数据】合作单位", grade_or_position: "工程师",
       attend_roadshow: true, receive_notifications: true, phone: "1390001025", email: "test-roadshow@minicamp.local",
       skills: [], status: "已通过", teamCode: "", teamId: "", createdAt: timestamp(25)
@@ -240,6 +246,27 @@ function createFixtures(state) {
 
 const store = await openStore();
 const state = normalize(store.state);
+
+if (store.kind === "JSON" && !allowJson) {
+  console.error(`[拒绝执行] 连不上 MySQL（${store.reason}）。`);
+  console.error(`           本脚本原本会静默改写本地文件 ${dbPath}，现已改为拒绝。`);
+  console.error("           请先修好 .env / MYSQL_* 连接；确实要写本地 JSON，请再加 --allow-json。");
+  process.exit(1);
+}
+
+if (!confirmed) {
+  console.error(`[未写入] 目标：${store.kind} ${store.target}`);
+  if (action === "clear") {
+    console.error("         将删除所有带 testFixture 标记的报名/队伍/创意/项目/通知/投票，并恢复生成前的活动配置。");
+  } else {
+    console.error("         将写入测试数据（报名/队伍/创意/项目/通知/投票）。");
+    console.error("         并会把 config.applicationOpen、config.voteOpen 强制改为 true，覆盖 voteStartAt / juryWeight / participantWeight，");
+    console.error("         同时置 testFixtures.active=true —— 此后新产生的真实记录也会被打上测试标记，会被 clear 一并删除。");
+  }
+  console.error("         确认目标无误后重跑并加 --yes（或设 MINICAMP_TESTDATA_YES=1）。");
+  process.exit(1);
+}
+
 if (action === "clear") {
   const removed = removeFixtures(state);
   await store.save(state);

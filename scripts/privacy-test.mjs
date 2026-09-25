@@ -20,7 +20,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // 公开接口绝不能出现的字段（他人报名资料）
 const FORBIDDEN_KEYS = ["phone", "email", "studentId", "motivation", "experience", "portfolio", "canHelpWith", "explore", "askMeAbout"];
 // 队伍成员允许下发的字段（白名单，与 server.mjs 的 memberView() 对应）
-const MEMBER_KEYS = ["id", "name", "college", "major", "grade", "skills", "status", "registration_type", "registrationType"];
+const MEMBER_KEYS = ["id","name","college","major","grade","skills","status","registrationType"];
 const PUBLIC_ENDPOINTS = ["/api/teams", "/api/projects", "/api/ideas", "/api/qa/public", "/api/config", "/api/starter-pack"];
 const NO_CODE_ENDPOINTS = ["/api/teams", "/api/projects"];   // 这两处不该出现队伍邀请码 code
 const PROTECTED_ENDPOINTS = ["/api/me", "/api/me/notices", "/api/me/vote", "/api/admin/summary", "/api/organizer/summary"];

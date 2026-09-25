@@ -23,7 +23,7 @@ Chart.js（jsDelivr，带 SRI 校验），两个源都不可用时后台图表�
     $env:MINICAMP_ADMIN_PASSWORD = "your-password"
     node server.mjs
 
-默认优先使用 MySQL 持久化；如果本地 MySQL 不可用，服务会自动回退到 `data/minicamp.json`，该文件不提交到 Git。可通过 `.env.example` 配置数据库连接。
+默认优先使用 MySQL 持久化；如果本地 MySQL 不可用，服务会自动回退到 `data/minicamp.json`，该文件不提交到 Git。可通过 `.env.example` 配置数据库连接。**如果 MySQL 连得上、但库里还没有 `app_state` 的 `main` 行（例如新库尚未导入镜像），服务会直接报错退出，不会拿本机 `data/minicamp.json` 去填库**；确需该行为时设 `MINICAMP_ALLOW_JSON_SEED=1`。
 
 ### 本机 MySQL（Windows）
 
@@ -52,9 +52,18 @@ Chart.js（jsDelivr，带 SRI 校验），两个源都不可用时后台图表�
 
 先停止正在运行的本地服务，再生成数据，随后重新启动服务：
 
-    npm run test-data
+    npm run test-data -- --yes
 
-测试数据带有内部标记，覆盖报名状态、个人资料、锁定与草稿队伍、公开与草稿项目、创意、全局与定向通知、参与者投票、Jury 评审结果，以及已开放的投票配置。
+脚本默认**只打印目标库和将要做的改动、不写入**；确认目标无误后必须加 `--yes`（或设 `MINICAMP_TESTDATA_YES=1`）才会真正执行。它连的是 `MYSQL_DATABASE` 指定的库；**连不上 MySQL 时会直接拒绝执行**，不会退回去改写本地 `data/minicamp.json`（确实要写本地文件请再加 `--allow-json`）。
+
+注意 npm 脚本本身不加载 `.env`：在干净 shell 里它会以默认的 `root`/空密码去连，从而被上述护栏拒绝（避免"目标不明就写文件"）。要写本机 MySQL，二选一：
+
+    $env:MYSQL_USER="user"; $env:MYSQL_PASSWORD="123456"; npm run test-data -- --yes
+    node --env-file-if-exists=.env scripts/test-data.mjs seed --yes
+
+`clear-test-data` 同理。
+
+测试数据带有内部标记，覆盖报名状态、个人资料、锁定与草稿队伍、公开与草稿项目、创意、全局与定向通知、参与者投票、Jury 评审结果，以及已开放的投票配置。注意 `seed` 会把 `applicationOpen` / `voteOpen` 强制改为 `true` 并置 `testFixtures.active`，**不要对正式库执行**。
 
 常用测试账号：
 
@@ -62,9 +71,9 @@ Chart.js（jsDelivr，带 SRI 校验），两个源都不可用时后台图表�
 - `TEST-APP-22` / `test-create-team@minicamp.local`：已录取且未组队，可测试创建队伍。
 - `TEST-APP-23` / `test-join-team@minicamp.local`：已录取且未组队，可加入 `TEST-TEAM-06` 并测试锁定队伍。
 
-需要清除时运行：
+需要清除时运行（同样需要 `--yes`）：
 
-    npm run clear-test-data
+    npm run clear-test-data -- --yes
 
 清除命令只删除带测试标记的数据，并恢复生成前的活动配置；不会删除原有报名、队伍、项目、通知或投票记录。
 

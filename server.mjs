@@ -12,23 +12,46 @@ const port = Number(process.env.MINICAMP_PORT || 4173);
 const dbPath = path.join(root, "data", "minicamp.json");
 const qaPath = path.join(root, "data", "qa.json");
 const adminPassword = process.env.MINICAMP_ADMIN_PASSWORD || "123456";
-/** 设置 MINICAMP_CLEAN_NOTICES=1 启动一次，可清掉历史重复的通知（会删除冗余数据）。 */
-const NOTICE_CLEANUP = process.env.MINICAMP_CLEAN_NOTICES === "1";
+/** 空库（app_state 里没有 main 行）时是否允许从本地 data/*.json 载入数据。默认拒绝，避免把本机旧数据写进库里。 */
+const ALLOW_JSON_SEED = process.env.MINICAMP_ALLOW_JSON_SEED === "1";
 const mysqlConfig = { host: process.env.MYSQL_HOST || "127.0.0.1", port: Number(process.env.MYSQL_PORT || 3306), user: process.env.MYSQL_USER || "root", password: process.env.MYSQL_PASSWORD || "", database: process.env.MYSQL_DATABASE || "minicamp2026", waitForConnections: true, connectionLimit: Number(process.env.MYSQL_CONNECTION_LIMIT || 10), charset: "utf8mb4" };
 const mime = {".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg"};
 const vendorFiles = new Map([["/vendor/chart.umd.min.js","chart.js/dist/chart.umd.js"]]);
 const seed = {
-  config:{eventName:"minicamp 2026",date:"2026-09-26/27",venue:"CSU Smart Classroom",applicationOpen:true,applicationDeadline:"2026-09-05T23:59:00+08:00",resultDate:"2026-09-08T18:00:00+08:00",themeReveal:"Day 1 09:45",voteStartAt:"2026-09-01T00:00:00+08:00",teamConfirmOpen:false,voteOpen:false,juryWeight:40,participantWeight:60,starterPack:{title:"AI Coding Starter Pack",intro:"Prepare your tools and environment before the event.",tools:["Codex","Claude Code","Cursor","GitHub Copilot"],steps:["Install and sign in to your tool","Prepare Node.js, Python and Git","Ask AI to plan before splitting tasks","Share complete errors and verify the result"]}},
-  applications:[
-    {id:"MC26-1001",name:"demo-user",studentId:"8201230001",college:"Computer Science",major:"Software Engineering",phone:"13800004021",email:"zhixing@example.com",entryType:"individual",teamCode:"",skills:["Frontend","AI Engineer"],motivation:"Build a useful campus tool.",experience:"Campus lost-and-found mini program",portfolio:"",askMeAbout:"Campus tools and frontend",canHelpWith:"Working demos",explore:"Product design",status:"待审核",teamId:"",createdAt:"2026-08-17T10:20:00+08:00"},
-    {id:"MC26-1002",name:"design-user",studentId:"8301230002",college:"Arts",major:"Visual Communication",phone:"13900005218",email:"ruoqing@example.com",entryType:"pair",teamCode:"MC26-A7K2",skills:["Design","Media"],motivation:"Turn interaction ideas into real things.",experience:"Brand design and portfolio",portfolio:"https://example.com",askMeAbout:"Visual and interaction",canHelpWith:"Clear interfaces",explore:"Product",status:"已录取",teamId:"TEAM 03",createdAt:"2026-08-16T14:05:00+08:00"},
-    {id:"MC26-1003",name:"hardware-user",studentId:"8101230003",college:"Automation",major:"Automation",phone:"13700008860",email:"zhou@example.com",entryType:"pair",teamCode:"MC26-A7K2",skills:["Hardware","Frontend"],motivation:"Try a campus hardware experience.",experience:"Smart car contest",portfolio:"",askMeAbout:"Hardware and sensors",canHelpWith:"Hardware prototypes",explore:"Interaction",status:"已录取",teamId:"TEAM 03",createdAt:"2026-08-16T14:18:00+08:00"}
-  ],
-  teams:[{id:"TEAM 03",code:"MC26-A7K2",project:"Campus encounter experiment",theme:"TBD",memberIds:["MC26-1002","MC26-1003"],status:"draft",locked:false}],
-  ideas:[{id:"IDEA-01",title:"Discover better campus places",summary:"Make campus life easier to start exploring.",theme:"Build for Humans",authorId:"MC26-1001",needs:["Product","Design"],status:"open",createdAt:"2026-08-20T10:00:00+08:00"}],
-  projects:[{id:"PROJECT-01",teamId:"TEAM 03",projectName:"Campus Pulse",theme:"Build for Humans",tagline:"Make real campus needs easier to see.",problem:"Campus needs and helpers often miss each other.",solution:"Connect needs, skills and people who can help.",members:[{name:"design-user",role:"design"},{name:"hardware-user",role:"engineering"}],demoUrl:"https://example.com",githubUrl:"",coverUrl:"",aiTools:["Codex"],status:"published",createdAt:"2026-08-20T16:00:00+08:00"}],
-  notices:[{id:"NOTICE-01",title:"Welcome to minicamp 2026",body:"After submitting, use your participant page to update details and read notices.",type:"event",target:"ALL",readBy:[],createdAt:"2026-08-20T08:00:00+08:00"}],
-  votes:[],teamRequests:[],sessions:{}
+  config: {
+    eventName: "minicamp 2026",
+    date: "2026-09-26/27",
+    venue: "CSU Smart Classroom",
+    applicationOpen: true,
+    applicationDeadline: "2026-09-05T23:59:00+08:00",
+    resultDate: "2026-09-08T18:00:00+08:00",
+    themeReveal: "Day 1 09:45",
+    voteStartAt: "2026-09-01T00:00:00+08:00",
+    teamConfirmOpen: false,
+    voteOpen: false,
+    juryWeight: 40,
+    participantWeight: 60,
+    starterPack: {
+      title: "AI Coding Starter Pack",
+      intro: "Prepare your tools and environment before the event.",
+      tools: ["Codex", "Claude Code", "Cursor", "GitHub Copilot"],
+      steps: [
+        "Install and sign in to your tool",
+        "Prepare Node.js, Python and Git",
+        "Ask AI to plan before splitting tasks",
+        "Share complete errors and verify the result"
+      ]
+    }
+  },
+
+  applications: [],
+  teams: [],
+  ideas: [],
+  projects: [],
+  notices: [],
+  votes: [],
+  teamRequests: [],
+  sessions: {}
 };
 let db;
 let pool;
@@ -111,14 +134,8 @@ function adminQaQuestion(row,summary){
 const makeId=p=>p+"-"+crypto.randomBytes(5).toString("hex").toUpperCase();
 const makeToken=()=>crypto.randomBytes(24).toString("hex");
 const applicationStatuses=new Set(["待审核","已录取","已通过","候补","待复审","未通过"]);
-const legacyApplicationStatuses={pending:"待审核",accepted:"已录取",waitlist:"候补",reviewing:"待复审"};
-const legacySkillMap={DEV:"Frontend",PRODUCT:"Product",DESIGN:"Design","AI/DATA":"AI Engineer",HARDWARE:"Hardware",BUSINESS:"Product",CREATIVE:"Media",RESEARCH:"AI Engineer"};
-const normalizeSkills=values=>(Array.isArray(values)?values:[]).map(value=>legacySkillMap[value]||value);
 const formalAwards=["Best Overall","Best Product","Best Design","Best Technical","Most Unexpected"];
 async function readJsonDb(){try{return JSON.parse(await fs.readFile(dbPath,"utf8"));}catch{return clone(seed);}}
-function normalizeTeams(){db.teams=(db.teams||[]).map(team=>({...team,ownerId:team.memberIds?.includes(team.ownerId)?team.ownerId:team.memberIds?.[0]||"",published:team.published===true}));}
-function normalizeApplications(){db.applications=(db.applications||[]).map(item=>{const legacy=String(item.grade||"").trim()?null:splitLegacyMajor(item.major);return {...item,registration_type:item.registration_type||item.registrationType||"contestant",registrationType:item.registration_type||item.registrationType||"contestant",skills:normalizeSkills(item.skills),...(legacy?{major:legacy.major,grade:legacy.grade}:{}),status:legacyApplicationStatuses[item.status]|| (applicationStatuses.has(item.status)?item.status:"待审核")};});}
-function normalizeIdeas(){db.ideas=(db.ideas||[]).map(item=>({...item,needs:normalizeSkills(item.needs)}));}
 async function loadDb(){
   try {
     let bootstrap;
@@ -127,7 +144,17 @@ async function loadDb(){
     pool=mysql.createPool(mysqlConfig);
     await pool.query("CREATE TABLE IF NOT EXISTS app_state (state_key VARCHAR(64) NOT NULL PRIMARY KEY, state_json JSON NOT NULL, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB");
     const [rows]=await pool.query("SELECT state_json FROM app_state WHERE state_key = 'main'");
-    db=rows.length ? (typeof rows[0].state_json === "string" ? JSON.parse(rows[0].state_json) : rows[0].state_json) : await readJsonDb();
+    if(rows.length)db=typeof rows[0].state_json === "string" ? JSON.parse(rows[0].state_json) : rows[0].state_json;
+    else if(ALLOW_JSON_SEED){console.warn("[warn] app_state 里没有 main 行，按 MINICAMP_ALLOW_JSON_SEED=1 从 "+dbPath+" 载入本地数据。");db=await readJsonDb();}
+    else {
+      console.error([
+        "[fatal] 数据库 "+mysqlConfig.database+" 连得上，但 app_state 里没有 state_key='main' 那一行。",
+        "        为免把本机旧数据写进库里，这里不会去读 "+dbPath+"。",
+        "        新库请先导入镜像：mysql -u "+mysqlConfig.user+" -p < storage/minicamp2026-init.sql",
+        "        确实要用本地 JSON 数据启动，请设 MINICAMP_ALLOW_JSON_SEED=1 后重试。"
+      ].join("\n"));
+      process.exit(1);
+    }
   } catch(error) {
     pool=undefined;
     db=await readJsonDb();
@@ -135,12 +162,8 @@ async function loadDb(){
   }
   for(const key of Object.keys(seed))if(!(key in db))db[key]=clone(seed[key]);
   db.config={...clone(seed.config),...(db.config||{})};
-  normalizeTeams();
-  normalizeApplications();
-  normalizeIdeas();
   // 问答存在独立表里：整理通知前先读一次，才能把「已回答」通知对回真正存在的问题。
   await qaStore.initialize();
-  normalizeNotices(NOTICE_CLEANUP);
   await saveDb();
 }
 let saveQueue=Promise.resolve();
@@ -152,19 +175,17 @@ function safe(x){if(!x)return null;const v={...x};delete v.password;return v;}
  * 手机号、邮箱、学号、参与动机、经历、作品集这些报名资料一律不下发。
  * 注意：不要用 safe()（黑名单，只删 password）来当对外视图 —— applications 里没有 password，等于没过滤。
  */
-function memberView(application){
-  if(!application)return null;
-  const registrationType=application.registration_type||application.registrationType||"contestant";
+function memberView(application) {
+  if (!application) return null;
   return {
-    id:application.id,
-    name:application.name||"",
-    college:application.college||"",
-    major:application.major||"",
-    grade:application.grade||"",
-    skills:normalizeSkills(application.skills),
-    status:application.status||"",
-    registration_type:registrationType,
-    registrationType
+    id: application.id,
+    name: application.name || "",
+    college: application.college || "",
+    major: application.major || "",
+    grade: application.grade || "",
+    skills: Array.isArray(application.skills) ? application.skills : [],
+    status: application.status || "",
+    registrationType: application.registrationType
   };
 }
 function send(res,status,data){res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});res.end(JSON.stringify(data));}
@@ -198,22 +219,25 @@ function normalizeVoterIdentity(data){
 }
 function duplicatePublicVote(identity){return db.votes.find(vote=>vote.role==="participant"&&(vote.voterCredentialHash===identity.credentialHash||vote.voterIdentityHash===identity.identityHash));}
 /** 投票人展示编号：优先投票记录上存下的编号；参与者本人投票用报名编号兜底；历史大众票用去重哈希回查会话。 */
-function voterCode(vote){
-  if(!vote)return "";
-  if(vote.voterCode)return String(vote.voterCode).replace(/[\s-]/g,"").toUpperCase();
-  if(db.applications.some(a=>a.id===vote.voterId))return vote.voterId;
-  const credential=vote.voterCredentialHash;
-  if(!credential)return "";
-  for(const storedSession of Object.values(db.sessions||{})){
-    if(storedSession?.credentialHash===credential&&storedSession.voter?.code)return storedSession.voter.code;
-  }
-  return "";
-}
+const voterCode = vote =>
+  String(vote?.voterCode || "")
+    .replace(/[\s-]/g, "")
+    .toUpperCase();
 function testFixtureMode(){return Boolean(db.testFixtures?.active);}
 /** 主办方视角的收件人：定向通知是一位报名者，广播通知是全部报名者。 */
 const noticeRecipients=target=>String(target||"ALL")==="ALL"?(db.applications||[]).map(item=>item.id):[String(target)];
 /** 通知标题按视角区分：提问者看到「你的提问已回答」，主办方看到「已回答提问」。 */
-const NOTICE_TYPE_LABEL={"问答":"问答回复","问答回复":"问答回复","资料复核":"资料修改（自动）","资料修改":"资料修改（自动）","项目审核":"项目审核",event:"活动公告","活动公告":"活动公告",application:"用户报名（自动）","报名进度":"用户报名（自动）","报名提交":"用户报名（自动）",roadshow:"用户报名（自动）","路演报名":"用户报名（自动）","用户报名":"用户报名（自动）","状态修改":"状态修改（自动）","录取结果":"录取结果","现场提醒":"现场提醒","组队消息":"组队消息（自动）"};
+const NOTICE_TYPE_LABEL = {
+  "问答": "问答回复",
+  "资料修改": "资料修改（自动）",
+  "项目审核": "项目审核",
+  "活动公告": "活动公告",
+  "报名提交": "用户报名（自动）",
+  "状态修改": "状态修改（自动）",
+  "录取结果": "录取结果",
+  "现场提醒": "现场提醒",
+  "组队消息": "组队消息（自动）"
+};
 /**
  * 系统自动生成的消息（三合一后的类型）。
  * 这些消息对选手一律不显示（只进主办方列表，由后台开关决定默认是否展开），
@@ -226,10 +250,21 @@ const NOTICE_TYPE_LABEL={"问答":"问答回复","问答回复":"问答回复","
  * 其中三类（用户报名 / 资料修改 / 状态修改）对选手完全不可见，
  * 问答回复虽然也是自动生成，但它是主办方对「你的提问」的回复，选手端照常显示。
  */
-const AUTO_NOTICE_TYPES=new Set(["报名提交","roadshow","application","资料修改","资料复核","状态修改","组队消息"]);
-const PARTICIPANT_HIDDEN_NOTICE_TYPES=new Set(["报名提交","roadshow","application","资料修改","资料复核","状态修改"]);
-const noticeTypeOf=notice=>String(notice?.type||"");
-const isQaNotice=notice=>notice?.contextType==="问答"||noticeTypeOf(notice)==="问答"||noticeTypeOf(notice)==="问答回复";
+const AUTO_NOTICE_TYPES =
+  new Set([
+    "报名提交",
+    "资料修改",
+    "状态修改",
+    "组队消息"
+  ]);
+const PARTICIPANT_HIDDEN_NOTICE_TYPES =
+  new Set([
+    "报名提交",
+    "资料修改",
+    "状态修改"
+  ]);
+const noticeTypeOf = notice => String(notice?.type || "");
+const isQaNotice = notice => notice?.contextType === "问答" || noticeTypeOf(notice) === "问答";
 const isAutoNotice=notice=>AUTO_NOTICE_TYPES.has(noticeTypeOf(notice))||isQaNotice(notice);
 /** 选手收件箱可见的通知：报名 / 资料 / 状态三类自动消息不下发，问答回复照常下发。 */
 const noticeVisibleToParticipant=notice=>!PARTICIPANT_HIDDEN_NOTICE_TYPES.has(noticeTypeOf(notice));
@@ -271,14 +306,22 @@ function noticeContentFor(notice,participant){
   const contents=Array.isArray(notice?.contents)?notice.contents.filter(row=>row&&String(row.body||"").trim()):[];
   if(!contents.length)return {title:String(notice?.title||""),body:String(notice?.body||"")};
   const status=String(participant?.status||"");
-  const row=contents.find(item=>(Array.isArray(item.statuses)?item.statuses:[item.status]).some(value=>String(value)===status));
+  const row=contents.find(item => Array.isArray(item.statuses) && item.statuses.some(value => String(value) === status));
   if(!row)return null;
   return {title:String(row.title||notice?.title||""),body:String(row.body||"")};
 }
-const noticeContentStatuses=notice=>(Array.isArray(notice?.contents)?notice.contents:[]).flatMap(row=>Array.isArray(row?.statuses)?row.statuses:[row?.status]).filter(Boolean).map(String);
+const noticeContentStatuses = notice =>
+  (Array.isArray(notice?.contents) ? notice.contents : [])
+    .flatMap(row =>
+      Array.isArray(row?.statuses) ? row.statuses : []
+    )
+    .filter(Boolean)
+    .map(String);
 /** 应回复的人 = 通知收件人里「已录取的参赛者」；路演观众与未录取者不需要确认参与。 */
 const replyRecipientsOf=(notice,ids)=>{const eligible=new Set((db.applications||[]).filter(item=>isContestant(item)&&isAccepted(item)).map(item=>item.id));return (ids||noticeRecipients(notice.target)).filter(id=>eligible.has(id));};
-const IS_QA_NOTICE=notice=>notice?.contextType==="问答"||notice?.type==="问答"||notice?.type==="qa"||String(notice?.title||"").includes("已回答");
+const IS_QA_NOTICE = notice =>
+  notice?.contextType === "问答" ||
+  notice?.type === "问答";
 function noticeTitleFor(notice,audience){
   if(!IS_QA_NOTICE(notice))return String(notice?.title||"");
   const followUp=String(notice?.title||"").includes("追问");
@@ -293,7 +336,7 @@ function adminNoticeView(notice){
   const recipients=noticeRecipients(notice.target);
   const statusOf=id=>String((db.applications||[]).find(item=>item.id===id)?.status||"");
   const contentRows=Array.isArray(notice.contents)?notice.contents.map(row=>{
-    const statuses=(Array.isArray(row?.statuses)?row.statuses:[row?.status]).filter(Boolean).map(String);
+    const statuses = Array.isArray(row?.statuses) ? row.statuses.map(String) : [];
     return {statuses,status:statuses.join(" · "),title:String(row?.title||""),body:String(row?.body||""),recipientCount:recipients.filter(id=>statuses.includes(statusOf(id))).length};
   }):[];
   // 有按状态内容时，真正的收件人只有「命中某个状态」的那批人；留空的状态不发送。
@@ -427,65 +470,6 @@ function notifyQaAnswered(question){
     format:"html"
   });
 }
-/**
- * 通知数据整理：
- *   - 每条通知补上稳定的事件键 key；
- *   - 删掉指向已不存在报名者的定向通知；
- *   - 旧版本用于防重复的内存数组 qaAnsweredNoticeIds 不再需要（已由 key 落库取代）。
- * 默认只做这些无损整理，服务器启动时不写库。
- * 需要真正合并历史重复（会删冗余数据、但保留每个问题的最新一条）时用一次性命令：
- *     MINICAMP_CLEAN_NOTICES=1 npm start
- * 清理模式额外做的事：问答通知按「提问人 + 问题编号」合并成一条，
- * 没能对回问题编号的老数据就按问题正文合并；同一问题被反复回答、来回置顶
- * 刷出来的几十条会收敛成一条，对应问题已经从问答表删掉的孤立通知也会一并清掉。
- */
-async function normalizeNotices(dedupe=false){
-  let questions=[];
-  if(dedupe){ try { questions=qaStore.list()||[]; } catch { questions=[]; } }
-  const before=(db.notices||[]).length;
-  const qId=new Map();
-  for(const question of questions)qId.set(`${question.asker_id}\u0000${String(question.question||"").trim()}`,question.question_id);
-  /** 从通知正文里认出「你的提问：… / 你的追问：…」，再对回问答表里的问题编号。 */
-  const parseBody=notice=>{
-    const first=String(notice.body||"").split("\n")[0];
-    const matched=first.match(/^你的(?:提问|追问)：(.*)$/);
-    const question=(matched?matched[1]:first).trim();
-    return {question,contextId:qId.get(`${String(notice.target||"")}\u0000${question}`)||""};
-  };
-
-  const rest=[];
-  const keepers=new Map();
-  for(const notice of db.notices||[]){
-    const target=String(notice.target||"ALL");
-    const recipientExists=target==="ALL"||(db.applications||[]).some(item=>item.id===target);
-    if(dedupe&&!recipientExists)continue;                                      // 报名记录已删除
-    const isQa=IS_QA_NOTICE(notice);
-    const parsed=isQa?parseBody(notice):{question:"",contextId:""};
-    const contextId=notice.contextId||parsed.contextId;
-    // 正文能认出问题、但问答表里已经没有这个问题 → 这是一条已经没有出处的旧通知
-    if(dedupe&&isQa&&parsed.question&&!contextId)continue;
-    const key=notice.key||(isQa
-      ? `问答:${target}:${contextId||parsed.question||String(notice.body||"").split("\n")[0]}`
-      : `${notice.type||"notice"}:${target}:${notice.id}`);
-    if(!dedupe){notice.key=key;rest.push(notice);continue;}
-    const current=keepers.get(key);
-    if(!current){
-      keepers.set(key,notice);
-      notice.key=key;
-      if(isQa&&contextId){notice.contextId=contextId;notice.contextType=notice.contextType||"问答";}
-      rest.push(notice);
-      continue;
-    }
-    // 同一件事只留一条：已读记录取并集，正文用最新一版
-    current.readBy=[...new Set([...(current.readBy||[]),...(notice.readBy||[])])];
-    if(!current.readAt&&notice.readAt)current.readAt=notice.readAt;
-    if(String(notice.createdAt||"")>String(current.createdAt||"")){current.body=notice.body;current.title=notice.title;current.updatedAt=notice.updatedAt||current.updatedAt;}
-  }
-  db.notices=rest;
-  delete db.qaAnsweredNoticeIds;
-  if(dedupe)console.log(`notice cleanup: ${before} 条 → ${rest.length} 条`);
-  return rest.length;
-}
 function normalizeVoteSelections(selections,role){
   if(!Array.isArray(selections))return null;
   const expected=role==="participant"?[...formalAwards,"People's Choice"]:formalAwards;
@@ -501,11 +485,14 @@ function normalizeVoteSelections(selections,role){
   return normalized;
 }
 function calcResults(){const map={};for(const vote of db.votes)for(const x of vote.selections||[]){const k=x.award+":"+x.projectId;map[k]??={award:x.award,projectId:x.projectId,participant:0,jury:0};map[k][vote.role]+=Number(x.points||0);}return Object.values(map).map(x=>({...x,total:x.participant+x.jury,weighted:x.participant*db.config.participantWeight/100+x.jury*db.config.juryWeight/100})).sort((a,b)=>b.weighted-a.weighted);}
-function participationModeFor(grade){return /大一|一年级|freshman/i.test(String(grade||""))?"仅参与路演及后续投票等阶段，不参与开发环节":"可参与完整活动流程";}
-function isContestant(p){return Boolean(p&&((p.registration_type||p.registrationType||"contestant")==="contestant"));}
+function participationModeFor(grade) {
+  return grade === "大一"
+    ? "仅参与路演及后续投票等阶段，不参与开发环节"
+    : "可参与完整活动流程";
+}
+function isContestant(p){return p?.registrationType === "contestant";}
 const contestantBasicFields=["name","studentId","college","major","grade","phone","email"];
 const contestantEditableFields=["skills","motivation","experience","portfolio"];
-const splitLegacyMajor=value=>{const match=String(value||"").match(/^\s*(.*?)\s*·\s*(大一|大二|大三|大四|研究生)\s*$/);return match?{major:match[1],grade:match[2]}:null;};
 const identityFields=["name","studentId","college","major","phone","email"];
 const fieldLabels={name:"姓名",studentId:"学号",college:"学院",major:"专业",grade:"年级",phone:"手机号",email:"邮箱",motivation:"参与动机"};
 /**
@@ -513,9 +500,16 @@ const fieldLabels={name:"姓名",studentId:"学号",college:"学院",major:"专�
  * fieldLabels 是给校验错误信息用的（简短），这里额外补上表单项的完整叫法。
  */
 const noticeFieldLabels={...fieldLabels,skills:"能力标签",experience:"做过的项目或相关经历",portfolio:"GitHub / 作品集 / 个人主页"};
-function normalizeContestantProfile(participant){
-  const legacy=String(participant?.grade||"").trim()?null:splitLegacyMajor(participant?.major);
-  return {name:String(participant?.name||""),studentId:String(participant?.studentId||""),college:String(participant?.college||""),major:legacy?legacy.major:String(participant?.major||""),grade:legacy?legacy.grade:String(participant?.grade||""),phone:String(participant?.phone||""),email:String(participant?.email||"")};
+function normalizeContestantProfile(participant) {
+  return {
+    name: String(participant?.name || ""),
+    studentId: String(participant?.studentId || ""),
+    college: String(participant?.college || ""),
+    major: String(participant?.major || ""),
+    grade: String(participant?.grade || ""),
+    phone: String(participant?.phone || ""),
+    email: String(participant?.email || "")
+  };
 }
 // 老数据可能缺少 grade（报名表加入年级之前提交的记录），身份与联系方式齐全即可被加入队伍（成员同样必须是已录取状态）。
 const memberProfileGaps=p=>{if(!p)return identityFields.slice();const normalized=normalizeContestantProfile(p);return identityFields.filter(key=>!String(normalized[key]||"").trim());};
@@ -534,7 +528,14 @@ function patchContestantProfile(participant,data){
   const locked=lockedContestantProfile(participant);
   if(contestantBasicFields.some(key=>Object.hasOwn(data,key)&&String(data[key]??"").trim()!==locked[key].trim()))return {status:403,message:"基本信息不可修改"};
   const next={...participant,...locked};
-  for(const key of contestantEditableFields)if(Object.hasOwn(data,key))next[key]=key==="skills"?normalizeSkills(data[key]):data[key];
+  for (const key of contestantEditableFields) {
+  if (Object.hasOwn(data, key)) {
+    next[key] =
+      key === "skills"
+        ? (Array.isArray(data[key]) ? data[key] : [])
+        : data[key];
+  }
+}
   if(!isProfileComplete(next))return {status:400,message:"required fields missing"};
   const before=profileFieldSnapshot(participant);
   Object.assign(participant,locked);
@@ -634,7 +635,7 @@ async function api(req,res,url){
   const method=req.method;
   if(url.pathname==="/api/config"&&method==="GET")return send(res,200,{config:{...db.config,voteOpen:votingIsOpen()}});
   if(url.pathname==="/api/starter-pack"&&method==="GET")return send(res,200,{starterPack:db.config.starterPack});
-  if(url.pathname==="/api/applications"&&method==="POST"){if(!db.config.applicationOpen)return fail(res,403,"application closed");const d=await body(req);const type=d.registration_type||d.registrationType||"contestant";if(type==="roadshow"){if(!d.name||!d.phone||!d.email||!d.identity_type||!d.school_or_company||!d.grade_or_position)return fail(res,400,"required fields missing");if(db.applications.some(x=>!isContestant(x)&&(String(x.email||"").toLowerCase()===String(d.email).toLowerCase()||String(x.phone||"")===String(d.phone))))return fail(res,409,"duplicate application");const a={...d,id:nextRoadshowCode(),registration_type:"roadshow",registrationType:"roadshow",entryType:"路演报名",status:"已通过",teamCode:"",teamId:"",skills:[],attend_roadshow:d.attend_roadshow!==false&&d.attend_roadshow!=="false",receive_notifications:d.receive_notifications!==false&&d.receive_notifications!=="false",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.applications.unshift(a);if(!db.notices.some(item=>noticeKeyOf(item)===AUTO_NOTICE_KEY.signup(a.id)))addNotice("用户报名成功","你的路演报名已通过，报名码为 "+a.id+"。","报名提交",a.id,{key:AUTO_NOTICE_KEY.signup(a.id)});const t=makeToken();db.sessions[t]={role:"participant",userId:a.id,createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,201,{application:safe(a),token:t});}if(db.config.applicationDeadline&&Date.now()>Date.parse(db.config.applicationDeadline))return fail(res,403,"application closed");if(!d.name||!d.studentId||!d.email||!d.phone||!d.motivation||!d.grade)return fail(res,400,"required fields missing");if(db.applications.some(x=>isContestant(x)&&(x.studentId===d.studentId||String(x.email||"").toLowerCase()===String(d.email).toLowerCase())))return fail(res,409,"duplicate application");const a={...d,id:"MC26-"+String(1+db.applications.reduce((max,x)=>/^MC26-\d+$/.test(x.id)?Math.max(max,Number(x.id.slice(5))):max,1000)).padStart(4,"0"),registration_type:"contestant",registrationType:"contestant",entryType:"个人报名",participationMode:participationModeFor(d.grade),teamCode:"",skills:d.skills||[],status:"待审核",teamId:"",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.applications.unshift(a);if(!db.notices.some(item=>noticeKeyOf(item)===AUTO_NOTICE_KEY.signup(a.id)))addNotice("用户报名成功","你的报名已提交，报名编号为 "+a.id+"。","报名提交",a.id,{key:AUTO_NOTICE_KEY.signup(a.id)});const t=makeToken();db.sessions[t]={role:"participant",userId:a.id,createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,201,{application:safe(a),token:t});}
+  if(url.pathname==="/api/applications"&&method==="POST"){if(!db.config.applicationOpen)return fail(res,403,"application closed");const d=await body(req);const type = d.registrationType;if (!["contestant", "roadshow"].includes(type))return fail(res, 400, "invalid registrationType");if(type==="roadshow"){if(!d.name||!d.phone||!d.email||!d.identity_type||!d.school_or_company||!d.grade_or_position)return fail(res,400,"required fields missing");if(db.applications.some(x=>!isContestant(x)&&(String(x.email||"").toLowerCase()===String(d.email).toLowerCase()||String(x.phone||"")===String(d.phone))))return fail(res,409,"duplicate application");const a={...d,id:nextRoadshowCode(),registrationType:"roadshow",entryType:"路演报名",status:"已通过",teamCode:"",teamId:"",skills:[],attend_roadshow:d.attend_roadshow!==false&&d.attend_roadshow!=="false",receive_notifications:d.receive_notifications!==false&&d.receive_notifications!=="false",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.applications.unshift(a);if(!db.notices.some(item=>noticeKeyOf(item)===AUTO_NOTICE_KEY.signup(a.id)))addNotice("用户报名成功","你的路演报名已通过，报名码为 "+a.id+"。","报名提交",a.id,{key:AUTO_NOTICE_KEY.signup(a.id)});const t=makeToken();db.sessions[t]={role:"participant",userId:a.id,createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,201,{application:safe(a),token:t});}if(db.config.applicationDeadline&&Date.now()>Date.parse(db.config.applicationDeadline))return fail(res,403,"application closed");if(!d.name||!d.studentId||!d.email||!d.phone||!d.motivation||!d.grade)return fail(res,400,"required fields missing");if(db.applications.some(x=>isContestant(x)&&(x.studentId===d.studentId||String(x.email||"").toLowerCase()===String(d.email).toLowerCase())))return fail(res,409,"duplicate application");const a={...d,id:"MC26-"+String(1+db.applications.reduce((max,x)=>/^MC26-\d+$/.test(x.id)?Math.max(max,Number(x.id.slice(5))):max,1000)).padStart(4,"0"),registrationType:"contestant",entryType:"个人报名",participationMode:participationModeFor(d.grade),teamCode:"",skills:d.skills||[],status:"待审核",teamId:"",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.applications.unshift(a);if(!db.notices.some(item=>noticeKeyOf(item)===AUTO_NOTICE_KEY.signup(a.id)))addNotice("用户报名成功","你的报名已提交，报名编号为 "+a.id+"。","报名提交",a.id,{key:AUTO_NOTICE_KEY.signup(a.id)});const t=makeToken();db.sessions[t]={role:"participant",userId:a.id,createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,201,{application:safe(a),token:t});}
   if(url.pathname==="/api/auth/participant"&&method==="POST"){const d=await body(req);const c=String(d.contact||"").toLowerCase().replace(/[\s-]/g,"");const a=db.applications.find(x=>x.id.toUpperCase()===String(d.id||"").toUpperCase()&&[x.email,x.phone].some(v=>String(v||"").toLowerCase().replace(/[\s-]/g,"")===c));if(!a)return fail(res,401,"invalid participant credentials");const t=makeToken();db.sessions[t]={role:"participant",userId:a.id,createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,200,{participant:safe(a),token:t});}
   if(url.pathname==="/api/auth/voter"&&method==="POST"){if(!votingIsOpen())return fail(res,403,"voting not open");const identity=normalizeVoterIdentity(await body(req));if(identity.error)return fail(res,400,identity.error);const existing=duplicatePublicVote(identity);const t=makeToken();db.sessions[t]={role:"voter",userId:identity.identityHash,credentialHash:identity.credentialHash,voter:{name:identity.name,code:identity.code},createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,200,{voter:db.sessions[t].voter,hasVoted:Boolean(existing),token:t});}
   if(url.pathname==="/api/auth/admin"&&method==="POST"){const d=await body(req);if(d.password!==adminPassword)return fail(res,401,"invalid admin password");const t=makeToken();db.sessions[t]={role:"admin",userId:"ADMIN",createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,200,{token:t});}
@@ -662,7 +663,7 @@ async function api(req,res,url){
   if(url.pathname==="/api/me"&&method==="PATCH"){if(!me)return fail(res,401,"login required");const d=await body(req);if(!isContestant(me)){if(!["name","phone","email","identity_type","school_or_company","grade_or_position"].every(key=>String(d[key]||"").trim()))return fail(res,400,"required fields missing");Object.assign(me,{name:d.name,phone:d.phone,email:d.email,identity_type:d.identity_type,school_or_company:d.school_or_company,grade_or_position:d.grade_or_position,attend_roadshow:d.attend_roadshow===undefined?me.attend_roadshow:d.attend_roadshow!==false&&d.attend_roadshow!=="false",receive_notifications:d.receive_notifications===undefined?me.receive_notifications:d.receive_notifications!==false&&d.receive_notifications!=="false",updatedAt:new Date().toISOString()});await saveDb();return send(res,200,{participant:safe(me)});}if(!d.name||!d.studentId||!d.college||!d.major||!d.grade||!d.phone||!d.email||!d.motivation)return fail(res,400,"required fields missing");if(d.studentId&&d.studentId!==me.studentId&&db.applications.some(item=>item.id!==me.id&&item.studentId===d.studentId))return fail(res,409,"student id already exists");
     // 保存前先对比快照：内容没变就不生成「资料修改（自动）」消息。
     const profileBefore=profileFieldSnapshot(me);
-    d.entryType="个人报名";d.participationMode=participationModeFor(d.grade);d.teamCode=me.teamCode;Object.assign(me,d,{id:me.id,registration_type:me.registration_type,registrationType:me.registrationType,status:me.status,teamId:me.teamId});me.updatedAt=new Date().toISOString();
+    d.entryType="个人报名";d.participationMode=participationModeFor(d.grade);d.teamCode=me.teamCode;Object.assign(me,d,{id:me.id,registrationType:me.registrationType,status:me.status,teamId:me.teamId});me.updatedAt=new Date().toISOString();
     const changed=changedProfileFields(d,me,profileBefore);
     if(changed.length)addNotice("资料已修改","你的资料有改动："+changedFieldText(changed,noticeFieldLabels)+"。主办方会同步看到你的最新资料。","资料修改",me.id,{key:AUTO_NOTICE_KEY.profile(me.id)});
     await saveDb();return send(res,200,{participant:safe(me)});}
@@ -845,10 +846,10 @@ async function api(req,res,url){
   if(url.pathname==="/api/qa"&&method==="POST"){
     if(!me)return fail(res,401,"login required");
     const d=await body(req);
-    const text=d.question??d.content??d.text;
+    const text=d.question;
     // 带 parentQuestionId 就是追问：只有原提问者本人能追问，可以连续追问（不限层数）。
-    if(d.parentQuestionId||d.parent_question_id){
-      const result=await qaStore.createFollowUp({askerId:me.id,parentQuestionId:d.parentQuestionId??d.parent_question_id,question:text});
+    if(d.parentQuestionId){
+      const result=await qaStore.createFollowUp({askerId:me.id,parentQuestionId:d.parentQuestionId,question:text});
       if(result.error)return fail(res,result.status,result.error);
       return send(res,201,{question:result.question,rootQuestionId:result.rootQuestionId,depth:result.depth});
     }
@@ -868,7 +869,7 @@ async function api(req,res,url){
     return send(res,200,{questions:qaStore.list({askerId:me.id}).map(questionWithId)});
   }
   // 公开列表：会话根（置顶在前 + 已回答），每条根带自己可见的追问链；不含 asker_id 等身份信息。
-  if((url.pathname==="/api/qa/public"||url.pathname==="/api/qa/answered")&&method==="GET"){
+  if((url.pathname==="/api/qa/public")&&method==="GET"){
     const roots=qaStore.listPublic();
     const questions=roots.map(row=>publicQuestion(row,qaPublicFollowUps(row.question_id)));
     // 断开显示：某条追问自己已公开，但它所在会话的根没公开（根被隐藏 / 还没回答）时，
@@ -889,8 +890,8 @@ async function api(req,res,url){
     if(!admin(req))return fail(res,401,"admin required");
     const d=await body(req),questionId=decodeURIComponent(qaAnswerMatch[1]);
     let question=null;
-    if(d.answer!==undefined||d.content!==undefined){
-      const result=await qaStore.answerQuestion({questionId,answer:d.answer??d.content,answeredBy:d.answeredBy});
+    if(d.answer!==undefined){
+      const result=await qaStore.answerQuestion({questionId,answer:d.answer,answeredBy:d.answeredBy});
       if(result.error)return fail(res,result.status,result.error);
       question=result.question;
     }
@@ -905,7 +906,7 @@ async function api(req,res,url){
     return send(res,200,{question});
   }
   // 创意板是公开的：只给展示字段，不下发 authorId（报名编号），避免把创意和具体报名人关联起来。
-  if(url.pathname==="/api/ideas"&&method==="GET")return send(res,200,{ideas:db.ideas.filter(x=>x.status==="open").map(idea=>({id:idea.id,title:idea.title,summary:idea.summary,theme:idea.theme,needs:normalizeSkills(idea.needs),status:idea.status,createdAt:idea.createdAt}))});
+  if(url.pathname==="/api/ideas"&&method==="GET")return send(res,200,{ideas:db.ideas.filter(x=>x.status==="open").map(idea=>({id:idea.id,title:idea.title,summary:idea.summary,theme:idea.theme,needs:Array.isArray(idea.needs) ? idea.needs : [],status:idea.status,createdAt:idea.createdAt}))});
   if(url.pathname==="/api/ideas"&&method==="POST"){if(!me)return fail(res,401,"login required");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");const d=await body(req);if(!d.title||!d.summary)return fail(res,400,"idea title and summary required");const idea={id:makeId("IDEA"),title:d.title,summary:d.summary,theme:d.theme||"TBD",needs:d.needs||[],authorId:me.id,status:"open",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.ideas.unshift(idea);await saveDb();return send(res,201,{idea});}
   // 项目 Gallery：匿名可见，成员走展示白名单，队伍邀请码同样不下发。
   if(url.pathname==="/api/projects"&&method==="GET")return send(res,200,{projects:db.projects.filter(x=>x.status==="published").map(project=>projectView(project))});
@@ -931,7 +932,18 @@ async function api(req,res,url){
       let rows=d.statusContents;
       if(typeof rows==="string"){try{rows=JSON.parse(rows||"[]");}catch{return fail(res,400,"invalid statusContents");}}
       if(!Array.isArray(rows))return fail(res,400,"invalid statusContents");
-      contents=rows.map(row=>({statuses:(Array.isArray(row?.statuses)?row.statuses:[row?.status]).filter(Boolean).map(String),title:String(row?.title||"").trim(),body:String(row?.body||"")})).filter(row=>row.statuses.length&&row.body.trim());
+      contents = rows
+  .map(row => ({
+    statuses: Array.isArray(row?.statuses)
+      ? row.statuses.filter(Boolean).map(String)
+      : [],
+    title: String(row?.title || "").trim(),
+    body: String(row?.body || "")
+  }))
+  .filter(row =>
+    row.statuses.length &&
+    row.body.trim()
+  );
       if(!contents.length)return fail(res,400,"at least one status needs content");
     }
     const requiresReply=d.requiresReply===true||d.requiresReply==="true"||d.requiresReply==="on";
