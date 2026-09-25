@@ -164,7 +164,7 @@ function createFixtures(state) {
     fixture({ id: testId(24), name: "未通过同学", studentId: "2026000024", college: "体育教研部", ...splitMajorGrade("运动训练 · 大二"), phone: "1390001024", email: "test-rejected@minicamp.local", entryType: "个人报名", teamCode: "", skills: ["Media"], motivation: "【测试数据】未通过的报名。", experience: "", portfolio: "", askMeAbout: "赛事运营", canHelpWith: "现场执行", explore: "运动科技", status: "未通过", teamId: "", createdAt: timestamp(24) }),
     // 路演报名：前台固定显示「已通过」，报名总览的「已通过」进度条靠它填色。
     fixture({
-      id: "TEST-RO-01", name: "路演观众", registration_type: "roadshow", registrationType: "roadshow", entryType: "路演报名",
+      id: "TEST-RO-01", name: "路演观众", registrationType: "roadshow", entryType: "路演报名",
       identity_type: "校外人员", school_or_company: "【测试数据】合作单位", grade_or_position: "工程师",
       attend_roadshow: true, receive_notifications: true, phone: "1390001025", email: "test-roadshow@minicamp.local",
       skills: [], status: "已通过", teamCode: "", teamId: "", createdAt: timestamp(25)
