@@ -1,6 +1,7 @@
 (() => {
   const api = MinicampAPI;
   const awards = ["Best Overall", "Best Product", "Best Design", "Best Technical", "Most Unexpected"];
+  const awardLabels = {"Best Overall":"全场最佳", "Best Product":"最佳产品", "Best Design":"最佳设计与体验", "Best Technical":"最佳技术 Hack", "Most Unexpected":"最出乎意料", "People's Choice":"现场人气奖"};
   const login = document.getElementById("voting-login-form");
   const form = document.getElementById("voting-form");
   const modal = document.getElementById("project-detail-modal");
@@ -19,16 +20,33 @@
   const projectName = id => projects.find(project => project.id === id)?.projectName || "未选择";
   const choiceForProject = (projectId, award) => Object.entries(voteDraft[award]).find(([, id]) => id === projectId)?.[0] || "";
   const rankLabel = points => ({3: "第一选择 · 3 票", 2: "第二选择 · 2 票", 1: "第三选择 · 1 票"}[points]);
+  async function confirmFirstChoiceReplacements(project, choices) {
+    const nextChoices = {...choices};
+    for (const award of awards) {
+      if (choices[award] !== "3") continue;
+      const currentFirstChoice = voteDraft[award][3];
+      if (!currentFirstChoice || currentFirstChoice === project.id) continue;
+      const confirmed = await MinicampUI.confirm({
+        kicker: "REPLACE FIRST CHOICE",
+        title: `替换「${awardLabels[award] || award}」的第一选择？`,
+        body: `你已经把「${projectName(currentFirstChoice)}」选为「${awardLabels[award] || award}」的第一选择，是否改为「${project.projectName}」？`,
+        cancelText: "保留原选择",
+        confirmText: "确认替换"
+      });
+      if (!confirmed) nextChoices[award] = null;
+    }
+    return nextChoices;
+  }
 
   function renderDraftSummary() {
     const summary = document.getElementById("vote-draft-summary");
     if (!summary) return;
     const rows = awards.map(award => {
       const picks = [3, 2, 1].map(points => `<span><b>${rankLabel(points)}</b>${escapeHtml(projectName(voteDraft[award][points]))}</span>`).join("");
-      return `<div class="vote-draft-row"><strong>${escapeHtml(award)}</strong><div>${picks}</div></div>`;
+      return `<div class="vote-draft-row"><strong>${escapeHtml(awardLabels[award] || award)}</strong><div>${picks}</div></div>`;
     }).join("");
-    const missing = awards.reduce((count, award) => count + [3, 2, 1].filter(points => !voteDraft[award][points]).length, 0);
-    summary.innerHTML = `<div class="vote-draft-head"><div><p class="section-kicker">YOUR DRAFT</p><h3>已选的投票</h3></div><span>${missing ? `还差 ${missing} 个选择` : "正式奖项已选齐"}</span></div>${rows}<div class="vote-draft-row people-draft"><strong>People's Choice</strong><div><span><b>现场人气奖</b>${escapeHtml(peopleChoice ? projectName(peopleChoice) : "未选择")}</span></div></div>`;
+    const missing = awards.reduce((count, award) => count + [3, 2, 1].filter(points => !voteDraft[award][points]).length, 0) + (peopleChoice ? 0 : 1);
+    summary.innerHTML = `<div class="vote-draft-head"><div><p class="section-kicker">YOUR DRAFT</p><h3>已选的投票</h3></div><span>${missing ? `还有 ${missing} 项待选` : "所有奖项已选齐"}</span></div>${rows}<div class="vote-draft-row people-draft"><strong>People's Choice</strong><div><span><b>现场人气奖</b>${escapeHtml(peopleChoice ? projectName(peopleChoice) : "未选择")}</span></div></div>`;
   }
 
   let peopleChoice = "";
@@ -43,7 +61,7 @@
       ["2", "第二选择 · 2 票"],
       ["1", "第三选择 · 1 票"]
     ];
-    const formal = awards.map(award => `<label><span>${escapeHtml(award)}</span><select data-vote-award data-award="${escapeHtml(award)}"><option value="">不投</option>${options.slice(1).map(([value, label]) => `<option value="${value}" ${choiceForProject(project.id, award) === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>`).join("");
+    const formal = awards.map(award => `<label><span>${escapeHtml(awardLabels[award] || award)}</span><select data-vote-award data-award="${escapeHtml(award)}"><option value="">不投</option>${options.slice(1).map(([value, label]) => `<option value="${value}" ${choiceForProject(project.id, award) === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>`).join("");
     return `<div class="project-vote-picker"><p class="section-kicker">CAST YOUR VOTE</p><p>选择这个项目要进入哪些奖项，以及它在该奖项中的票次。</p><div class="project-vote-options">${formal}<label><span>People's Choice</span><select data-vote-people><option value="">不投</option><option value="yes" ${peopleChoice === project.id ? "selected" : ""}>现场人气奖</option></select></label></div><button class="button button-primary" type="button" data-vote-project>投它一票 <span>✓</span></button></div>`;
   }
 
@@ -53,7 +71,7 @@
     const githubUrl = safeUrl(project.githubUrl);
     const links = [
       demoUrl && `<a class='button button-primary' href='${demoUrl}' target='_blank' rel='noreferrer'>打开 Demo <span>↗</span></a>`,
-      githubUrl && `<a class='outline-button' href='${githubUrl}' target='_blank' rel='noreferrer'>查看 GitHub ↗</a>`
+      githubUrl && `<a class='outline-button' href='${githubUrl}' target='_blank' rel='noreferrer'>查看 GitHub <span>↗</span></a>`
     ].filter(Boolean).join("");
     const ownTeam = voter && project.teamId === voter.teamId;
     document.getElementById("project-detail-content").innerHTML =
@@ -65,18 +83,30 @@
       (links ? `<div class='project-detail-actions'>${links}</div>` : "") +
       (ownTeam ? "<p class='project-vote-disabled'>这是你的队伍，不能为自己的项目投票。</p>" : projectVotePicker(project));
     modal.showModal();
-    modal.querySelector("[data-vote-project]")?.addEventListener("click", () => {
+    modal.querySelector("[data-vote-project]")?.addEventListener("click", async event => {
+      const submitButton = event.currentTarget;
+      if (submitButton.disabled) return;
+      submitButton.disabled = true;
       const choices = Object.fromEntries([...modal.querySelectorAll("[data-vote-award]")].map(select => [select.dataset.award, select.value]));
       choices.people = modal.querySelector("[data-vote-people]")?.value || "";
-      applyProjectVote(project, choices);
-      modal.close();
-      render();
-      document.getElementById("vote-draft-feedback").textContent = `已记录「${project.projectName}」的投票选择，还可以继续选择其他项目。`;
+      try {
+        const nextChoices = await confirmFirstChoiceReplacements(project, choices);
+        applyProjectVote(project, nextChoices);
+        modal.close();
+        render();
+        const keptCount = awards.filter(award => nextChoices[award] === null).length;
+        document.getElementById("vote-draft-feedback").textContent = keptCount
+          ? `已记录「${project.projectName}」的其他选择，${keptCount} 个第一选择保留原项目。`
+          : `已记录「${project.projectName}」的投票选择，还可以继续选择其他项目。`;
+      } finally {
+        submitButton.disabled = false;
+      }
     });
   }
 
   function applyProjectVote(project, choices) {
     for (const award of awards) {
+      if (choices[award] === null) continue;
       for (const points of [3, 2, 1]) {
         if (voteDraft[award][points] === project.id) voteDraft[award][points] = "";
       }

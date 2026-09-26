@@ -12,6 +12,8 @@ const port = Number(process.env.MINICAMP_PORT || 4173);
 const dbPath = path.join(root, "data", "minicamp.json");
 const qaPath = path.join(root, "data", "qa.json");
 const adminPassword = process.env.MINICAMP_ADMIN_PASSWORD || "123456";
+// 本地项目提交测试：只允许回环地址上的指定账号使用，生产请求不会命中。
+const localSubmissionBypassAccount = String(process.env.MINICAMP_LOCAL_SUBMISSION_BYPASS_ACCOUNT ?? "").trim().toUpperCase();
 /** 空库（app_state 里没有 main 行）时是否允许从本地 data/*.json 载入数据。默认拒绝，避免把本机旧数据写进库里。 */
 const ALLOW_JSON_SEED = process.env.MINICAMP_ALLOW_JSON_SEED === "1";
 const mysqlConfig = { host: process.env.MYSQL_HOST || "127.0.0.1", port: Number(process.env.MYSQL_PORT || 3306), user: process.env.MYSQL_USER || "root", password: process.env.MYSQL_PASSWORD || "", database: process.env.MYSQL_DATABASE || "minicamp2026", waitForConnections: true, connectionLimit: Number(process.env.MYSQL_CONNECTION_LIMIT || 10), charset: "utf8mb4" };
@@ -31,6 +33,7 @@ const seed = {
     voteOpen: false,
     juryWeight: 40,
     participantWeight: 60,
+    resultsPublic: false,
     starterPack: {
       title: "AI Coding Starter Pack",
       intro: "Prepare your tools and environment before the event.",
@@ -50,6 +53,9 @@ const seed = {
   projects: [],
   notices: [],
   votes: [],
+  organizers: [],
+  awardDecisions: [],
+  voteAttempts: [],
   teamRequests: [],
   sessions: {}
 };
@@ -135,6 +141,9 @@ const makeId=p=>p+"-"+crypto.randomBytes(5).toString("hex").toUpperCase();
 const makeToken=()=>crypto.randomBytes(24).toString("hex");
 const applicationStatuses=new Set(["待审核","已录取","已通过","候补","待复审","未通过"]);
 const formalAwards=["Best Overall","Best Product","Best Design","Best Technical","Most Unexpected"];
+const peopleAward="People's Choice";
+const awardOrder=[...formalAwards,peopleAward];
+const awardLabels={"Best Overall":"全场最佳","Best Product":"最佳产品","Best Design":"最佳设计与体验","Best Technical":"最佳技术 Hack","Most Unexpected":"最出乎意料","People's Choice":"现场人气奖"};
 async function readJsonDb(){try{return JSON.parse(await fs.readFile(dbPath,"utf8"));}catch{return clone(seed);}}
 async function loadDb(){
   try {
@@ -191,10 +200,13 @@ function memberView(application) {
 function send(res,status,data){res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});res.end(JSON.stringify(data));}
 function fail(res,status,message){send(res,status,{error:message});}
 function body(req){return new Promise((resolve,reject)=>{let raw="";req.on("data",x=>{raw+=x;if(raw.length>8000000)reject(new Error("body too large"));});req.on("end",()=>{try{resolve(raw?JSON.parse(raw):{});}catch{reject(new Error("invalid JSON"));}});req.on("error",reject);});}
+function isLoopbackRequest(req){const host=String(req.headers.host||"").split(":")[0].toLowerCase();const remote=String(req.socket?.remoteAddress||"").replace(/^::ffff:/,"");const localHost=host==="localhost"||host==="127.0.0.1"||host==="[::1]";const localRemote=remote==="127.0.0.1"||remote==="::1";return localHost&&localRemote;}
+function localSubmissionBypass(req,participant){return Boolean(participant&&isLoopbackRequest(req)&&localSubmissionBypassAccount&&String(participant.id||"").trim().toUpperCase()===localSubmissionBypassAccount);}
 function session(req,role){const h=req.headers.authorization||"";const key=h.startsWith("Bearer ")?h.slice(7):"";const s=db.sessions[key];return s&&(!role||s.role===role)?s:null;}
 function person(req){const s=session(req,"participant");return s&&db.applications.find(x=>x.id===s.userId);}
 function publicVoter(req){return session(req,"voter");}
 function admin(req){return Boolean(session(req,"admin"));}
+function adminSession(req){return session(req,"admin");}
 /**
  * 队伍视图。includeCode 默认 false（公开视角不下发邀请码）：
  * 只有「本队成员 / 主办方」的接口显式传 {includeCode:true}，匿名列表拿不到队伍邀请码。
@@ -211,13 +223,22 @@ function voteView(vote){return vote?{id:vote.id,createdAt:vote.createdAt,selecti
 /** 大众投票身份：姓名 + 报名编号（MC26-… / RO-…），与报名系统共用同一套编号。 */
 function normalizeVoterIdentity(data){
   const name=String(data.name||"").normalize("NFKC").trim().replace(/\s+/g," ");
-  const code=String(data.code||data.applicationId||data.id||"").normalize("NFKC").trim().toUpperCase().replace(/[\s-]/g,"");
+  const rawCode=String(data.code||data.applicationId||data.id||"").normalize("NFKC").trim().toUpperCase();
+  const normalizedCode=rawCode.replace(/[\s-]/g,"");
   if(name.length<1||name.length>40)return {error:"请输入真实姓名。"};
-  if(!/^(MC26|RO)\d{4,12}$/.test(code))return {error:"请输入报名编号，例如 MC26-1001 或 RO-2026-000001。"};
+  if(!/^(MC26|RO)\d{4,12}$/.test(normalizedCode))return {error:"请输入报名编号，例如 MC26-1001 或 RO-2026-000001。"};
+  const application=db.applications.find(item=>String(item.id||"").toUpperCase().replace(/[\s-]/g,"")===normalizedCode);
+  if(!application)return {error:"报名编号不存在。"};
+  if(String(application.name||"").normalize("NFKC").trim().replace(/\s+/g," ")!==name)return {error:"姓名与报名编号不匹配。"};
+  if(isContestant(application)&&!isAccepted(application))return {error:"当前报名状态不能参与投票。"};
+  const code=application.id;
   const digest=value=>crypto.createHmac("sha256",process.env.MINICAMP_VOTER_SECRET||adminPassword).update(value).digest("hex");
-  return {name,code,credentialHash:digest("code:"+code),identityHash:digest("identity:"+[name,code].join("|"))};
+  return {name:application.name,code,applicationId:application.id,teamId:application.teamId||"",credentialHash:digest("code:"+String(code).toUpperCase()),identityHash:digest("identity:"+[name,String(code).toUpperCase()].join("|"))};
 }
-function duplicatePublicVote(identity){return db.votes.find(vote=>vote.role==="participant"&&(vote.voterCredentialHash===identity.credentialHash||vote.voterIdentityHash===identity.identityHash));}
+function duplicatePublicVote(identity){return activeVotes().find(vote=>vote.role==="participant"&&(vote.voterId===identity.applicationId||vote.voterCredentialHash===identity.credentialHash||vote.voterIdentityHash===identity.identityHash));}
+function organizerByCode(code){const normalized=String(code||"").normalize("NFKC").trim().toUpperCase();return (db.organizers||[]).find(item=>item.status!=="inactive"&&String(item.code||item.id||"").toUpperCase()===normalized);}
+function organizerSession(req){const organizer=session(req,"organizer");return organizer&&(db.organizers||[]).some(item=>item.id===organizer.organizerId&&item.status!=="inactive")?organizer:null;}
+function recordVoteAttempt(data){db.voteAttempts=(db.voteAttempts||[]);db.voteAttempts.unshift({id:makeId("VOTE-ATTEMPT"),createdAt:new Date().toISOString(),...data});if(db.voteAttempts.length>2000)db.voteAttempts.length=2000;}
 /** 投票人展示编号：优先投票记录上存下的编号；参与者本人投票用报名编号兜底；历史大众票用去重哈希回查会话。 */
 const voterCode = vote =>
   String(vote?.voterCode || "")
@@ -470,21 +491,39 @@ function notifyQaAnswered(question){
     format:"html"
   });
 }
+function activeVotes(){return (db.votes||[]).filter(vote=>vote.status!=="voided");}
 function normalizeVoteSelections(selections,role){
-  if(!Array.isArray(selections))return null;
-  const expected=role==="participant"?[...formalAwards,"People's Choice"]:formalAwards;
-  if(selections.length!==(role==="participant"?formalAwards.length*3+1:formalAwards.length))return null;
+  if(!Array.isArray(selections)||selections.length!==formalAwards.length*3+1)return null;
   const normalized=[];
-  for(const award of expected){
+  for(const award of awardOrder){
     const rows=selections.filter(item=>item?.award===award);
-    if(role==="participant"&&award!=="People's Choice"){
-      if(rows.length!==3||new Set(rows.map(item=>item.projectId)).size!==3||rows.map(item=>Number(item.points)).sort((a,b)=>a-b).join(",")!=="1,2,3")return null;
-    } else if(rows.length!==1||Number(rows[0].points)!==(award==="People's Choice"?1:3))return null;
+    if(award===peopleAward){
+      if(rows.length!==1||Number(rows[0].points)!==1)return null;
+    }else if(rows.length!==3||new Set(rows.map(item=>item.projectId)).size!==3||rows.map(item=>Number(item.points)).sort((a,b)=>a-b).join(",")!=="1,2,3")return null;
     for(const row of rows){if(typeof row.projectId!=="string"||!row.projectId.trim()||!Number.isInteger(Number(row.points)))return null;normalized.push({award,projectId:row.projectId,points:Number(row.points)});}
   }
   return normalized;
 }
-function calcResults(){const map={};for(const vote of db.votes)for(const x of vote.selections||[]){const k=x.award+":"+x.projectId;map[k]??={award:x.award,projectId:x.projectId,participant:0,jury:0};map[k][vote.role]+=Number(x.points||0);}return Object.values(map).map(x=>({...x,total:x.participant+x.jury,weighted:x.participant*db.config.participantWeight/100+x.jury*db.config.juryWeight/100})).sort((a,b)=>b.weighted-a.weighted);}
+function voteGroup(vote){return vote.role==="organizer"||vote.role==="jury"?"organizer":"participant";}
+function calcResults(){
+  const map={};
+  for(const vote of activeVotes())for(const x of vote.selections||[]){
+    const k=x.award+":"+x.projectId;
+    map[k]??={award:x.award,projectId:x.projectId,participantRaw:0,organizerRaw:0,participantBallots:0,organizerBallots:0};
+    const group=voteGroup(vote);
+    map[k][group+"Raw"]+=Number(x.points||0);
+    map[k][group+"Ballots"]+=1;
+  }
+  const totals={};
+  for(const row of Object.values(map)){totals[row.award]??={participant:0,organizer:0};totals[row.award].participant+=row.participantRaw;totals[row.award].organizer+=row.organizerRaw;}
+  return Object.values(map).map(row=>{
+    const total=totals[row.award]||{participant:0,organizer:0};
+    const people=row.award===peopleAward;
+    const participantRate=total.participant?row.participantRaw/total.participant*100:0;
+    const organizerRate=total.organizer?row.organizerRaw/total.organizer*100:0;
+    return {...row,awardLabel:awardLabels[row.award]||row.award,participantRate,organizerRate,weightedScore:people?null:participantRate*Number(db.config.participantWeight??60)/100+organizerRate*Number(db.config.juryWeight??40)/100,rawVotes:row.participantRaw+row.organizerRaw,totalRaw:row.participantRaw+row.organizerRaw};
+  }).sort((a,b)=>a.award.localeCompare(b.award)||((b.weightedScore??b.rawVotes)-(a.weightedScore??a.rawVotes)));
+}
 function participationModeFor(grade) {
   return grade === "大一"
     ? "仅参与路演及后续投票等阶段，不参与开发环节"
@@ -629,16 +668,31 @@ function deleteParticipantAccount(participant){
   return {affectedTeamIds:[...affectedTeamIds],removedTeamIds:[...removedTeamIds]};
 }
 
-function resolvedAwards(){const rows=calcResults(),formal=["Best Overall","Best Product","Best Design","Best Technical","Most Unexpected"],used=new Set(),winners=[];for(const award of formal){const row=rows.find(x=>x.award===award&&!used.has(db.projects.find(p=>p.id===x.projectId)?.teamId));if(row){const project=db.projects.find(p=>p.id===row.projectId);used.add(project?.teamId);winners.push({...row,projectName:project?.projectName,teamId:project?.teamId});}}const people=rows.find(x=>x.award==="People's Choice");if(people){const project=db.projects.find(p=>p.id===people.projectId);winners.push({...people,projectName:project?.projectName,teamId:project?.teamId,stackable:true});}return winners;}
+function resolvedAwards(){
+  const rows=calcResults(),used=new Set(),winners=[],decisions=new Map((db.awardDecisions||[]).map(item=>[item.award,item]));
+  for(const award of awardOrder){
+    const candidates=rows.filter(row=>row.award===award).map(row=>{const project=db.projects.find(p=>p.id===row.projectId);return {...row,projectName:project?.projectName,teamId:project?.teamId};}).filter(row=>row.teamId&&!used.has(row.teamId));
+    const decision=decisions.get(award);
+    if(decision?.projectId){const chosen=candidates.find(row=>row.projectId===decision.projectId);if(chosen){used.add(chosen.teamId);winners.push({...chosen,status:"confirmed",resolvedBy:decision.resolvedBy,resolvedAt:decision.resolvedAt});continue;}}
+    if(!candidates.length){winners.push({award,awardLabel:awardLabels[award],status:"pending",candidates:[]});continue;}
+    const score=row=>award===peopleAward?row.rawVotes:(row.weightedScore??-1);
+    const best=score(candidates[0]);
+    const tied=candidates.filter(row=>score(row)===best);
+    if(tied.length>1){winners.push({award,awardLabel:awardLabels[award],status:"tie",candidates:tied});continue;}
+    const chosen=candidates[0];used.add(chosen.teamId);winners.push({...chosen,status:"automatic"});
+  }
+  return winners;
+}
 
 async function api(req,res,url){
   const method=req.method;
   if(url.pathname==="/api/config"&&method==="GET")return send(res,200,{config:{...db.config,voteOpen:votingIsOpen()}});
   if(url.pathname==="/api/starter-pack"&&method==="GET")return send(res,200,{starterPack:db.config.starterPack});
+  if(url.pathname==="/api/results"&&method==="GET"){if(!db.config.resultsPublic)return fail(res,403,"results not public");return send(res,200,{awards:resolvedAwards().filter(item=>["automatic","confirmed"].includes(item.status)).map(item=>({award:item.awardLabel||item.award,projectName:item.projectName,teamId:item.teamId,rawVotes:item.rawVotes}))});}
   if(url.pathname==="/api/applications"&&method==="POST"){if(!db.config.applicationOpen)return fail(res,403,"application closed");const d=await body(req);const type = d.registrationType;if (!["contestant", "roadshow"].includes(type))return fail(res, 400, "invalid registrationType");if(type==="roadshow"){if(!d.name||!d.phone||!d.email||!d.identity_type||!d.school_or_company||!d.grade_or_position)return fail(res,400,"required fields missing");if(db.applications.some(x=>!isContestant(x)&&(String(x.email||"").toLowerCase()===String(d.email).toLowerCase()||String(x.phone||"")===String(d.phone))))return fail(res,409,"duplicate application");const a={...d,id:nextRoadshowCode(),registrationType:"roadshow",entryType:"路演报名",status:"已通过",teamCode:"",teamId:"",skills:[],attend_roadshow:d.attend_roadshow!==false&&d.attend_roadshow!=="false",receive_notifications:d.receive_notifications!==false&&d.receive_notifications!=="false",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.applications.unshift(a);if(!db.notices.some(item=>noticeKeyOf(item)===AUTO_NOTICE_KEY.signup(a.id)))addNotice("用户报名成功","你的路演报名已通过，报名码为 "+a.id+"。","报名提交",a.id,{key:AUTO_NOTICE_KEY.signup(a.id)});const t=makeToken();db.sessions[t]={role:"participant",userId:a.id,createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,201,{application:safe(a),token:t});}if(db.config.applicationDeadline&&Date.now()>Date.parse(db.config.applicationDeadline))return fail(res,403,"application closed");if(!d.name||!d.studentId||!d.email||!d.phone||!d.motivation||!d.grade)return fail(res,400,"required fields missing");if(db.applications.some(x=>isContestant(x)&&(x.studentId===d.studentId||String(x.email||"").toLowerCase()===String(d.email).toLowerCase())))return fail(res,409,"duplicate application");const a={...d,id:"MC26-"+String(1+db.applications.reduce((max,x)=>/^MC26-\d+$/.test(x.id)?Math.max(max,Number(x.id.slice(5))):max,1000)).padStart(4,"0"),registrationType:"contestant",entryType:"个人报名",participationMode:participationModeFor(d.grade),teamCode:"",skills:d.skills||[],status:"待审核",teamId:"",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.applications.unshift(a);if(!db.notices.some(item=>noticeKeyOf(item)===AUTO_NOTICE_KEY.signup(a.id)))addNotice("用户报名成功","你的报名已提交，报名编号为 "+a.id+"。","报名提交",a.id,{key:AUTO_NOTICE_KEY.signup(a.id)});const t=makeToken();db.sessions[t]={role:"participant",userId:a.id,createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,201,{application:safe(a),token:t});}
   if(url.pathname==="/api/auth/participant"&&method==="POST"){const d=await body(req);const c=String(d.contact||"").toLowerCase().replace(/[\s-]/g,"");const a=db.applications.find(x=>x.id.toUpperCase()===String(d.id||"").toUpperCase()&&[x.email,x.phone].some(v=>String(v||"").toLowerCase().replace(/[\s-]/g,"")===c));if(!a)return fail(res,401,"invalid participant credentials");const t=makeToken();db.sessions[t]={role:"participant",userId:a.id,createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,200,{participant:safe(a),token:t});}
-  if(url.pathname==="/api/auth/voter"&&method==="POST"){if(!votingIsOpen())return fail(res,403,"voting not open");const identity=normalizeVoterIdentity(await body(req));if(identity.error)return fail(res,400,identity.error);const existing=duplicatePublicVote(identity);const t=makeToken();db.sessions[t]={role:"voter",userId:identity.identityHash,credentialHash:identity.credentialHash,voter:{name:identity.name,code:identity.code},createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,200,{voter:db.sessions[t].voter,hasVoted:Boolean(existing),token:t});}
-  if(url.pathname==="/api/auth/admin"&&method==="POST"){const d=await body(req);if(d.password!==adminPassword)return fail(res,401,"invalid admin password");const t=makeToken();db.sessions[t]={role:"admin",userId:"ADMIN",createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,200,{token:t});}
+  if(url.pathname==="/api/auth/voter"&&method==="POST"){if(!votingIsOpen())return fail(res,403,"voting not open");const d=await body(req),identity=normalizeVoterIdentity(d);if(identity.error){recordVoteAttempt({kind:"login",role:"participant",code:String(d.code||d.applicationId||d.id||""),reason:identity.error});return fail(res,400,identity.error);}const existing=duplicatePublicVote(identity);const t=makeToken();db.sessions[t]={role:"voter",userId:identity.applicationId,identityHash:identity.identityHash,credentialHash:identity.credentialHash,voter:{name:identity.name,code:identity.code,applicationId:identity.applicationId,teamId:identity.teamId},createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,200,{voter:db.sessions[t].voter,hasVoted:Boolean(existing),token:t});}
+  if(url.pathname==="/api/auth/admin"&&method==="POST"){const d=await body(req);if(d.password!==adminPassword)return fail(res,401,"invalid admin password");const organizerCode=String(d.organizerCode||"").trim().toUpperCase();const organizer=organizerCode?organizerByCode(organizerCode):null;if(organizerCode&&!organizer)return fail(res,401,"invalid organizer code");const t=makeToken();db.sessions[t]={role:organizer?"organizer":"admin",userId:organizer?.id||"ADMIN",organizerId:organizer?.id||null,organizerCode:organizer?.code||null,organizerName:organizer?.name||null,createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,200,{token:t,organizer:organizer||null,hasVoted:Boolean(organizer&&activeVotes().some(vote=>vote.role==="organizer"&&String(vote.voterId)===String(organizer.id)))});}
   const me=person(req);
   const voter=publicVoter(req);
   if(url.pathname==="/api/me"&&method==="DELETE"){if(!me)return fail(res,401,"login required");deleteParticipantAccount(me);await saveDb();return send(res,200,{ok:true});}
@@ -658,8 +712,8 @@ async function api(req,res,url){
     const changed=result.changed||[];
     if(changed.length)addNotice("资料已修改","你的资料有改动："+changedFieldText(changed,noticeFieldLabels)+"。主办方会同步看到你的最新资料。","资料修改",me.id,{key:AUTO_NOTICE_KEY.profile(me.id)});
     await saveDb();return send(res,200,{participant:safe(me)});}
-  if(url.pathname==="/api/me"&&method==="GET"){if(!me)return fail(res,401,"login required");return send(res,200,{participant:safe(me),team:teamView(db.teams.find(x=>x.id===me.teamId),{includeCode:true})});}
-  if(url.pathname==="/api/me/vote"&&method==="GET"){if(me&&!isContestant(me))return fail(res,403,"roadshow participants do not have voting access");if(!me&&!voter)return fail(res,401,"login required");const voterId=voter?.userId||me.id;return send(res,200,{voter:voter?.voter||{code:me.id,name:me.name,grade:me.grade,college:me.college,teamId:me.teamId},vote:voteView(db.votes.find(item=>item.role==="participant"&&(item.voterId===voterId||voter&&(item.voterIdentityHash===voter.userId)))),voteOpen:votingIsOpen()});}
+  if(url.pathname==="/api/me"&&method==="GET"){if(!me)return fail(res,401,"login required");return send(res,200,{participant:safe(me),team:teamView(db.teams.find(x=>x.id===me.teamId),{includeCode:true}),localSubmissionBypass:localSubmissionBypass(req,me)});}
+  if(url.pathname==="/api/me/vote"&&method==="GET"){if(me&&!isContestant(me))return fail(res,403,"roadshow participants do not have voting access");if(!me&&!voter)return fail(res,401,"login required");const voterId=voter?.userId||me.id;return send(res,200,{voter:voter?.voter||{code:me.id,name:me.name,grade:me.grade,college:me.college,teamId:me.teamId},vote:voteView(activeVotes().find(item=>item.role==="participant"&&(item.voterId===voterId||voter&&(item.voterIdentityHash===voter.identityHash)))),voteOpen:votingIsOpen()});}
   if(url.pathname==="/api/me"&&method==="PATCH"){if(!me)return fail(res,401,"login required");const d=await body(req);if(!isContestant(me)){if(!["name","phone","email","identity_type","school_or_company","grade_or_position"].every(key=>String(d[key]||"").trim()))return fail(res,400,"required fields missing");Object.assign(me,{name:d.name,phone:d.phone,email:d.email,identity_type:d.identity_type,school_or_company:d.school_or_company,grade_or_position:d.grade_or_position,attend_roadshow:d.attend_roadshow===undefined?me.attend_roadshow:d.attend_roadshow!==false&&d.attend_roadshow!=="false",receive_notifications:d.receive_notifications===undefined?me.receive_notifications:d.receive_notifications!==false&&d.receive_notifications!=="false",updatedAt:new Date().toISOString()});await saveDb();return send(res,200,{participant:safe(me)});}if(!d.name||!d.studentId||!d.college||!d.major||!d.grade||!d.phone||!d.email||!d.motivation)return fail(res,400,"required fields missing");if(d.studentId&&d.studentId!==me.studentId&&db.applications.some(item=>item.id!==me.id&&item.studentId===d.studentId))return fail(res,409,"student id already exists");
     // 保存前先对比快照：内容没变就不生成「资料修改（自动）」消息。
     const profileBefore=profileFieldSnapshot(me);
@@ -910,11 +964,16 @@ async function api(req,res,url){
   if(url.pathname==="/api/ideas"&&method==="POST"){if(!me)return fail(res,401,"login required");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");const d=await body(req);if(!d.title||!d.summary)return fail(res,400,"idea title and summary required");const idea={id:makeId("IDEA"),title:d.title,summary:d.summary,theme:d.theme||"TBD",needs:d.needs||[],authorId:me.id,status:"open",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.ideas.unshift(idea);await saveDb();return send(res,201,{idea});}
   // 项目 Gallery：匿名可见，成员走展示白名单，队伍邀请码同样不下发。
   if(url.pathname==="/api/projects"&&method==="GET")return send(res,200,{projects:db.projects.filter(x=>x.status==="published").map(project=>projectView(project))});
-  if(url.pathname==="/api/projects"&&method==="POST"){if(!me)return fail(res,401,"login required");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted participants only");const team=db.teams.find(x=>x.id===me.teamId);if(!team)return fail(res,403,"join a team first");if(db.projects.some(project=>project.teamId===team.id))return fail(res,409,"team already has a project");const d=await body(req);const project={id:makeId("PROJECT"),teamId:team.id,...d,members:d.members||team.memberIds.map(mid=>({name:db.applications.find(x=>x.id===mid)?.name||"member",role:""})),aiTools:d.aiTools||[],status:"draft",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.projects.push(project);await saveDb();return send(res,201,{project:projectView(project,{includeCode:true})});}
-  if(url.pathname.startsWith("/api/projects/")&&method==="PATCH"){const isAdmin=admin(req);if(!me&&!isAdmin)return fail(res,401,"login required");const p=db.projects.find(x=>x.id===decodeURIComponent(url.pathname.split("/").pop()));if(!p)return fail(res,404,"project not found");const d=await body(req);if(!isAdmin&&p.teamId!==me.teamId)return fail(res,403,"project access denied");if(isAdmin)Object.assign(p,d);else for(const key of ["projectName","theme","tagline","problem","solution","demoUrl","githubUrl","coverUrl","aiTools"]){if(Object.hasOwn(d,key))p[key]=d[key];}await saveDb();return send(res,200,{project:projectView(p,{includeCode:true})});}
-  if(url.pathname==="/api/votes"&&method==="POST"){const jury=admin(req);if(!votingIsOpen())return fail(res,403,"voting not open");if(!jury&&!me&&!voter)return fail(res,401,"login required");if(me&&(!isContestant(me)||!isAccepted(me)))return fail(res,403,"accepted participants only");const d=await body(req),role=jury?"jury":"participant",voterId=jury?"ADMIN":voter?.userId||me.id;if(duplicatePublicVote(voter?{credentialHash:voter.credentialHash,identityHash:voter.userId}:{credentialHash:null,identityHash:null})||db.votes.some(x=>x.voterId===voterId&&x.role===role))return fail(res,409,"vote already submitted");const selections=normalizeVoteSelections(d.selections,role);if(!selections)return fail(res,400,"invalid vote selections");const allowed=new Set(db.projects.filter(x=>x.status==="published").map(x=>x.id));if(selections.some(x=>!allowed.has(x.projectId)))return fail(res,400,"unpublished project in vote");if(me&&selections.some(x=>db.projects.find(p=>p.id===x.projectId)?.teamId===me.teamId))return fail(res,400,"cannot vote for your team");db.votes.push({id:makeId("VOTE"),voterId,role,selections,createdAt:new Date().toISOString(),voterCode:voter?.voter?.code||me?.id||"",voterCredentialHash:voter?.credentialHash||null,voterIdentityHash:voter?.userId||null,testFixture:testFixtureMode()});await saveDb();return send(res,201,{ok:true});}
+  if(url.pathname==="/api/projects"&&method==="POST"){const localBypass=localSubmissionBypass(req,me);if(!me)return fail(res,401,"login required");if(!isContestant(me)||(!isAccepted(me)&&!localBypass))return fail(res,403,"accepted participants only");const team=db.teams.find(x=>x.id===me.teamId)||(localBypass?{id:"LOCAL-TEAM-"+me.id,memberIds:[me.id],project:"本地测试队伍",theme:"TBD",status:"draft",locked:false,published:false}:null);if(!team)return fail(res,403,"join a team first");if(db.projects.some(project=>project.teamId===team.id))return fail(res,409,"team already has a project");const d=await body(req);const project={id:makeId("PROJECT"),teamId:team.id,...d,members:d.members||team.memberIds.map(mid=>({name:db.applications.find(x=>x.id===mid)?.name||"member",role:""})),aiTools:d.aiTools||[],status:"draft",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.projects.push(project);await saveDb();return send(res,201,{project:projectView(project,{includeCode:true}),localSubmissionBypass:localBypass});}
+  if(url.pathname.startsWith("/api/projects/")&&method==="PATCH"){const isAdmin=admin(req);if(!me&&!isAdmin)return fail(res,401,"login required");const p=db.projects.find(x=>x.id===decodeURIComponent(url.pathname.split("/").pop()));if(!p)return fail(res,404,"project not found");const d=await body(req);if(!isAdmin&&p.teamId!==me.teamId&&!localSubmissionBypass(req,me))return fail(res,403,"project access denied");if(isAdmin)Object.assign(p,d);else for(const key of ["projectName","theme","tagline","problem","solution","demoUrl","githubUrl","coverUrl","aiTools"]){if(Object.hasOwn(d,key))p[key]=d[key];}await saveDb();return send(res,200,{project:projectView(p,{includeCode:true})});}
+  if(url.pathname==="/api/votes"&&method==="POST"){const adminInfo=adminSession(req),organizerInfo=organizerSession(req),organizerId=organizerInfo?.organizerId;const organizer=organizerId?(db.organizers||[]).find(item=>item.id===organizerId):null;if(!votingIsOpen())return fail(res,403,"voting not open");if(!adminInfo&&!organizerInfo&&!me&&!voter)return fail(res,401,"login required");if(me&&(!isContestant(me)||!isAccepted(me)))return fail(res,403,"accepted participants only");if(adminInfo&&!organizer)return fail(res,403,"organizer identity required");const d=await body(req),role=organizer?"organizer":"participant",voterId=organizer.id||voter?.voter?.applicationId||me.id;const duplicate=role==="organizer"?activeVotes().some(x=>x.role==="organizer"&&String(x.voterId)===String(voterId)):activeVotes().some(x=>x.role==="participant"&&String(x.voterId)===String(voterId));if(duplicate){recordVoteAttempt({kind:"submit",role,voterId,reason:"vote already submitted"});return fail(res,409,"vote already submitted");}const selections=normalizeVoteSelections(d.selections,role);if(!selections){recordVoteAttempt({kind:"submit",role,voterId,reason:"invalid vote selections"});return fail(res,400,"invalid vote selections");}const allowed=new Set(db.projects.filter(x=>x.status==="published").map(x=>x.id));if(selections.some(x=>!allowed.has(x.projectId)))return fail(res,400,"unpublished project in vote");const teamId=organizer?"":voter?.voter?.teamId||me?.teamId||"";if(teamId&&selections.some(x=>db.projects.find(p=>p.id===x.projectId)?.teamId===teamId)){recordVoteAttempt({kind:"submit",role,voterId,reason:"cannot vote for your team"});return fail(res,400,"cannot vote for your team");}db.votes.push({id:makeId("VOTE"),voterId,role,selections,status:"active",createdAt:new Date().toISOString(),voterCode:organizer.code||voter?.voter?.code||me?.id||"",voterName:organizer.name||voter?.voter?.name||me?.name||"",organizerId:organizer?.id||null,voterCredentialHash:voter?.credentialHash||null,voterIdentityHash:voter?.identityHash||null,testFixture:testFixtureMode()});await saveDb();return send(res,201,{ok:true});}
+  if(url.pathname==="/api/admin/organizers"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{organizers:db.organizers||[]});}
+  if(url.pathname==="/api/admin/organizers"&&method==="POST"){if(!admin(req))return fail(res,401,"admin required");const d=await body(req),code=String(d.code||"").trim().toUpperCase(),name=String(d.name||"").trim();if(!code||!name)return fail(res,400,"organizer code and name required");if((db.organizers||[]).some(item=>String(item.code).toUpperCase()===code))return fail(res,409,"organizer already exists");const organizer={id:makeId("ORG"),code,name,status:"active",createdAt:new Date().toISOString()};db.organizers.push(organizer);await saveDb();return send(res,201,{organizer});}
+  const organizerRoute=url.pathname.match(/^\/api\/admin\/organizers\/([^/]+)$/);if(organizerRoute&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const organizer=(db.organizers||[]).find(item=>item.id===decodeURIComponent(organizerRoute[1]));if(!organizer)return fail(res,404,"organizer not found");const d=await body(req);if(d.name!==undefined)organizer.name=String(d.name).trim();if(d.status!==undefined&&!['active','inactive'].includes(d.status))return fail(res,400,"invalid organizer status");if(d.status!==undefined)organizer.status=d.status;await saveDb();return send(res,200,{organizer});}
+  const resetVote=url.pathname.match(/^\/api\/admin\/votes\/([^/]+)\/reset$/);if(resetVote&&method==="POST"){if(!admin(req))return fail(res,401,"admin required");const vote=(db.votes||[]).find(item=>item.id===decodeURIComponent(resetVote[1]));if(!vote)return fail(res,404,"vote not found");if(vote.status==="voided")return fail(res,409,"vote already reset");const d=await body(req);vote.status="voided";vote.voidedAt=new Date().toISOString();vote.voidedBy=adminSession(req)?.organizerId||"ADMIN";vote.voidReason=String(d.reason||"主办方撤回").trim();await saveDb();return send(res,200,{ok:true,vote});}
+  if(url.pathname==="/api/admin/award-decisions"&&method==="POST"){if(!admin(req))return fail(res,401,"admin required");const d=await body(req);if(!awardOrder.includes(d.award)||typeof d.projectId!=="string")return fail(res,400,"invalid award decision");const candidateIds=new Set((resolvedAwards().find(item=>item.award===d.award)?.candidates||[]).map(item=>item.projectId));if(!candidateIds.has(d.projectId))return fail(res,400,"project is not a tie candidate");db.awardDecisions=(db.awardDecisions||[]).filter(item=>item.award!==d.award);db.awardDecisions.push({award:d.award,projectId:d.projectId,resolvedBy:"ADMIN",resolvedAt:new Date().toISOString()});await saveDb();return send(res,200,{awards:resolvedAwards()});}
   if(url.pathname==="/api/organizer/summary"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{config:{eventName:db.config.eventName,date:db.config.date,venue:db.config.venue,applicationOpen:db.config.applicationOpen,applicationDeadline:db.config.applicationDeadline,resultDate:db.config.resultDate},metrics:{applications:db.applications.length,accepted:db.applications.filter(x=>x.status==="已录取").length,pending:db.applications.filter(x=>x.status==="待审核").length,teams:db.teams.length,publishedProjects:db.projects.filter(x=>x.status==="published").length},teams:db.teams.map(t=>({id:t.id,project:t.project,theme:t.theme,status:t.status,memberCount:t.memberIds.length})),projects:db.projects.filter(x=>x.status==="published").map(p=>({id:p.id,projectName:p.projectName,theme:p.theme,tagline:p.tagline,demoUrl:p.demoUrl})),notices:db.notices.filter(x=>x.target==="ALL").slice(0,10).map(x=>({title:x.title,body:x.body,type:x.type,createdAt:x.createdAt}))});}
-  if(url.pathname==="/api/admin/summary"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{applications:db.applications.map(safe),applicationStatuses:[...applicationStatuses],teams:db.teams.map(team=>teamView(team,{includeCode:true})),ideas:db.ideas,projects:db.projects.map(project=>projectView(project,{includeCode:true})),notices:db.notices.map(adminNoticeView),votes:db.votes.map(vote=>({...vote,voterCode:voterCode(vote)})),results:calcResults(),awards:resolvedAwards(),config:{...db.config,voteOpen:votingIsOpen()}});}
+  if(url.pathname==="/api/admin/summary"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{organizers:db.organizers||[],voteAttempts:db.voteAttempts||[],applications:db.applications.map(safe),applicationStatuses:[...applicationStatuses],teams:db.teams.map(team=>teamView(team,{includeCode:true})),ideas:db.ideas,projects:db.projects.map(project=>projectView(project,{includeCode:true})),notices:db.notices.map(adminNoticeView),votes:db.votes.map(vote=>({...vote,voterCode:voterCode(vote)})),results:calcResults(),awards:resolvedAwards(),config:{...db.config,voteOpen:votingIsOpen()}});}
   if(url.pathname==="/api/admin/applications"&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const d=await body(req),a=db.applications.find(x=>x.id===d.id);if(!a)return fail(res,404,"application not found");if(!isContestant(a)&&d.status!==undefined&&d.status!==a.status)return fail(res,403,"roadshow applications are always 已通过");if(!applicationStatuses.has(d.status))return fail(res,400,"invalid application status");
     // 「状态修改（自动）」只在状态值真的变化时写一条，正文带上「旧状态 → 新状态」；
     // 重复点同一个状态、或只改队伍归属，都不会再刷屏。
@@ -958,4 +1017,3 @@ async function api(req,res,url){
 async function serve(req,res){const url=new URL(req.url,"http://"+(req.headers.host||"localhost"));if(url.pathname.startsWith("/api/")){try{await api(req,res,url);}catch(e){console.error(e);fail(res,500,e.message||"server error");}return;}const requested=url.pathname==="/"?"/index.html":url.pathname;const vendor=vendorFiles.get(requested);const file=vendor?path.join(root,"node_modules",vendor):path.resolve(publicRoot,"."+path.posix.normalize(requested));if(!vendor&&file!==publicRoot&&!file.startsWith(publicRoot+path.sep)){res.writeHead(403);res.end("Forbidden");return;}try{const data=await fs.readFile(file);res.writeHead(200,{"Content-Type":mime[path.extname(file)]||"application/octet-stream","Cache-Control":"no-store"});res.end(data);}catch{if(vendor){console.error("缺少前端依赖 chart.js：请先在项目根目录执行 npm install（"+file+"）");}res.writeHead(404);res.end("Not found");}}
 await loadDb();
 http.createServer(serve).listen(port,"127.0.0.1",()=>console.log("minicamp preview: http://localhost:"+port+" (qa storage: "+qaStore.mode()+")"));
-

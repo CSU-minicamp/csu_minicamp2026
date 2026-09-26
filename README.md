@@ -126,7 +126,7 @@ Chart.js（jsDelivr，带 SRI 校验），两个源都不可用时后台图表�
 - 报名去重、Team Code、队伍加入与 3–5 人锁定。
 - 个人资料、Bonjour Profile 字段、通知中心。
 - Idea 发布、项目草稿提交、主办方审核发布、动态 Gallery。
-- 参与者投票、Jury 投票、参与者/Jury 权重统计。
+- 参与者、路演观众和主办方六奖项投票；正式奖按组内归一化后使用 60%/40%权重，现场人气奖按原始票数统计。
 - 活动日期、报名状态、投票权重和 Starter Pack 可在后台配置。
 - 问答信息独立存储于 `qa_questions` 表，前台 `/qa.html` 支持搜索、折叠展开、置顶、我的提问分段展示，后台可回答与置顶/隐藏，回答后自动通知提问者（见上文）。
 - 统一的通知与确认模块 `public/ui.js`（`MinicampUI.toast / confirm / alert`）：页面不再使用 `window.confirm` 等浏览器默认弹窗，需要时在页面里加一行 `<script src="ui.js"></script>` 即可。

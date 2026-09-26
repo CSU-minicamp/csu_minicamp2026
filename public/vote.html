@@ -13,15 +13,15 @@
   <header id="site-header" class="site-header"></header>
   <main class="voting-shell shell" hidden>
     <section class="voting-workspace" id="voting-workspace" hidden>
-      <div class="voting-top"><div><p class="section-kicker">PEOPLE'S VOTE / 2026</p><h1>选择你愿意支持的作品。</h1><p>你好，<strong id="voter-name">参与者</strong>。不能投给自己的队伍，每个奖项提交一次。</p></div><button class="outline-button" id="voting-logout" type="button">退出投票</button></div>
+      <div class="voting-top"><div><p class="section-kicker">PEOPLE'S VOTE / 2026</p><h1>把你的一票，投给打动你的作品</h1><p>你好，<strong id="voter-name">参与者</strong>。每个奖项只能提交一次，且不能投给自己的队伍。</p></div><button class="outline-button" id="voting-logout" type="button">退出投票</button></div>
       <section class="project-browser" aria-labelledby="project-browser-title">
-        <div class="project-browser-heading"><div><p class="section-kicker">PROJECTS / DEMO FAIR</p><h2 id="project-browser-title">先看看有哪些作品。</h2></div><span id="project-count">0 个作品</span></div>
-        <p>点击作品卡片查看项目背景、解决方案、团队成员与 Demo 链接。</p>
+        <div class="project-browser-heading"><div><p class="section-kicker">PROJECTS / DEMO FAIR</p><h2 id="project-browser-title">逛一逛，今年有哪些作品</h2></div><span id="project-count">0 个作品</span></div>
+        <p>点开卡片，看看他们想解决什么问题、做出了什么。</p>
         <div class="project-browser-grid" id="project-browser-grid"></div>
       </section>
       <section class="vote-entry" aria-labelledby="vote-entry-title">
-        <div class="vote-entry-heading"><div><p class="section-kicker">CAST YOUR VOTE</p><h2 id="vote-entry-title">现在，投出你的选择。</h2></div><span>每个奖项仅可提交一次</span></div>
-        <div class="vote-notice"><span>!</span><p><strong>投票提示</strong> 每个正式奖项的第一、第二、第三选择必须是三个不同项目；你不能投给自己的队伍。</p></div>
+        <div class="vote-entry-heading"><div><p class="section-kicker">CAST YOUR VOTE</p><h2 id="vote-entry-title">看好了？来投票</h2></div><span>提交后不可修改</span></div>
+        <div class="vote-notice"><span>!</span><p><strong>投票提示</strong> 每个奖项的一、二、三选择须为三个不同项目。</p></div>
         <form id="voting-form">
           <div class="vote-draft-summary" id="vote-draft-summary"></div><p class="vote-draft-feedback" id="vote-draft-feedback" role="status" aria-live="polite"></p>
           <div class="voting-submit-bar"><p id="voting-error" role="alert"></p><button class="button button-primary" type="submit">提交全部投票 <span>↗</span></button></div>
@@ -34,7 +34,7 @@
     <button class="modal-close" id="project-detail-close" type="button" aria-label="关闭作品详情">×</button>
     <div id="project-detail-content"></div>
   </dialog>
-  <script src="api.js"></script><script src="nav.js"></script><script src="voting.js"></script><script src="participant-fab.js"></script>
+  <script src="api.js"></script><script src="nav.js"></script><script src="ui.js"></script><script src="voting.js"></script><script src="participant-fab.js"></script>
   <div id="participant-fab-root"></div>
 </body>
 </html>

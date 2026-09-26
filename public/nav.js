@@ -11,8 +11,8 @@
       { id: "about", label: "活动介绍", href: "index.html#about", current: ["home", "starter-pack"] },
       { id: "qa", label: "Q&A", href: "qa.html", current: ["qa"] },
       { id: "team", label: "组队工作区", href: "team.html", current: ["team"] },
-      // Gallery 与现场投票已注释移除。如需恢复，去除注释即可（index.html 奖项区的投票按钮由 app.js 单独控制，不受影响）。
-      // { id: "gallery", label: "项目 Gallery", href: "gallery.html", current: ["gallery", "submission"] },
+      // Gallery 在完成准入条件后显示；上传项目从 Gallery 页面进入。现场投票入口由 app.js 单独控制。
+      { id: "gallery", label: "项目 Gallery", href: "gallery.html", current: ["gallery"] },
       // { id: "voting", label: "现场投票", href: "voting.html", current: ["voting", "vote"], voting: true },
       { id: "profile", label: "个人主页", href: "profile.html", current: ["profile", "profile-dashboard"] }
     ];
@@ -37,6 +37,17 @@
 
   const toggle = header.querySelector(".nav-toggle");
   const nav = header.querySelector(".site-nav");
+  const galleryLink = nav.querySelector('a[href="gallery.html"]');
+  // Gallery is available only after the participant access checks complete.
+  const hideGallery = () => galleryLink?.remove();
+  const showGallery = () => {
+    if (nav.querySelector('a[href="gallery.html"]')) return;
+    const link = document.createElement("a");
+    link.href = "gallery.html";
+    link.textContent = "项目 Gallery";
+    if (page === "gallery") link.setAttribute("aria-current", "page");
+    nav.insertBefore(link, nav.querySelector(".nav-account"));
+  };
   const closeMenu = () => {
     nav.classList.remove("open");
     toggle.setAttribute("aria-expanded", "false");
@@ -73,13 +84,16 @@
     profileLink.title = name;
   };
   profileLink.classList.add("nav-account");
+  hideGallery();
   if (!window.MinicampAPI?.getToken()) signOut();
-  else window.MinicampAPI.request("/api/me").then(({participant}) => {
+  else window.MinicampAPI.request("/api/me").then(({participant, team, localSubmissionBypass}) => {
     const type = participant.registrationType || "contestant";
     signIn(participant);
     // 只有状态为「已录取」的参赛者能进入组队工作区：路演观众与 待审核/待复审/候补/未通过 都不显示入口。
     // 未登录访客仍然保留入口，点击后再走登录流程，由 team.html 自己按状态给出说明。
     if (type !== "contestant" || String(participant.status || "") !== "已录取") header.querySelector('a[href="team.html"]')?.remove();
+    const hasTeam = Boolean(team);
+    if (localSubmissionBypass || (type === "contestant" && String(participant.status || "") === "已录取" && hasTeam && window.MinicampAPI.isProfileComplete(participant))) showGallery();
   }).catch(signOut);
   window.MinicampAPI?.request("/api/config").then(({ config }) => {
     if (config.voteOpen) return;

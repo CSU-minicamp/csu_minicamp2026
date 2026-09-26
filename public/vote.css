@@ -131,12 +131,11 @@
 #project-detail-content > h2 { margin: 0 0 12px; font-size: 30px; line-height: 1.15; }
 #project-detail-content > h3 { margin: 22px 0 8px; font-size: 14px; }
 #project-detail-content > p { color: #3f3f39; font-size: 14px; line-height: 1.75; }
-#project-detail-content dl {
+#project-detail-content .project-detail-copy {
   margin: 22px 0 0;
   padding-top: 18px;
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: 10px 18px;
+  display: flex;
+  flex-direction: column;
   border-top: 1px solid var(--line);
 }
 #project-detail-content dt {
@@ -168,6 +167,6 @@
     gap: 8px;
   }
   #project-detail-content { padding: 26px 20px 32px; }
-  #project-detail-content dl { grid-template-columns: 1fr; gap: 4px; }
+  #project-detail-content .project-detail-copy > div { grid-template-columns: 1fr; gap: 4px; }
   #project-detail-content dt { margin-top: 8px; }
 }

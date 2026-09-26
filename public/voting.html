@@ -13,19 +13,19 @@
   <main class="voting-shell shell">
     <section class="voting-login" id="voting-login">
       <div><p class="section-kicker">DEMO FAIR / VOTING</p><h1>把你喜欢的<br>作品投出来。</h1><p>每位参与者可以为各奖项选择第一、第二、第三选择。第一选择 3 票，第二选择 2 票，第三选择 1 票。People's Choice 另选一个最喜欢的项目。</p><div class="vote-rules"><div><strong>3</strong><span>第一选择</span></div><div><strong>2</strong><span>第二选择</span></div><div><strong>1</strong><span>第三选择</span></div></div></div>
-      <form class="profile-login-card" id="voting-login-form" novalidate><div class="profile-card-top"><span class="status-dot"></span>中南大学身份确认</div><h2>进入投票</h2><p>面向中南大学同学开放，填写姓名和报名编号即可参与大众投票。</p><label>姓名<input id="public-voter-name" required maxlength="40" autocomplete="name" placeholder="请输入真实姓名"></label><label>报名编号<input id="public-voter-code" required maxlength="24" autocomplete="username" placeholder="例如 MC26-1001，路演为 RO-2026-000001"><small class="field-help">参赛报名者在报名成功页 / 个人主页可以看到自己的编号</small></label><p class="identity-privacy">报名编号仅用于身份核验和防重复投票，系统只保存不可逆的去重标识。</p><p class="profile-error" id="voter-error" role="alert"></p><button class="button button-dark" type="submit">开始投票 <span>↗</span></button><div class="profile-demo-hint">每个报名编号只能提交一次投票</div></form>
+      <form class="profile-login-card" id="voting-login-form" novalidate><div class="profile-card-top"><span class="status-dot"></span>中南大学身份确认</div><h2>进入投票</h2><p>面向参赛者和路演观众开放，填写姓名和报名编号即可参与投票。</p><label>姓名<input id="public-voter-name" required maxlength="40" autocomplete="name" placeholder="请输入真实姓名"></label><label>报名编号<input id="public-voter-code" required maxlength="24" autocomplete="username" placeholder="例如 MC26-1001，路演为 RO-2026-000001"><small class="field-help">参赛报名者在报名成功页 / 个人主页可以看到自己的编号</small></label><p class="identity-privacy">报名编号仅用于身份核验和防重复投票，系统只保存不可逆的去重标识。</p><p class="profile-error" id="voter-error" role="alert"></p><button class="button button-dark" type="submit">开始投票 <span>↗</span></button><div class="profile-demo-hint">每个报名编号只能提交一次投票</div></form>
     </section>
 
     <section class="voting-workspace" id="voting-workspace" hidden>
-      <div class="voting-top"><div><p class="section-kicker">PEOPLE'S VOTE / 2026</p><h1>选择你愿意支持的作品。</h1><p>你好，<strong id="voter-name">参与者</strong><span id="voter-code"></span>。不能投给自己的队伍，每个奖项提交一次。</p></div><button class="outline-button" id="voting-logout" type="button">退出投票</button></div>
+      <div class="voting-top"><div><p class="section-kicker">PEOPLE'S VOTE / 2026</p><h1>把你的一票，投给打动你的作品</h1><p>你好，<strong id="voter-name">参与者</strong><span id="voter-code"></span>。前五个奖项各选前三名，现场人气奖单选；且不能投给自己的队伍。</p></div><button class="outline-button" id="voting-logout" type="button">退出投票</button></div>
       <section class="project-browser" aria-labelledby="project-browser-title">
-        <div class="project-browser-heading"><div><p class="section-kicker">PROJECTS / DEMO FAIR</p><h2 id="project-browser-title">先看看有哪些作品。</h2></div><span id="project-count">0 个作品</span></div>
-        <p>点击作品卡片查看项目背景、解决方案、团队成员与 Demo 链接。</p>
+        <div class="project-browser-heading"><div><p class="section-kicker">PROJECTS / DEMO FAIR</p><h2 id="project-browser-title">逛一逛，今年有哪些作品</h2></div><span id="project-count">0 个作品</span></div>
+        <p>点开卡片，看看他们想解决什么问题、做出了什么。</p>
         <div class="project-browser-grid" id="project-browser-grid"></div>
       </section>
       <section class="vote-entry" aria-labelledby="vote-entry-title">
-        <div class="vote-entry-heading"><div><p class="section-kicker">CAST YOUR VOTE</p><h2 id="vote-entry-title">现在，投出你的选择。</h2></div><span>每个奖项仅可提交一次</span></div>
-        <div class="vote-notice"><span>!</span><p><strong>投票提示</strong> 每个正式奖项的第一、第二、第三选择必须是三个不同项目；你不能投给自己的队伍。</p></div>
+        <div class="vote-entry-heading"><div><p class="section-kicker">CAST YOUR VOTE</p><h2 id="vote-entry-title">看好了？来投票</h2></div><span>提交后不可修改</span></div>
+        <div class="vote-notice"><span>!</span><p><strong>投票提示</strong> 每个奖项的一、二、三选择须为三个不同项目。</p></div>
         <form id="voting-form">
           <div class="formal-votes" id="formal-votes"></div>
           <section class="people-choice-block"><div class="vote-section-title"><div><p class="section-kicker">SPECIAL AWARD</p><h2>现场人气奖</h2></div><span>PEOPLE'S CHOICE · 单选</span></div><div class="candidate-grid" id="people-candidates"></div></section>

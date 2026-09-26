@@ -24,7 +24,7 @@ window.MinicampAPI = (() => {
     location.replace("profile.html?" + query.toString());
   };
   async function requireProfile(returnTo = profileReturnUrl()) {
-    if (isLocalPreview()) return { participant: previewParticipant, team: null };
+    if (isLocalPreview()) return { participant: previewParticipant, team: null, localSubmissionBypass: true };
     try {
       const data = await request("/api/me");
       if (!isProfileComplete(data.participant)) {

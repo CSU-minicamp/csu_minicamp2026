@@ -1,6 +1,50 @@
 /* submission.css — 作品提交页（submission.html）专用样式 */
-.project-form {max-width:860px;margin:24px auto;display:grid;gap:18px}
-.field-hint {display:block;color:var(--muted,#666);font-size:12px;margin-top:6px}
-.required-mark,.optional-mark {font-style:normal;font-size:11px;font-weight:700;margin-left:5px}
-.required-mark {color:#d94b3f}
-.optional-mark {color:var(--muted,#777)}
+.project-form { max-width: 860px; margin: 24px auto; padding: 34px; display: grid; gap: 24px; }
+.form-intro { padding-bottom: 24px; border-bottom: 1px solid var(--ink); }
+.form-intro .section-kicker { margin-bottom: 12px; color: var(--coral); }
+.form-intro h2 { margin: 0 0 10px; font-size: clamp(28px, 4vw, 42px); }
+.form-intro p:last-child { max-width: 600px; margin: 0; color: var(--muted); font-size: 13px; }
+.project-form > label,
+.project-form .field-grid label { display: flex; flex-direction: column; gap: 8px; font-size: 12px; font-weight: 800; }
+.project-form input,
+.project-form textarea,
+.project-form select { min-height: 48px; padding: 13px 14px; font-size: 13px; }
+.project-form textarea { min-height: 128px; resize: vertical; line-height: 1.65; }
+.project-form input::placeholder,
+.project-form textarea::placeholder { color: #989890; opacity: 1; }
+.project-form select:invalid { color: var(--muted); }
+.project-form .field-grid { gap: 18px; }
+.upload-field { min-height: 88px; padding: 16px; display: grid !important; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px !important; border: 1px dashed var(--line); border-radius: 4px; background: #fbfbf7; cursor: pointer; }
+.upload-field:hover { border-color: var(--ink); background: white; }
+.upload-field-copy { display: flex; flex-direction: column; gap: 5px; }
+.upload-field-copy strong { font-size: 12px; }
+.upload-field-copy small { color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.5; }
+.upload-field input[type="file"] { width: auto; min-height: auto; padding: 0; border: 0; background: transparent; font-size: 11px; cursor: pointer; }
+.upload-file-name { grid-column: 1 / -1; color: var(--muted); font-size: 11px; font-weight: 400; }
+.field-hint { display: block; color: var(--muted, #666); font-size: 12px; margin-top: 6px; }
+#member-fields fieldset { margin: 0; padding: 20px; border: 1px solid var(--line); border-radius: 4px; }
+#member-fields legend { padding: 0 8px; font-size: 13px; font-weight: 800; }
+#member-fields fieldset label { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; font-weight: 700; }
+#member-fields fieldset label:first-of-type { margin-top: 4px; }
+#member-fields fieldset input { min-height: 44px; }
+@media (max-width: 620px) {
+  .project-form { margin-top: 18px; padding: 22px 18px; gap: 20px; }
+  .project-form .field-grid { grid-template-columns: 1fr; }
+  .upload-field { grid-template-columns: 1fr; }
+  .upload-field input[type="file"] { width: 100%; }
+}
+.form-error { min-height: 22px; margin: 0; padding: 0; color: var(--error); font-size: 12px; line-height: 1.6; }
+.form-error:not(:empty) { padding: 11px 13px; border-left: 3px solid var(--error); background: #fff0ed; }
+.project-form input.has-error,
+.project-form textarea.has-error,
+.project-form select.has-error { border-color: var(--error); box-shadow: 0 0 0 2px rgba(180, 35, 24, .12); }
+.field-error { color: var(--error); font-size: 11px; font-weight: 600; line-height: 1.45; }
+.project-form .button.is-loading { cursor: wait; opacity: .72; }
+.project-form .button.is-loading .submit-arrow { display: inline-block; animation: submit-pulse .9s ease-in-out infinite; }
+@keyframes submit-pulse { 50% { transform: translateX(4px); opacity: .45; } }
+.local-test-note { margin: 14px 0 0; padding: 10px 12px; color: #6c5100; background: #fff4c7; border-left: 3px solid var(--yellow); font-size: 12px; line-height: 1.6; }
+.submission-exit { flex: 0 0 auto; white-space: nowrap; }
+.submission-exit span { font-size: 16px; line-height: 1; }
+@media (max-width: 620px) {
+  .submission-exit { align-self: flex-start; }
+}

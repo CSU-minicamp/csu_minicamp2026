@@ -639,20 +639,46 @@
 
   function renderVoting() {
     const results = state.results || [], awards = state.awards || [];
-    const participantVotes = new Set((state.votes || []).filter(vote => vote.role === "participant").map(vote => vote.voterId)).size;
-    const juryVotes = new Set((state.votes || []).filter(vote => vote.role === "jury").map(vote => vote.voterId)).size;
-    setHtml("vote-summary", "<div class='vote-leader'><span>投票状态</span><strong>" + (state.config?.voteOpen ? "开放中" : "未开放") + "</strong><p>参与者 " + participantVotes + " 人 · Jury " + juryVotes + " 人</p></div><div class='vote-list'><div class='vote-row'><strong>参与者权重</strong><span class='vote-meter'><i style='width:" + Number(state.config?.participantWeight || 0) + "%'></i></span><b>" + Number(state.config?.participantWeight || 0) + "%</b></div><div class='vote-row'><strong>Jury 权重</strong><span class='vote-meter'><i style='width:" + Number(state.config?.juryWeight || 0) + "%'></i></span><b>" + Number(state.config?.juryWeight || 0) + "%</b></div></div>");
-    setHtml("vote-results", awards.map(award => "<div class='vote-row'><strong>" + esc(award.award) + "</strong><span>" + esc(award.projectName || award.projectId) + " · " + esc(award.teamId || "") + "</span><b>" + Number(award.weighted || 0).toFixed(1) + "</b></div>").join("") || (results.length ? "<p class='empty-state'>已有投票，正在计算获奖项目。</p>" : "<p class='empty-state'>暂无已提交投票</p>"));
-    // 投票人名单：统一按「报名编号 · 姓名」区分投票人（Jury 单独标注）。
-    const voteRows = [...(state.votes || [])].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).map(vote => {
-      const jury = vote.role === "jury";
-      const known = (state.applications || []).find(a => a.id === vote.voterId);
-      const code = vote.voterCode || (known ? known.id : "");
-      const name = known ? known.name : "";
-      const label = jury ? "Jury 评审" : code ? (name ? code + " · " + name : code) : (vote.voterId || "未知投票人");
-      return "<div class='vote-voter'><span class='vote-voter-role" + (jury ? " is-jury" : "") + "'>" + (jury ? "JURY" : "参与者") + "</span><strong>" + esc(label) + "</strong><small>" + (jury ? esc((vote.selections || []).length + " 个奖项") : name ? "已报名" : "未匹配到报名编号") + "</small><time>" + esc(fmt(vote.createdAt)) + "</time></div>";
+    const activeVotes = (state.votes || []).filter(vote => vote.status !== "voided");
+    const participantVotes = new Set(activeVotes.filter(vote => vote.role === "participant").map(vote => vote.voterId)).size;
+    const organizerVotes = new Set(activeVotes.filter(vote => vote.role === "organizer" || vote.role === "jury").map(vote => vote.voterId)).size;
+    setHtml("vote-summary", "<div class='vote-leader'><span>投票状态</span><strong>" + (state.config?.voteOpen ? "开放中" : "未开放") + "</strong><p>大众 " + participantVotes + " 人 · 主办方 " + organizerVotes + " 人</p></div><div class='vote-list'><div class='vote-row'><strong>大众组权重</strong><span class='vote-meter'><i style='width:" + Number(state.config?.participantWeight || 60) + "%'></i></span><b>" + Number(state.config?.participantWeight || 60) + "%</b></div><div class='vote-row'><strong>主办方组权重</strong><span class='vote-meter'><i style='width:" + Number(state.config?.juryWeight || 40) + "%'></i></span><b>" + Number(state.config?.juryWeight || 40) + "%</b></div></div>");
+    const participantWeight = Number(state.config?.participantWeight ?? 60);
+    const juryWeight = Number(state.config?.juryWeight ?? 40);
+    document.querySelectorAll("#vote-summary .vote-row").forEach((row, index) => {
+      const weight = [participantWeight, juryWeight][index];
+      if (weight === undefined) return;
+      row.querySelector("i")?.style.setProperty("width", weight + "%");
+      const label = row.querySelector("b");
+      if (label) label.textContent = weight + "%";
+    });
+    const awardRows = awards.map(award => {
+      const score = award.status === "tie" ? "平票待裁决" : award.status === "pending" ? "暂无可确认结果" : award.projectName || "待定";
+      const raw = award.award === "People's Choice" ? Number(award.rawVotes || award.totalRaw || 0).toFixed(0) + " 票" : "大众 " + Number(award.participantRaw || 0).toFixed(0) + " · 主办方 " + Number(award.organizerRaw || 0).toFixed(0) + " · 加权 " + (award.weightedScore == null ? "—" : Number(award.weightedScore).toFixed(2) + "%");
+      const tieOptions = award.status === "tie" ? (award.candidates || []).map(row => "<option value='" + esc(row.projectId) + "'>" + esc(row.projectName || row.projectId) + "</option>").join("") : "";
+      const action = award.status === "tie" ? "<select data-award-decision='" + esc(award.award) + "'><option value=''>选择获奖项目</option>" + tieOptions + "</select><button type='button' class='outline-button award-decision' data-award='" + esc(award.award) + "'>确认</button>" : "";
+      return "<div class='vote-row'><strong>" + esc(award.awardLabel || award.award) + "</strong><span>" + esc(score) + "<small class='vote-detail'>" + esc(raw) + "</small>" + action + "</span><b>" + (award.status || "") + "</b></div>";
     }).join("");
-    setHtml("vote-voters", voteRows ? voteRows : "<p class='empty-state'>暂无投票记录</p>");
+    setHtml("vote-results", awardRows || (results.length ? "<p class='empty-state'>已有投票，正在计算结果。</p>" : "<p class='empty-state'>暂无已提交投票</p>"));
+    document.querySelectorAll(".award-decision").forEach(button => button.onclick = async () => {
+      const select = document.querySelector("[data-award-decision='" + CSS.escape(button.dataset.award) + "']");
+      if (!select?.value) return toast("请选择获奖项目", "error");
+      try { await api.request("/api/admin/award-decisions", {method:"POST", body:JSON.stringify({award:button.dataset.award, projectId:select.value})}); toast("获奖项目已确认", "success"); await load(); } catch (error) { toast(error.message, "error"); }
+    });
+    const organizers = state.organizers || [];
+    setHtml("organizer-list", organizers.map(item => "<div class='vote-voter'><span class='vote-voter-role is-jury'>主办方</span><strong>" + esc(item.code) + " · " + esc(item.name) + "</strong><small>" + esc(item.status || "active") + "</small><button type='button' class='outline-button organizer-toggle' data-id='" + esc(item.id) + "' data-status='" + (item.status === "inactive" ? "active" : "inactive") + "'>" + (item.status === "inactive" ? "启用" : "停用") + "</button></div>").join("") || "<p class='empty-state'>暂无主办方编号</p>");
+    document.querySelectorAll(".organizer-toggle").forEach(button => button.onclick = async () => { try { await api.request("/api/admin/organizers/" + encodeURIComponent(button.dataset.id), {method:"PATCH", body:JSON.stringify({status:button.dataset.status})}); await load(); } catch (error) { toast(error.message, "error"); } });
+    const voteRows = [...(state.votes || [])].sort((a,b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).map(vote => {
+      const voided = vote.status === "voided"; const role = vote.role === "organizer" || vote.role === "jury" ? "主办方" : "大众";
+      const name = vote.voterName || ((state.applications || []).find(a => a.id === vote.voterId)?.name || "");
+      const label = [vote.voterCode || vote.voterId, name].filter(Boolean).join(" · ");
+      return "<div class='vote-voter" + (voided ? " is-voided" : "") + "'><span class='vote-voter-role" + (role === "主办方" ? " is-jury" : "") + "'>" + role + "</span><strong>" + esc(label || "未知投票人") + "</strong><small>" + (voided ? "已撤回：" + esc(vote.voidReason || "") : esc((vote.selections || []).length + " 项选择")) + "</small><time>" + esc(fmt(vote.createdAt)) + "</time>" + (!voided ? "<button type='button' class='outline-button vote-reset' data-id='" + esc(vote.id) + "'>撤回并允许重投</button>" : "") + "</div>";
+    }).join("");
+    setHtml("vote-voters", voteRows || "<p class='empty-state'>暂无投票记录</p>");
+    document.querySelectorAll(".vote-reset").forEach(button => button.onclick = async () => { const ok = await MinicampUI.confirm({title:"撤回这份投票？", body:"撤回后原投票不再计入结果，该投票人可以重新提交。", tone:"danger", confirmText:"撤回并允许重投"}); if (!ok) return; try { await api.request("/api/admin/votes/" + encodeURIComponent(button.dataset.id) + "/reset", {method:"POST", body:JSON.stringify({reason:"主办方撤回"})}); toast("投票已撤回，可重新提交", "success"); await load(); } catch (error) { toast(error.message, "error"); } });
+    setHtml("vote-anomalies", (state.voteAttempts || []).slice(0,100).map(item => "<div class='vote-voter'><span class='vote-voter-role is-jury'>异常</span><strong>" + esc(item.reason || "未知异常") + "</strong><small>" + esc(item.role || "") + " · " + esc(item.voterId || item.code || "") + "</small><time>" + esc(fmt(item.createdAt)) + "</time></div>").join("") || "<p class='empty-state'>暂无异常记录</p>");
+    const create = document.getElementById("organizer-create-form");
+    if (create && !create.dataset.bound) { create.dataset.bound = "1"; create.onsubmit = async event => { event.preventDefault(); const data = new FormData(create); try { await api.request("/api/admin/organizers", {method:"POST", body:JSON.stringify({code:data.get("code"),name:data.get("name")})}); create.reset(); toast("主办方编号已新增", "success"); await load(); } catch (error) { toast(error.message, "error"); } }; }
   }
 
   // 服务端已经下发 typeLabel（唯一权威）；这张表只在老数据缺 typeLabel 时兜底。
@@ -851,10 +877,13 @@
     const box = document.getElementById("config-editor"); if (!box) return;
     const c = state.config || {};
     const pack = JSON.stringify(c.starterPack || {}, null, 2);
-    box.innerHTML = "<div class='admin-card-head'><h2>活动配置</h2><span id='config-form-state'>保存后官网实时生效</span></div><form class='field-grid'><label>活动名称<input name='eventName' value='" + esc(c.eventName) + "'></label><label>活动日期<input name='date' value='" + esc(c.date) + "'></label><label>活动地点<input name='venue' value='" + esc(c.venue) + "'></label><label>主题揭晓<input name='themeReveal' value='" + esc(c.themeReveal) + "'></label><label>报名截止" + timeInput("applicationDeadline", "报名截止", c.applicationDeadline) + "</label><label>录取公布" + timeInput("resultDate", "录取公布", c.resultDate) + "</label><label>投票开始时间" + timeInput("voteStartAt", "投票开始时间", c.voteStartAt) + "</label><label>报名状态<select name='applicationOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>正式组队确认<select name='teamConfirmOpen'><option value='true'>开启</option><option value='false'>关闭</option></select></label><label>投票状态<select name='voteOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>参与者投票权重（%）<input name='participantWeight' type='number' min='0' max='100' value='" + Number(c.participantWeight || 60) + "'></label><label>Jury 投票权重（%）<input name='juryWeight' type='number' min='0' max='100' value='" + Number(c.juryWeight || 40) + "'></label><label class='config-pack'>Starter Pack（JSON）<textarea name='starterPack' rows='10'>" + esc(pack) + "</textarea></label><div class='config-actions'><button class='button button-dark'>保存配置</button></div></form>";
+    box.innerHTML = "<div class='admin-card-head'><h2>活动配置</h2><span id='config-form-state'>保存后官网实时生效</span></div><form class='field-grid'><label>活动名称<input name='eventName' value='" + esc(c.eventName) + "'></label><label>活动日期<input name='date' value='" + esc(c.date) + "'></label><label>活动地点<input name='venue' value='" + esc(c.venue) + "'></label><label>主题揭晓<input name='themeReveal' value='" + esc(c.themeReveal) + "'></label><label>报名截止" + timeInput("applicationDeadline", "报名截止", c.applicationDeadline) + "</label><label>录取公布" + timeInput("resultDate", "录取公布", c.resultDate) + "</label><label>投票开始时间" + timeInput("voteStartAt", "投票开始时间", c.voteStartAt) + "</label><label>报名状态<select name='applicationOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>正式组队确认<select name='teamConfirmOpen'><option value='true'>开启</option><option value='false'>关闭</option></select></label><label>投票状态<select name='voteOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>参与者投票权重（%）<input name='participantWeight' type='number' min='0' max='100' value='" + Number(c.participantWeight || 60) + "'></label><label>Jury 投票权重（%）<input name='juryWeight' type='number' min='0' max='100' value='" + Number(c.juryWeight || 40) + "'></label><label>结果公开<select name='resultsPublic'><option value='true'>公开</option><option value='false'>不公开</option></select></label><label class='config-pack'>Starter Pack（JSON）<textarea name='starterPack' rows='10'>" + esc(pack) + "</textarea></label><div class='config-actions'><button class='button button-dark'>保存配置</button></div></form>";
     box.querySelector('[name="applicationOpen"]').value = String(c.applicationOpen);
     box.querySelector('[name="teamConfirmOpen"]').value = String(Boolean(c.teamConfirmOpen));
     box.querySelector('[name="voteOpen"]').value = String(c.voteOpen);
+    box.querySelector('[name="participantWeight"]').value = String(c.participantWeight ?? 60);
+    box.querySelector('[name="juryWeight"]').value = String(c.juryWeight ?? 40);
+     box.querySelector('[name="resultsPublic"]').value = String(Boolean(c.resultsPublic));
     // 重建后把未保存的草稿放回，自动刷新不会清掉正在改的配置。
     preserveForm(box.querySelector("form"), draftOf("config"));
     bindDraft("config", box.querySelector("form"), "config-form-state");
@@ -865,7 +894,7 @@
     box.querySelector("form").onsubmit = async e => {
       e.preventDefault();
       const d = Object.fromEntries(new FormData(e.currentTarget));
-      d.applicationOpen = d.applicationOpen === "true"; d.teamConfirmOpen = d.teamConfirmOpen === "true"; d.voteOpen = d.voteOpen === "true";
+      d.applicationOpen = d.applicationOpen === "true"; d.teamConfirmOpen = d.teamConfirmOpen === "true"; d.voteOpen = d.voteOpen === "true"; d.resultsPublic = d.resultsPublic === "true";
       d.participantWeight = Number(d.participantWeight); d.juryWeight = Number(d.juryWeight);
       for (const key of ["applicationDeadline", "resultDate", "voteStartAt"]) {
         const parsed = joinTime(d[key + "Date"], d[key + "Hour"], d[key + "Minute"]);
