@@ -43,8 +43,46 @@
 .project-form .button.is-loading .submit-arrow { display: inline-block; animation: submit-pulse .9s ease-in-out infinite; }
 @keyframes submit-pulse { 50% { transform: translateX(4px); opacity: .45; } }
 .local-test-note { margin: 14px 0 0; padding: 10px 12px; color: #6c5100; background: #fff4c7; border-left: 3px solid var(--yellow); font-size: 12px; line-height: 1.6; }
-.submission-exit { flex: 0 0 auto; white-space: nowrap; }
-.submission-exit span { font-size: 16px; line-height: 1; }
+.submission-exit {
+  min-height: 48px;
+  padding: 0 16px 0 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  color: var(--ink);
+  background: var(--white);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: 4px 4px 0 var(--coral);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: transform .16s ease, color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.submission-exit:hover {
+  color: white;
+  background: var(--coral);
+  border-color: var(--ink);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--ink);
+}
+.submission-exit:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+}
+.submission-exit span {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 1;
+  transition: transform .16s ease;
+}
+.submission-exit:hover span { transform: translateX(-2px); }
 @media (max-width: 620px) {
   .submission-exit { align-self: flex-start; }
 }
