@@ -108,14 +108,16 @@
   function showLogin() {
     if (document.getElementById("admin-login")) return;
     const box = document.createElement("section"); box.id = "admin-login"; box.className = "admin-login-card";
-    box.innerHTML = "<p class='section-kicker'>ORGANIZER ACCESS</p><h2>进入报名管理工作台</h2><form><label>主办方密码<input type='password' name='password' required></label><p class='form-error'></p><button class='button button-dark'>登录</button></form>";
+    box.innerHTML = "<p class='section-kicker'>ORGANIZER ACCESS</p><h2>进入报名管理工作台</h2><form><label>主办方密码<input type='password' name='password' required></label><label>Jury 编号（可留空）<input name='organizerCode' maxlength='40' autocomplete='off' placeholder='例如 ORG-001；填了这次登录同时具备评委身份'></label><p class='form-error'></p><button class='button button-dark'>登录</button></form>";
     root.prepend(box);
     const form = box.querySelector("form");
     if (!form) return;
     form.onsubmit = async e => {
       e.preventDefault();
       try {
-        const d = await api.request("/api/auth/admin", { method: "POST", body: JSON.stringify({ password: new FormData(e.currentTarget).get("password") }) });
+        // FormData 必须在 await 之前取好（事件派发结束后 e.currentTarget 会变成 null）。
+        const data = new FormData(e.currentTarget);
+        const d = await api.request("/api/auth/admin", { method: "POST", body: JSON.stringify({ password: data.get("password"), organizerCode: data.get("organizerCode") }) });
         api.setAdminToken(d.token);
         box.remove();
         await load();
