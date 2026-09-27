@@ -76,6 +76,27 @@
   });
   const escapeHtml = value => String(value).replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 
+  const renderMemberFields = (team, project = null) => {
+    const roles = new Map((project?.members || []).map(member => [String(member.name || ""), String(member.role || "")]));
+    fields.innerHTML = "<fieldset><legend>团队成员分工（每项选填）</legend>" + team.members.map(member =>
+      "<label>" + escapeHtml(member.name) + "<input data-member-role data-member-name='" + escapeHtml(member.name) + "' placeholder='例如：产品负责人、前端开发、视觉设计（选填）' value='" + escapeHtml(roles.get(String(member.name || "")) || "") + "'></label>"
+    ).join("") + "</fieldset>";
+  };
+  const fillProjectFields = project => {
+    for (const name of ["projectName", "theme", "tagline", "problem", "solution", "demoUrl", "githubUrl"]) {
+      const field = form.elements[name];
+      if (field) field.value = project?.[name] || "";
+    }
+    form.elements.aiTools.value = Array.isArray(project?.aiTools) ? project.aiTools.join(", ") : String(project?.aiTools || "");
+    coverUrl.value = project?.coverUrl || "";
+    if (coverFileName && project?.coverUrl) coverFileName.textContent = "已上传封面图（重新选择可替换）";
+  };
+  const setFormLocked = locked => {
+    form.classList.toggle("is-locked", locked);
+    form.querySelectorAll("input, textarea, select, button").forEach(field => { field.disabled = locked; });
+    if (locked) error.textContent = "投票已开始，作品内容已锁定，暂不能修改。";
+  };
+
   async function init() {
     try {
       const profile = await api.requireProfile("submission.html");
@@ -94,11 +115,29 @@
         note.textContent = "本地测试模式：当前账号暂时跳过组队限制；正式环境仍需先创建或加入队伍。";
         form.querySelector(".form-intro")?.appendChild(note);
       }
-      fields.innerHTML = "<fieldset><legend>团队成员分工（每项选填）</legend>" + team.members.map(member =>
-        "<label>" + escapeHtml(member.name) + "<input data-member-role data-member-name='" + escapeHtml(member.name) + "' placeholder='例如：产品负责人、前端开发、视觉设计（选填）'></label>"
-      ).join("") + "</fieldset>";
+      renderMemberFields(team);
       form.dataset.teamId = team.id;
       form.dataset.participantId = participant.id;
+      if (!localSubmissionBypass) {
+        const mine = await api.request("/api/me/project");
+        existingProject = mine.project;
+        voteOpen = Boolean(mine.voteOpen);
+      }
+      if (existingProject) {
+        form.dataset.projectId = existingProject.id;
+        fillProjectFields(existingProject);
+        renderMemberFields(team, existingProject);
+        if (submitLabel) submitLabel.textContent = "保存项目修改";
+        const intro = form.querySelector(".form-intro");
+        if (intro && !intro.querySelector(".submission-edit-note")) {
+          const note = document.createElement("p");
+          note.className = "submission-edit-note";
+          note.textContent = "这是你们已提交的项目，投票开放前可以继续修改。";
+          intro.appendChild(note);
+        }
+      }
+      if (voteOpen) setFormLocked(true);
+
     } catch {
       location.href = "profile.html";
     }
@@ -129,13 +168,16 @@
       payload.members = members;
       payload.aiTools = String(data.get("aiTools") || "").split(",").map(item => item.trim()).filter(Boolean);
       error.textContent = "";
-      await api.request("/api/projects", { method: "POST", body: JSON.stringify(payload) });
-      form.innerHTML = "<div class='form-success'><span class='success-mark'>✓</span><p class='section-kicker'>PROJECT SAVED</p><h3>项目草稿已提交。</h3><p>主办方审核并发布后，项目会显示在 Gallery 中。</p><a class='button button-dark' href='gallery.html'>查看 Project Gallery</a></div>";
+      const endpoint = existingProject ? "/api/projects/" + encodeURIComponent(existingProject.id) : "/api/projects";
+      const method = existingProject ? "PATCH" : "POST";
+      const result = await api.request(endpoint, { method, body: JSON.stringify(payload) });
+      existingProject = result.project || existingProject;
+      form.innerHTML = "<div class='form-success'><span class='success-mark'>✓</span><p class='section-kicker'>PROJECT SAVED</p><h3>" + (method === "PATCH" ? "项目修改已保存。" : "项目草稿已提交。") + "</h3><p>主办方审核并发布后，项目会显示在 Gallery 中。</p><a class='button button-dark' href='gallery.html'>查看 Project Gallery</a></div>";
     } catch (err) {
       error.textContent = err.message || "提交失败，请稍后重试。";
       submit.disabled = false;
       submit.classList.remove("is-loading");
-      if (submitLabel) submitLabel.textContent = "重新提交";
+      if (submitLabel) submitLabel.textContent = existingProject ? "保存项目修改" : "重新提交";
     } finally {
       if (coverFile) coverFile.disabled = false;
     }
