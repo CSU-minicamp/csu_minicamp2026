@@ -7,7 +7,8 @@
   const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[char]));
   const projectOptions = () => projects.map(project => "<option value='" + esc(project.id) + "'>" + esc(project.projectName) + "</option>").join("");
   const formalFields = award => "<fieldset class='jury-award-field'><legend>" + esc(labels[award]) + "</legend><label>第一选择 · 3 票<select data-award='" + esc(award) + "' data-points='3' required><option value=''>请选择</option>" + projectOptions() + "</select></label><label>第二选择 · 2 票<select data-award='" + esc(award) + "' data-points='2' required><option value=''>请选择</option>" + projectOptions() + "</select></label><label>第三选择 · 1 票<select data-award='" + esc(award) + "' data-points='1' required><option value=''>请选择</option>" + projectOptions() + "</select></label></fieldset>";
-  const peopleField = "<fieldset class='jury-award-field'><legend>现场人气奖</legend><label>选择一个项目<select data-award='" + peopleAward + "' data-points='1' required><option value=''>请选择</option>" + projectOptions() + "</select></label></fieldset>";
+  // 必须和 formalFields 一样延迟到渲染时求值：写成字符串常量会在 projects 还没拉到时就把空选项定死。
+  const peopleField = () => "<fieldset class='jury-award-field'><legend>现场人气奖</legend><label>选择一个项目<select data-award='" + peopleAward + "' data-points='1' required><option value=''>请选择</option>" + projectOptions() + "</select></label></fieldset>";
   const login = document.getElementById("jury-login");
   login.onsubmit = async event => {
     event.preventDefault();
@@ -19,7 +20,7 @@
       projects = (await api.request("/api/projects")).projects || [];
       document.querySelector(".voting-login").hidden = true;
       document.getElementById("jury-workspace").hidden = false;
-      document.getElementById("jury-fields").innerHTML = formalAwards.map(formalFields).join("") + peopleField;
+      document.getElementById("jury-fields").innerHTML = formalAwards.map(formalFields).join("") + peopleField();
     } catch (error) { document.getElementById("jury-error").textContent = error.message; }
   };
   document.getElementById("jury-form").onsubmit = async event => {
