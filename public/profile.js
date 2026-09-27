@@ -118,9 +118,10 @@
   async function renderVote() {
     const container = document.getElementById("my-vote-content");
     if (!container) return;
-    const {vote, voteOpen} = await api.request("/api/me/vote");
+    const {vote, voteOpen, voteStatus} = await api.request("/api/me/vote");
     if (!vote) {
-      container.innerHTML = "<div class='my-vote-empty'><span>○</span><div><strong>" + (voteOpen ? "你还没有投票。" : "投票暂未开放。") + "</strong><p>" + (voteOpen ? "浏览作品后，为你喜欢的项目投出一票。" : "主办方设置开始时间后，这里会显示投票入口。") + "</p>" + (voteOpen ? "<a class='button button-primary' href='vote.html'>去投票 <span>↗</span></a>" : "") + "</div></div>";
+      const ended = voteStatus === "ended";
+      container.innerHTML = "<div class='my-vote-empty'><span>\u25cb</span><div><strong>" + (voteOpen ? "\u4f60\u8fd8\u6ca1\u6709\u6295\u7968\u3002" : (ended ? "\u6295\u7968\u5df2\u7ed3\u675f\u3002" : "\u6295\u7968\u6682\u672a\u5f00\u653e\u3002")) + "</strong><p>" + (voteOpen ? "\u6d4f\u89c8\u4f5c\u54c1\u540e\uff0c\u4e3a\u4f60\u559c\u6b22\u7684\u9879\u76ee\u6295\u51fa\u4e00\u7968\u3002" : (ended ? "\u6295\u7968\u5df2\u7ed3\u675f\uff0c\u5956\u9879\u516c\u5e03\u540e\u53ef\u4ee5\u5728\u5b98\u7f51\u67e5\u770b\u83b7\u5956\u961f\u4f0d\u3002" : "\u4e3b\u529e\u65b9\u5f00\u653e\u6295\u7968\u540e\uff0c\u8fd9\u91cc\u4f1a\u663e\u793a\u6295\u7968\u5165\u53e3\u3002")) + "</p>" + (voteOpen ? "<a class='button button-primary' href='vote.html'>\u53bb\u6295\u7968 <span>\u2197</span></a>" : "") + "</div></div>";
       return;
     }
     const groups = vote.selections.reduce((result, selection) => {

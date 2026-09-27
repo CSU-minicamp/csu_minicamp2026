@@ -32,7 +32,7 @@
     const selections = selects.map(select => ({award:select.dataset.award, projectId:select.value, points:Number(select.dataset.points)}));
     try {
       await api.request("/api/votes", {method:"POST", body:JSON.stringify({selections})});
-      event.currentTarget.innerHTML = "<div class='form-success'><h3>主办方投票已记录。</h3><p>如需更正，请联系后台撤回后重新提交。</p><a class='button button-dark' href='admin.html'>返回后台查看统计</a></div>";
+      event.currentTarget.innerHTML = "<div class='form-success'><h3>Jury 投票已记录。</h3><p>如需更正，请联系后台撤回后重新提交。</p><a class='button button-dark' href='admin.html'>返回后台查看统计</a></div>";
     } catch (error) { document.getElementById("jury-submit-error").textContent = error.message; }
   };
 })();

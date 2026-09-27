@@ -65,14 +65,15 @@
     registration.deadlineLabel = registration.deadline ? new Date(registration.deadline).toLocaleString("zh-CN", {hour12: false}) : "";
     document.querySelectorAll("[data-config-date]").forEach(el => el.textContent = config.date);
     document.querySelectorAll("[data-voting-entry]").forEach(el => {
-      if (config.voteOpen) {
-        el.innerHTML = "开始投票 <span>↗</span>";
+      const status = config.voteStatus || (config.voteEnded ? "ended" : (config.voteOpen ? "open" : "not_started"));
+      if (status === "open") {
+        el.innerHTML = "\u7acb\u5373\u6295\u7968 <span>\u2197</span>";
         el.setAttribute("href", "voting.html");
         el.removeAttribute("aria-disabled");
         el.removeAttribute("tabindex");
         el.classList.remove("is-disabled");
       } else {
-        el.textContent = "暂未开放投票";
+        el.textContent = status === "ended" ? "\u6295\u7968\u5df2\u7ed3\u675f" : "\u6682\u672a\u5f00\u653e\u6295\u7968";
         el.removeAttribute("href");
         el.setAttribute("aria-disabled", "true");
         el.setAttribute("tabindex", "-1");

@@ -31,6 +31,13 @@ const seed = {
     voteStartAt: "2026-09-01T00:00:00+08:00",
     teamConfirmOpen: false,
     voteOpen: false,
+    voteStatus: "not_started",
+    voteOpenedBy: null,
+    voteOpenedAt: null,
+    voteEndedBy: null,
+    voteEndedAt: null,
+    voteFrozenBy: null,
+    voteFrozenAt: null,
     juryWeight: 40,
     participantWeight: 60,
     resultsPublic: false,
@@ -55,6 +62,9 @@ const seed = {
   votes: [],
   organizers: [],
   awardDecisions: [],
+  awards: [],
+  voteSnapshot: null,
+  voteAudienceSnapshot: null,
   voteAttempts: [],
   teamRequests: [],
   sessions: {}
@@ -171,8 +181,21 @@ async function loadDb(){
   }
   for(const key of Object.keys(seed))if(!(key in db))db[key]=clone(seed[key]);
   db.config={...clone(seed.config),...(db.config||{})};
+  if (db.config.voteStatus === "ended" || db.config.voteEndedAt) { db.config.voteStatus = "ended"; db.config.voteOpen = false; }
+  else db.config.voteStatus = db.config.voteOpen ? "open" : "not_started";
+  if (!Array.isArray(db.awards)) db.awards = [];
+  if (!Object.hasOwn(db, "voteSnapshot")) db.voteSnapshot = null;
+  if (!Object.hasOwn(db, "voteAudienceSnapshot")) db.voteAudienceSnapshot = null;
+  if (votingStatus() === "ended" && Array.isArray(db.voteSnapshot?.results) && !db.voteSnapshot.frozenAt) {
+    db.voteSnapshot.frozenAt = db.voteSnapshot.capturedAt || db.config.voteEndedAt || new Date().toISOString();
+    db.voteSnapshot.frozenBy = db.voteSnapshot.endedBy || db.config.voteEndedBy || "ADMIN";
+    db.config.voteFrozenAt = db.voteSnapshot.frozenAt;
+    db.config.voteFrozenBy = db.voteSnapshot.frozenBy;
+  }
   // 问答存在独立表里：整理通知前先读一次，才能把「已回答」通知对回真正存在的问题。
   await qaStore.initialize();
+  if (votingStatus() === "open" && !db.voteAudienceSnapshot) db.voteAudienceSnapshot = captureVoteAudience();
+  if (resultsAreFrozen() && !db.awards.length) initializeAwardRecords("ADMIN");
   await saveDb();
 }
 let saveQueue=Promise.resolve();
@@ -207,6 +230,15 @@ function person(req){const s=session(req,"participant");return s&&db.application
 function publicVoter(req){return session(req,"voter");}
 function admin(req){return Boolean(session(req,"admin"));}
 function adminSession(req){return session(req,"admin");}
+function controlSession(req){
+  const administrator=session(req,"admin");
+  if(administrator)return administrator;
+  return organizerSession(req);
+}
+function controlActor(req){
+  const current=controlSession(req);
+  return current?.organizerId||current?.userId||"ADMIN";
+}
 /**
  * 队伍视图。includeCode 默认 false（公开视角不下发邀请码）：
  * 只有「本队成员 / 主办方」的接口显式传 {includeCode:true}，匿名列表拿不到队伍邀请码。
@@ -218,7 +250,63 @@ function teamView(team,{includeCode=false}={}){
   return view;
 }
 function projectView(project,options){return {...project,team:teamView(db.teams.find(x=>x.id===project.teamId),options)};}
-function votingIsOpen(){return Boolean(db.config.voteOpen);}
+function votingStatus(){
+  if (db.config.voteStatus === "ended" || db.config.voteEndedAt || db.config.voteEnded === true) return "ended";
+  return db.config.voteOpen ? "open" : "not_started";
+}
+function votingIsOpen(){return votingStatus() === "open";}
+function resultsAreFrozen(){return Boolean(db.voteSnapshot?.frozenAt||db.config.voteFrozenAt);}
+function captureVoteAudience(){
+  const participants=(db.applications||[])
+    .filter(item=>(isContestant(item)?isAccepted(item):true))
+    .map(item=>String(item.id||""))
+    .filter(Boolean);
+  const jury=(db.organizers||[])
+    .filter(item=>item.status!=="inactive")
+    .map(item=>String(item.id||item.code||""))
+    .filter(Boolean);
+  return {capturedAt:new Date().toISOString(),participantIds:[...new Set(participants)],juryIds:[...new Set(jury)]};
+}
+function voteIsComplete(vote){return vote?.status!=="voided"&&Boolean(normalizeVoteSelections(vote?.selections,vote?.role));}
+function countedVotes(){return (db.votes||[]).filter(voteIsComplete);}
+function voteStats(){
+  const all=(db.votes||[]),active=all.filter(item=>item.status!=="voided"),valid=active.filter(voteIsComplete);
+  const audience=db.voteAudienceSnapshot||captureVoteAudience();
+  const participantExpected=audience.participantIds?.length??0;
+  const juryExpected=audience.juryIds?.length??0;
+  const participantActive=active.filter(item=>voteGroup(item)==="participant");
+  const juryActive=active.filter(item=>voteGroup(item)==="organizer");
+  const uniqueCount=rows=>new Set(rows.map(item=>String(item.voterId||""))).size;
+  const participantValid=valid.filter(item=>voteGroup(item)==="participant");
+  const juryValid=valid.filter(item=>voteGroup(item)==="organizer");
+  const participantVoided=all.filter(item=>item.status==="voided"&&voteGroup(item)==="participant");
+  const juryVoided=all.filter(item=>item.status==="voided"&&voteGroup(item)==="organizer");
+  return {
+    participant:{submitted:uniqueCount(participantActive),valid:uniqueCount(participantValid),expected:participantExpected,incomplete:Math.max(0,uniqueCount(participantActive)-uniqueCount(participantValid)),withdrawn:uniqueCount(participantVoided)},
+    jury:{submitted:uniqueCount(juryActive),valid:uniqueCount(juryValid),expected:juryExpected,incomplete:Math.max(0,uniqueCount(juryActive)-uniqueCount(juryValid)),withdrawn:uniqueCount(juryVoided)},
+    valid:valid.length,active:active.length,voided:all.length-active.length,
+    incomplete:active.length-valid.length,
+    audienceCapturedAt:audience.capturedAt||null
+  };
+}
+function currentVoteResults(){
+  return resultsAreFrozen() && Array.isArray(db.voteSnapshot?.results)
+    ? db.voteSnapshot.results
+    : calcResults();
+}
+function publicConfig(){
+  return {...db.config, voteOpen:votingIsOpen(), voteStatus:votingStatus(), voteEnded:votingStatus() === "ended",resultsFrozen:resultsAreFrozen()};
+}
+function awardRecordFor(award){
+  return (db.awards || []).find(item => item.award === award) || null;
+}
+function awardTeamName(projectId){
+  const project = db.projects.find(item => item.id === projectId);
+  const team = db.teams.find(item => item.id === project?.teamId);
+  return String(team?.project || team?.name || project?.projectName || team?.id || "").trim();
+}
+function projectTeamId(projectId){return String(db.projects.find(item=>item.id===projectId)?.teamId||"");}
+function hasOtherConfirmedFormalAward(award,projectId){const teamId=projectTeamId(projectId);return Boolean(teamId&&award!==peopleAward&&(db.awards||[]).some(item=>item.award!==award&&item.award!==peopleAward&&item.confirmedProjectId&&projectTeamId(item.confirmedProjectId)===teamId));}
 function voteView(vote){return vote?{id:vote.id,createdAt:vote.createdAt,selections:(vote.selections||[]).map(selection=>({...selection,projectName:db.projects.find(project=>project.id===selection.projectId)?.projectName||"已删除项目"}))}:null;}
 /** 大众投票身份：姓名 + 报名编号（MC26-… / RO-…），与报名系统共用同一套编号。 */
 function normalizeVoterIdentity(data){
@@ -507,12 +595,16 @@ function normalizeVoteSelections(selections,role){
 function voteGroup(vote){return vote.role==="organizer"||vote.role==="jury"?"organizer":"participant";}
 function calcResults(){
   const map={};
-  for(const vote of activeVotes())for(const x of vote.selections||[]){
+  for(const vote of countedVotes())for(const x of vote.selections||[]){
     const k=x.award+":"+x.projectId;
-    map[k]??={award:x.award,projectId:x.projectId,participantRaw:0,organizerRaw:0,participantBallots:0,organizerBallots:0};
+    map[k]??={award:x.award,projectId:x.projectId,participantRaw:0,organizerRaw:0,participantBallots:0,organizerBallots:0,participantPoints3:0,participantPoints2:0,participantPoints1:0,organizerPoints3:0,organizerPoints2:0,organizerPoints1:0};
     const group=voteGroup(vote);
     map[k][group+"Raw"]+=Number(x.points||0);
     map[k][group+"Ballots"]+=1;
+    const pointsKey=group==="participant"?"participantPoints":"organizerPoints";
+    if(Number(x.points)===3)map[k][pointsKey+"3"]+=1;
+    if(Number(x.points)===2)map[k][pointsKey+"2"]+=1;
+    if(Number(x.points)===1)map[k][pointsKey+"1"]+=1;
   }
   const totals={};
   for(const row of Object.values(map)){totals[row.award]??={participant:0,organizer:0};totals[row.award].participant+=row.participantRaw;totals[row.award].organizer+=row.organizerRaw;}
@@ -668,27 +760,154 @@ function deleteParticipantAccount(participant){
   return {affectedTeamIds:[...affectedTeamIds],removedTeamIds:[...removedTeamIds]};
 }
 
-function resolvedAwards(){
-  const rows=calcResults(),used=new Set(),winners=[],decisions=new Map((db.awardDecisions||[]).map(item=>[item.award,item]));
-  for(const award of awardOrder){
-    const candidates=rows.filter(row=>row.award===award).map(row=>{const project=db.projects.find(p=>p.id===row.projectId);return {...row,projectName:project?.projectName,teamId:project?.teamId};}).filter(row=>row.teamId&&!used.has(row.teamId));
-    const decision=decisions.get(award);
-    if(decision?.projectId){const chosen=candidates.find(row=>row.projectId===decision.projectId);if(chosen){used.add(chosen.teamId);winners.push({...chosen,status:"confirmed",resolvedBy:decision.resolvedBy,resolvedAt:decision.resolvedAt});continue;}}
-    if(!candidates.length){winners.push({award,awardLabel:awardLabels[award],status:"pending",candidates:[]});continue;}
-    const score=row=>award===peopleAward?row.rawVotes:(row.weightedScore??-1);
-    const best=score(candidates[0]);
-    const tied=candidates.filter(row=>score(row)===best);
-    if(tied.length>1){winners.push({award,awardLabel:awardLabels[award],status:"tie",candidates:tied});continue;}
-    const chosen=candidates[0];used.add(chosen.teamId);winners.push({...chosen,status:"automatic"});
+function awardScore(award, row){
+  return award === peopleAward
+    ? Number(row.participantBallots ?? row.participantRaw ?? 0)
+    : Number(row.weightedScore ?? -1);
+}
+function scoresTie(a, b){
+  const scale = Math.max(1, Math.abs(a), Math.abs(b));
+  return Math.abs(a - b) <= 1e-9 * scale;
+}
+function awardRecommendations(rows = currentVoteResults()){
+  const used = new Set();
+  const results = [];
+  for (const award of awardOrder) {
+    // A team may have more than one submitted project. Keep the strongest
+    // project for that team so one award cannot list the same team twice.
+    const byTeam = new Map();
+    for (const row of rows.filter(item => item.award === award)) {
+      const project = db.projects.find(item => item.id === row.projectId);
+      const teamId = project?.teamId || row.teamId || "";
+      if (!teamId) continue;
+      const candidate = {
+        ...row,
+        projectName: project?.projectName || row.projectName || "",
+        teamId
+      };
+      const previous = byTeam.get(teamId);
+      if (!previous ||
+          awardScore(award, candidate) > awardScore(award, previous) ||
+          (scoresTie(awardScore(award, candidate), awardScore(award, previous)) &&
+            String(candidate.projectId).localeCompare(String(previous.projectId)) < 0)) {
+        byTeam.set(teamId, candidate);
+      }
+    }
+    const candidates = [...byTeam.values()]
+      .filter(row => award === peopleAward || !used.has(row.teamId))
+      .sort((a, b) => {
+        const difference = awardScore(award, b) - awardScore(award, a);
+        return scoresTie(difference, 0)
+          ? String(a.projectName || a.projectId).localeCompare(String(b.projectName || b.projectId))
+          : difference;
+      });
+    if (!candidates.length) {
+      results.push({award, awardLabel: awardLabels[award] || award, status: "pending", candidates: []});
+      continue;
+    }
+    const best = awardScore(award, candidates[0]);
+    const tied = candidates.filter(row => scoresTie(awardScore(award, row), best));
+    if (tied.length > 1) {
+      results.push({award, awardLabel: awardLabels[award] || award, status: "tie",
+        candidates, tiedProjectIds: tied.map(row => row.projectId), recommendedProjectId: null,
+        recommendedVotes: best});
+      continue;
+    }
+    const chosen = candidates[0];
+    if (award !== peopleAward) used.add(chosen.teamId);
+    results.push({...chosen, award, awardLabel: awardLabels[award] || award, status: "automatic", candidates,
+      recommendedProjectId: chosen.projectId, recommendedVotes: awardScore(award, chosen)});
   }
-  return winners;
+  return results;
+}
+function initializeAwardRecords(actor = "ADMIN", force = false){
+  const recommendations = awardRecommendations(db.voteSnapshot?.results || calcResults());
+  const previous = new Map((db.awards || []).map(item => [item.award, item]));
+  const legacy = new Map((db.awardDecisions || []).map(item => [item.award, item]));
+  db.awards = recommendations.map(rec => {
+    const old = previous.get(rec.award);
+    if (old && !force) return old;
+    const oldDecision = legacy.get(rec.award);
+    const confirmedProjectId = oldDecision?.projectId || old?.confirmedProjectId || null;
+    return {
+      award: rec.award,
+      status: confirmedProjectId ? "confirmed" : "pending",
+      recommendedProjectId: rec.recommendedProjectId || null,
+      recommendedVotes: Number(rec.recommendedVotes || 0),
+      tiedProjectIds: rec.tiedProjectIds || [],
+      confirmedProjectId,
+      confirmedBy: confirmedProjectId ? (oldDecision?.resolvedBy || actor) : null,
+      confirmedAt: confirmedProjectId ? (oldDecision?.resolvedAt || new Date().toISOString()) : null,
+      publishedBy: null,
+      publishedAt: null,
+      revokedBy: null,
+      revokedAt: null,
+      revokeReason: null,
+      previousConfirmedProjectId: null,
+      decisionProjectId: null,
+      audit: Array.isArray(old?.audit) ? old.audit : [],
+      candidates: (rec.candidates || []).map(row => ({projectId: row.projectId, projectName: row.projectName, teamId: row.teamId, participantRaw: row.participantRaw, organizerRaw: row.organizerRaw, participantRate: row.participantRate, organizerRate: row.organizerRate, weightedScore: row.weightedScore, rawVotes: row.rawVotes, totalRaw: row.totalRaw, participantBallots: row.participantBallots, organizerBallots: row.organizerBallots, participantPoints3: row.participantPoints3, participantPoints2: row.participantPoints2, participantPoints1: row.participantPoints1, organizerPoints3: row.organizerPoints3, organizerPoints2: row.organizerPoints2, organizerPoints1: row.organizerPoints1}))
+    };
+  });
+  return db.awards;
+}
+function resolvedAwards(){
+  const recommendations = awardRecommendations(currentVoteResults());
+  const finalizationReady = votingStatus() === "ended" && resultsAreFrozen();
+  return recommendations.map(rec => {
+    const record = awardRecordFor(rec.award);
+    const selectedProjectId = record?.confirmedProjectId || record?.decisionProjectId || record?.recommendedProjectId || rec.recommendedProjectId || null;
+    const selected = (rec.candidates || []).find(row => row.projectId === selectedProjectId);
+    const requiresDecision = finalizationReady && rec.status === "tie" && !record?.confirmedProjectId;
+    const status = record?.confirmedProjectId
+      ? (record.status || "confirmed")
+      : (requiresDecision ? "tie" : (record?.status || (finalizationReady ? (rec.status === "automatic" ? "pending" : rec.status) : "provisional")));
+    return {
+      ...rec,
+      ...(selected || {}),
+      projectId: selectedProjectId,
+      projectName: selected?.projectName || rec.projectName || "",
+      teamId: selected?.teamId || rec.teamId || "",
+      awardStatus: status,
+      status,
+      requiresDecision,
+      recommendedProjectId: record?.recommendedProjectId || rec.recommendedProjectId || null,
+      recommendedVotes: Number(record?.recommendedVotes ?? rec.recommendedVotes ?? selected?.rawVotes ?? 0),
+      confirmedProjectId: record?.confirmedProjectId || null,
+      decisionProjectId: record?.decisionProjectId || null,
+      confirmedBy: record?.confirmedBy || null,
+      confirmedAt: record?.confirmedAt || null,
+      publishedBy: record?.publishedBy || null,
+      publishedAt: record?.publishedAt || null,
+      revokedBy: record?.revokedBy || null,
+      revokedAt: record?.revokedAt || null,
+      revokeReason: record?.revokeReason || null,
+      audit: Array.isArray(record?.audit) ? record.audit : [],
+      candidates: record?.candidates?.length ? record.candidates : (rec.candidates || [])
+    };
+  });
+}
+function publicAwards(){
+  return resolvedAwards().map((item, index) => {
+    const published = (item.awardStatus || item.status) === "published";
+    return {
+      award: item.award,
+      awardLabel: item.awardLabel || item.award,
+      order: index + 1,
+      status: published ? "published" : "pending",
+      published,
+      teamName: published ? awardTeamName(item.projectId) : null,
+      votes: published ? Number(item.participantBallots || 0) + Number(item.organizerBallots || 0) : null
+    };
+  });
 }
 
 async function api(req,res,url){
   const method=req.method;
-  if(url.pathname==="/api/config"&&method==="GET")return send(res,200,{config:{...db.config,voteOpen:votingIsOpen()}});
+  if(url.pathname==="/api/config"&&method==="GET")return send(res,200,{config:publicConfig()});
   if(url.pathname==="/api/starter-pack"&&method==="GET")return send(res,200,{starterPack:db.config.starterPack});
-  if(url.pathname==="/api/results"&&method==="GET"){if(!db.config.resultsPublic)return fail(res,403,"results not public");return send(res,200,{awards:resolvedAwards().filter(item=>["automatic","confirmed"].includes(item.status)).map(item=>({award:item.awardLabel||item.award,projectName:item.projectName,teamId:item.teamId,rawVotes:item.rawVotes}))});}
+  if(url.pathname==="/api/awards"&&method==="GET")return send(res,200,{voteStatus:votingStatus(),awards:publicAwards()});
+  if(url.pathname==="/api/results"&&method==="GET"){if(!db.config.resultsPublic)return fail(res,403,"results not public");return send(res,200,{awards:publicAwards().filter(item=>item.published)});}
   if(url.pathname==="/api/applications"&&method==="POST"){if(!db.config.applicationOpen)return fail(res,403,"application closed");const d=await body(req);const type = d.registrationType;if (!["contestant", "roadshow"].includes(type))return fail(res, 400, "invalid registrationType");if(type==="roadshow"){if(!d.name||!d.phone||!d.email||!d.identity_type||!d.school_or_company||!d.grade_or_position)return fail(res,400,"required fields missing");if(db.applications.some(x=>!isContestant(x)&&(String(x.email||"").toLowerCase()===String(d.email).toLowerCase()||String(x.phone||"")===String(d.phone))))return fail(res,409,"duplicate application");const a={...d,id:nextRoadshowCode(),registrationType:"roadshow",entryType:"路演报名",status:"已通过",teamCode:"",teamId:"",skills:[],attend_roadshow:d.attend_roadshow!==false&&d.attend_roadshow!=="false",receive_notifications:d.receive_notifications!==false&&d.receive_notifications!=="false",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.applications.unshift(a);if(!db.notices.some(item=>noticeKeyOf(item)===AUTO_NOTICE_KEY.signup(a.id)))addNotice("用户报名成功","你的路演报名已通过，报名码为 "+a.id+"。","报名提交",a.id,{key:AUTO_NOTICE_KEY.signup(a.id)});const t=makeToken();db.sessions[t]={role:"participant",userId:a.id,createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,201,{application:safe(a),token:t});}if(db.config.applicationDeadline&&Date.now()>Date.parse(db.config.applicationDeadline))return fail(res,403,"application closed");if(!d.name||!d.studentId||!d.email||!d.phone||!d.motivation||!d.grade)return fail(res,400,"required fields missing");if(db.applications.some(x=>isContestant(x)&&(x.studentId===d.studentId||String(x.email||"").toLowerCase()===String(d.email).toLowerCase())))return fail(res,409,"duplicate application");const a={...d,id:"MC26-"+String(1+db.applications.reduce((max,x)=>/^MC26-\d+$/.test(x.id)?Math.max(max,Number(x.id.slice(5))):max,1000)).padStart(4,"0"),registrationType:"contestant",entryType:"个人报名",participationMode:participationModeFor(d.grade),teamCode:"",skills:d.skills||[],status:"待审核",teamId:"",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.applications.unshift(a);if(!db.notices.some(item=>noticeKeyOf(item)===AUTO_NOTICE_KEY.signup(a.id)))addNotice("用户报名成功","你的报名已提交，报名编号为 "+a.id+"。","报名提交",a.id,{key:AUTO_NOTICE_KEY.signup(a.id)});const t=makeToken();db.sessions[t]={role:"participant",userId:a.id,createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,201,{application:safe(a),token:t});}
   if(url.pathname==="/api/auth/participant"&&method==="POST"){const d=await body(req);const c=String(d.contact||"").toLowerCase().replace(/[\s-]/g,"");const a=db.applications.find(x=>x.id.toUpperCase()===String(d.id||"").toUpperCase()&&[x.email,x.phone].some(v=>String(v||"").toLowerCase().replace(/[\s-]/g,"")===c));if(!a)return fail(res,401,"invalid participant credentials");const t=makeToken();db.sessions[t]={role:"participant",userId:a.id,createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,200,{participant:safe(a),token:t});}
   if(url.pathname==="/api/auth/voter"&&method==="POST"){if(!votingIsOpen())return fail(res,403,"voting not open");const d=await body(req),identity=normalizeVoterIdentity(d);if(identity.error){recordVoteAttempt({kind:"login",role:"participant",code:String(d.code||d.applicationId||d.id||""),reason:identity.error});return fail(res,400,identity.error);}const existing=duplicatePublicVote(identity);const t=makeToken();db.sessions[t]={role:"voter",userId:identity.applicationId,identityHash:identity.identityHash,credentialHash:identity.credentialHash,voter:{name:identity.name,code:identity.code,applicationId:identity.applicationId,teamId:identity.teamId},createdAt:Date.now(),testFixture:testFixtureMode()};await saveDb();return send(res,200,{voter:db.sessions[t].voter,hasVoted:Boolean(existing),token:t});}
@@ -713,7 +932,7 @@ async function api(req,res,url){
     if(changed.length)addNotice("资料已修改","你的资料有改动："+changedFieldText(changed,noticeFieldLabels)+"。主办方会同步看到你的最新资料。","资料修改",me.id,{key:AUTO_NOTICE_KEY.profile(me.id)});
     await saveDb();return send(res,200,{participant:safe(me)});}
   if(url.pathname==="/api/me"&&method==="GET"){if(!me)return fail(res,401,"login required");return send(res,200,{participant:safe(me),team:teamView(db.teams.find(x=>x.id===me.teamId),{includeCode:true}),localSubmissionBypass:localSubmissionBypass(req,me)});}
-  if(url.pathname==="/api/me/vote"&&method==="GET"){if(me&&!isContestant(me))return fail(res,403,"roadshow participants do not have voting access");if(!me&&!voter)return fail(res,401,"login required");const voterId=voter?.userId||me.id;return send(res,200,{voter:voter?.voter||{code:me.id,name:me.name,grade:me.grade,college:me.college,teamId:me.teamId},vote:voteView(activeVotes().find(item=>item.role==="participant"&&(item.voterId===voterId||voter&&(item.voterIdentityHash===voter.identityHash)))),voteOpen:votingIsOpen()});}
+  if(url.pathname==="/api/me/vote"&&method==="GET"){if(me&&!isContestant(me))return fail(res,403,"roadshow participants do not have voting access");if(!me&&!voter)return fail(res,401,"login required");const voterId=voter?.userId||me.id;return send(res,200,{voter:voter?.voter||{code:me.id,name:me.name,grade:me.grade,college:me.college,teamId:me.teamId},vote:voteView(activeVotes().find(item=>item.role==="participant"&&(item.voterId===voterId||voter&&(item.voterIdentityHash===voter.identityHash)))),voteOpen:votingIsOpen(),voteStatus:votingStatus()});}
   if(url.pathname==="/api/me/project"&&method==="GET"){
     if(!me)return fail(res,401,"login required");
     if(!isContestant(me))return fail(res,403,"roadshow participants do not have project access");
@@ -970,16 +1189,113 @@ async function api(req,res,url){
   if(url.pathname==="/api/ideas"&&method==="POST"){if(!me)return fail(res,401,"login required");if(!isContestant(me)||!isAccepted(me))return fail(res,403,"accepted contestants only");const d=await body(req);if(!d.title||!d.summary)return fail(res,400,"idea title and summary required");const idea={id:makeId("IDEA"),title:d.title,summary:d.summary,theme:d.theme||"TBD",needs:d.needs||[],authorId:me.id,status:"open",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.ideas.unshift(idea);await saveDb();return send(res,201,{idea});}
   // 项目 Gallery：匿名可见，成员走展示白名单，队伍邀请码同样不下发。
   if(url.pathname==="/api/projects"&&method==="GET")return send(res,200,{projects:db.projects.filter(x=>x.status==="published").map(project=>projectView(project))});
-  if(url.pathname==="/api/projects"&&method==="POST"){const localBypass=localSubmissionBypass(req,me);if(!me)return fail(res,401,"login required");if(votingIsOpen())return fail(res,409,"project submission locked after voting started");if(!isContestant(me)||(!isAccepted(me)&&!localBypass))return fail(res,403,"accepted participants only");const team=db.teams.find(x=>x.id===me.teamId)||(localBypass?{id:"LOCAL-TEAM-"+me.id,memberIds:[me.id],project:"本地测试队伍",theme:"TBD",status:"draft",locked:false,published:false}:null);if(!team)return fail(res,403,"join a team first");if(db.projects.some(project=>project.teamId===team.id))return fail(res,409,"team already has a project");const d=await body(req);const project={id:makeId("PROJECT"),teamId:team.id,...d,members:d.members||team.memberIds.map(mid=>({name:db.applications.find(x=>x.id===mid)?.name||"member",role:""})),aiTools:d.aiTools||[],status:"draft",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.projects.push(project);await saveDb();return send(res,201,{project:projectView(project,{includeCode:true}),localSubmissionBypass:localBypass});}
-  if(url.pathname.startsWith("/api/projects/")&&method==="PATCH"){const isAdmin=admin(req);if(!me&&!isAdmin)return fail(res,401,"login required");if(!isAdmin&&votingIsOpen())return fail(res,409,"project editing locked after voting started");const p=db.projects.find(x=>x.id===decodeURIComponent(url.pathname.split("/").pop()));if(!p)return fail(res,404,"project not found");const d=await body(req);if(!isAdmin&&p.teamId!==me.teamId&&!localSubmissionBypass(req,me))return fail(res,403,"project access denied");if(isAdmin)Object.assign(p,d);else for(const key of ["projectName","theme","tagline","problem","solution","demoUrl","githubUrl","coverUrl","aiTools","members"]){if(Object.hasOwn(d,key))p[key]=d[key];}await saveDb();return send(res,200,{project:projectView(p,{includeCode:true})});}
+  if(url.pathname==="/api/projects"&&method==="POST"){const localBypass=localSubmissionBypass(req,me);if(!me)return fail(res,401,"login required");if(votingStatus()!=="not_started")return fail(res,409,"project submission locked after voting started");if(!isContestant(me)||(!isAccepted(me)&&!localBypass))return fail(res,403,"accepted participants only");const team=db.teams.find(x=>x.id===me.teamId)||(localBypass?{id:"LOCAL-TEAM-"+me.id,memberIds:[me.id],project:"本地测试队伍",theme:"TBD",status:"draft",locked:false,published:false}:null);if(!team)return fail(res,403,"join a team first");if(db.projects.some(project=>project.teamId===team.id))return fail(res,409,"team already has a project");const d=await body(req);const project={id:makeId("PROJECT"),teamId:team.id,...d,members:d.members||team.memberIds.map(mid=>({name:db.applications.find(x=>x.id===mid)?.name||"member",role:""})),aiTools:d.aiTools||[],status:"draft",createdAt:new Date().toISOString(),testFixture:testFixtureMode()};db.projects.push(project);await saveDb();return send(res,201,{project:projectView(project,{includeCode:true}),localSubmissionBypass:localBypass});}
+  if(url.pathname.startsWith("/api/projects/")&&method==="PATCH"){const isAdmin=admin(req);if(!me&&!isAdmin)return fail(res,401,"login required");if(!isAdmin&&votingStatus()!=="not_started")return fail(res,409,"project editing locked after voting started");const p=db.projects.find(x=>x.id===decodeURIComponent(url.pathname.split("/").pop()));if(!p)return fail(res,404,"project not found");const d=await body(req);if(!isAdmin&&p.teamId!==me.teamId&&!localSubmissionBypass(req,me))return fail(res,403,"project access denied");if(isAdmin)Object.assign(p,d);else for(const key of ["projectName","theme","tagline","problem","solution","demoUrl","githubUrl","coverUrl","aiTools","members"]){if(Object.hasOwn(d,key))p[key]=d[key];}await saveDb();return send(res,200,{project:projectView(p,{includeCode:true})});}
   if(url.pathname==="/api/votes"&&method==="POST"){const adminInfo=adminSession(req),organizerInfo=organizerSession(req),organizerId=organizerInfo?.organizerId;const organizer=organizerId?(db.organizers||[]).find(item=>item.id===organizerId):null;if(!votingIsOpen())return fail(res,403,"voting not open");if(!adminInfo&&!organizerInfo&&!me&&!voter)return fail(res,401,"login required");if(me&&(!isContestant(me)||!isAccepted(me)))return fail(res,403,"accepted participants only");if(adminInfo&&!organizer)return fail(res,403,"organizer identity required");const d=await body(req),role=organizer?"organizer":"participant",voterId=organizer.id||voter?.voter?.applicationId||me.id;const duplicate=role==="organizer"?activeVotes().some(x=>x.role==="organizer"&&String(x.voterId)===String(voterId)):activeVotes().some(x=>x.role==="participant"&&String(x.voterId)===String(voterId));if(duplicate){recordVoteAttempt({kind:"submit",role,voterId,reason:"vote already submitted"});return fail(res,409,"vote already submitted");}const selections=normalizeVoteSelections(d.selections,role);if(!selections){recordVoteAttempt({kind:"submit",role,voterId,reason:"invalid vote selections"});return fail(res,400,"invalid vote selections");}const allowed=new Set(db.projects.filter(x=>x.status==="published").map(x=>x.id));if(selections.some(x=>!allowed.has(x.projectId)))return fail(res,400,"unpublished project in vote");const teamId=organizer?"":voter?.voter?.teamId||me?.teamId||"";if(teamId&&selections.some(x=>db.projects.find(p=>p.id===x.projectId)?.teamId===teamId)){recordVoteAttempt({kind:"submit",role,voterId,reason:"cannot vote for your team"});return fail(res,400,"cannot vote for your team");}db.votes.push({id:makeId("VOTE"),voterId,role,selections,status:"active",createdAt:new Date().toISOString(),voterCode:organizer.code||voter?.voter?.code||me?.id||"",voterName:organizer.name||voter?.voter?.name||me?.name||"",organizerId:organizer?.id||null,voterCredentialHash:voter?.credentialHash||null,voterIdentityHash:voter?.identityHash||null,testFixture:testFixtureMode()});await saveDb();return send(res,201,{ok:true});}
   if(url.pathname==="/api/admin/organizers"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{organizers:db.organizers||[]});}
   if(url.pathname==="/api/admin/organizers"&&method==="POST"){if(!admin(req))return fail(res,401,"admin required");const d=await body(req),code=String(d.code||"").trim().toUpperCase(),name=String(d.name||"").trim();if(!code||!name)return fail(res,400,"organizer code and name required");if((db.organizers||[]).some(item=>String(item.code).toUpperCase()===code))return fail(res,409,"organizer already exists");const organizer={id:makeId("ORG"),code,name,status:"active",createdAt:new Date().toISOString()};db.organizers.push(organizer);await saveDb();return send(res,201,{organizer});}
   const organizerRoute=url.pathname.match(/^\/api\/admin\/organizers\/([^/]+)$/);if(organizerRoute&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const organizer=(db.organizers||[]).find(item=>item.id===decodeURIComponent(organizerRoute[1]));if(!organizer)return fail(res,404,"organizer not found");const d=await body(req);if(d.name!==undefined)organizer.name=String(d.name).trim();if(d.status!==undefined&&!['active','inactive'].includes(d.status))return fail(res,400,"invalid organizer status");if(d.status!==undefined)organizer.status=d.status;await saveDb();return send(res,200,{organizer});}
-  const resetVote=url.pathname.match(/^\/api\/admin\/votes\/([^/]+)\/reset$/);if(resetVote&&method==="POST"){if(!admin(req))return fail(res,401,"admin required");const vote=(db.votes||[]).find(item=>item.id===decodeURIComponent(resetVote[1]));if(!vote)return fail(res,404,"vote not found");if(vote.status==="voided")return fail(res,409,"vote already reset");const d=await body(req);vote.status="voided";vote.voidedAt=new Date().toISOString();vote.voidedBy=adminSession(req)?.organizerId||"ADMIN";vote.voidReason=String(d.reason||"主办方撤回").trim();await saveDb();return send(res,200,{ok:true,vote});}
-  if(url.pathname==="/api/admin/award-decisions"&&method==="POST"){if(!admin(req))return fail(res,401,"admin required");const d=await body(req);if(!awardOrder.includes(d.award)||typeof d.projectId!=="string")return fail(res,400,"invalid award decision");const candidateIds=new Set((resolvedAwards().find(item=>item.award===d.award)?.candidates||[]).map(item=>item.projectId));if(!candidateIds.has(d.projectId))return fail(res,400,"project is not a tie candidate");db.awardDecisions=(db.awardDecisions||[]).filter(item=>item.award!==d.award);db.awardDecisions.push({award:d.award,projectId:d.projectId,resolvedBy:"ADMIN",resolvedAt:new Date().toISOString()});await saveDb();return send(res,200,{awards:resolvedAwards()});}
-  if(url.pathname==="/api/organizer/summary"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{config:{eventName:db.config.eventName,date:db.config.date,venue:db.config.venue,applicationOpen:db.config.applicationOpen,applicationDeadline:db.config.applicationDeadline,resultDate:db.config.resultDate},metrics:{applications:db.applications.length,accepted:db.applications.filter(x=>x.status==="已录取").length,pending:db.applications.filter(x=>x.status==="待审核").length,teams:db.teams.length,publishedProjects:db.projects.filter(x=>x.status==="published").length},teams:db.teams.map(t=>({id:t.id,project:t.project,theme:t.theme,status:t.status,memberCount:t.memberIds.length})),projects:db.projects.filter(x=>x.status==="published").map(p=>({id:p.id,projectName:p.projectName,theme:p.theme,tagline:p.tagline,demoUrl:p.demoUrl})),notices:db.notices.filter(x=>x.target==="ALL").slice(0,10).map(x=>({title:x.title,body:x.body,type:x.type,createdAt:x.createdAt}))});}
-  if(url.pathname==="/api/admin/summary"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{organizers:db.organizers||[],voteAttempts:db.voteAttempts||[],applications:db.applications.map(safe),applicationStatuses:[...applicationStatuses],teams:db.teams.map(team=>teamView(team,{includeCode:true})),ideas:db.ideas,projects:db.projects.map(project=>projectView(project,{includeCode:true})),notices:db.notices.map(adminNoticeView),votes:db.votes.map(vote=>({...vote,voterCode:voterCode(vote)})),results:calcResults(),awards:resolvedAwards(),config:{...db.config,voteOpen:votingIsOpen()}});}
+  const resetVote=url.pathname.match(/^\/api\/admin\/votes\/([^/]+)\/reset$/);if(resetVote&&method==="POST"){if(!admin(req))return fail(res,401,"admin required");if(votingStatus()==="ended")return fail(res,409,"results are frozen");const vote=(db.votes||[]).find(item=>item.id===decodeURIComponent(resetVote[1]));if(!vote)return fail(res,404,"vote not found");if(vote.status==="voided")return fail(res,409,"vote already reset");vote.status="voided";vote.voidedAt=new Date().toISOString();vote.voidedBy=adminSession(req)?.organizerId||"ADMIN";await saveDb();return send(res,200,{ok:true,vote});}
+  if(url.pathname==="/api/admin/voting/open"&&method==="POST"){
+    if(!admin(req))return fail(res,401,"admin required");
+    if(votingStatus()==="ended")return fail(res,409,"voting already ended");
+    if(votingIsOpen())return send(res,200,{config:publicConfig()});
+    const at=new Date().toISOString(),actor=controlActor(req);
+    db.voteAudienceSnapshot=captureVoteAudience();
+    db.config.voteOpen=true;db.config.voteStatus="open";db.config.voteOpenedAt=at;db.config.voteOpenedBy=actor;
+    await saveDb();return send(res,200,{config:publicConfig()});
+  }
+  if(url.pathname==="/api/admin/voting/end"&&method==="POST"){
+    if(!admin(req))return fail(res,401,"admin required");
+    if(!votingIsOpen())return fail(res,409,votingStatus()==="ended"?"voting already ended":"voting has not opened");
+    const at=new Date().toISOString(),actor=controlActor(req);
+
+
+    db.config.voteOpen=false;db.config.voteStatus="ended";db.config.voteEndedAt=at;db.config.voteEndedBy=actor;
+
+
+    await saveDb();return send(res,200,{config:publicConfig(),awards:resolvedAwards()});
+  }
+  if(url.pathname==="/api/admin/voting/freeze"&&method==="POST"){
+    if(!admin(req))return fail(res,401,"admin required");
+    if(votingStatus()!=="ended")return fail(res,409,"end voting before freezing results");
+    if(resultsAreFrozen())return send(res,200,{config:publicConfig(),awards:resolvedAwards()});
+    const at=new Date().toISOString(),actor=controlActor(req);
+    db.voteSnapshot={capturedAt:at,frozenAt:at,frozenBy:actor,results:clone(calcResults())};
+    db.config.voteFrozenAt=at;db.config.voteFrozenBy=actor;
+    initializeAwardRecords(actor,true);
+    await saveDb();return send(res,200,{config:publicConfig(),awards:resolvedAwards()});
+  }
+  if(url.pathname==="/api/admin/award-decisions"&&method==="POST"){
+    if(!admin(req))return fail(res,401,"admin required");
+    if(votingStatus()!=="ended"||!resultsAreFrozen())return fail(res,409,"freeze results before confirming awards");
+    const d=await body(req);
+    if(!awardOrder.includes(d.award)||typeof d.projectId!=="string")return fail(res,400,"invalid award decision");
+    if(!db.awards?.length)initializeAwardRecords(controlActor(req));
+    const award=resolvedAwards().find(item=>item.award===d.award);
+    const candidate=(award?.candidates||[]).find(item=>item.projectId===d.projectId);
+    if(!candidate)return fail(res,400,"project is not an award candidate");
+    const duplicate=hasOtherConfirmedFormalAward(d.award,d.projectId);
+    if(duplicate)return fail(res,409,"a team can only receive one award");
+    const record=awardRecordFor(d.award);if(!record)return fail(res,404,"award not found");
+    if(record.status==="published")return fail(res,409,"published award must be revoked first");
+    if(record.status==="confirmed" && record.confirmedProjectId!==d.projectId)return fail(res,409,"revoke the award before changing its winner");
+    const at=new Date().toISOString(),actor=controlActor(req),previousProjectId=record.confirmedProjectId||null;
+    const recommendedProjectId=record.recommendedProjectId||award.recommendedProjectId||null;
+    const decisionAction=previousProjectId&&previousProjectId!==d.projectId?"adjust":(record.tiedProjectIds?.length?"adjudicate":"confirm");
+    record.confirmedProjectId=d.projectId;record.decisionProjectId=d.projectId;record.status="confirmed";record.confirmedBy=actor;record.confirmedAt=at;
+    record.revokeReason=null;record.revokedBy=null;record.revokedAt=null;
+    record.audit=Array.isArray(record.audit)?record.audit:[];
+    record.audit.push({action:decisionAction,projectId:d.projectId,previousProjectId,recommendedProjectId,actor,at});
+    db.awardDecisions=(db.awardDecisions||[]).filter(item=>item.award!==d.award);
+    db.awardDecisions.push({award:d.award,projectId:d.projectId,resolvedBy:actor,resolvedAt:at});
+    await saveDb();return send(res,200,{awards:resolvedAwards()});
+  }
+  const awardAction=url.pathname.match(/^\/api\/admin\/awards\/([^/]+)\/(publish|revoke)$/);
+  if(awardAction&&method==="POST"){
+    if(!admin(req))return fail(res,401,"admin required");
+    if(votingStatus()!=="ended"||!resultsAreFrozen())return fail(res,409,"freeze results before publishing awards");
+    const awardName=decodeURIComponent(awardAction[1]),record=awardRecordFor(awardName);
+    if(!record)return fail(res,404,"award not found");
+    const actor=controlActor(req),at=new Date().toISOString();
+    record.audit=Array.isArray(record.audit)?record.audit:[];
+    if(awardAction[2]==="publish"){
+      if(record.status!=="confirmed"||!record.confirmedProjectId)return fail(res,409,"confirm the award before publishing");
+      record.status="published";record.publishedBy=actor;record.publishedAt=at;
+      record.audit.push({action:"publish",projectId:record.confirmedProjectId,actor,at});
+    }else{
+      if(record.status!=="published")return fail(res,409,"award is not published");
+      const previousProjectId=record.confirmedProjectId||null;
+      const d=await body(req);
+      const replacementProjectId=String(d.replacementProjectId||"").trim();
+      if(replacementProjectId){
+        const award=resolvedAwards().find(item=>item.award===awardName);
+        const candidate=award?.candidates?.find(item=>item.projectId===replacementProjectId);
+        if(!candidate)return fail(res,400,"replacement project is not an award candidate");
+        const duplicate=hasOtherConfirmedFormalAward(awardName,replacementProjectId);
+        if(duplicate)return fail(res,409,"a team can only receive one award");
+      }
+      record.status="pending";record.previousConfirmedProjectId=previousProjectId;
+      record.confirmedProjectId=null;record.confirmedBy=null;record.confirmedAt=null;
+      record.decisionProjectId=replacementProjectId||null;
+      record.revokedBy=actor;record.revokedAt=at;record.revokeReason=null;
+      record.publishedBy=null;record.publishedAt=null;
+      record.audit.push({action:"revoke",projectId:previousProjectId,replacementProjectId:replacementProjectId||null,actor,at});
+    }
+    await saveDb();return send(res,200,{awards:resolvedAwards()});
+  }
+  if(url.pathname==="/api/admin/awards/publish-all"&&method==="POST"){
+    if(!admin(req))return fail(res,401,"admin required");
+    if(votingStatus()!=="ended"||!resultsAreFrozen())return fail(res,409,"freeze results before publishing awards");
+    if(!db.awards?.length)initializeAwardRecords(controlActor(req));
+    const pending=(db.awards||[]).filter(item=>item.status!=="confirmed"&&item.status!=="published").map(item=>item.award);
+    if(pending.length)return fail(res,409,"all awards must be confirmed: "+pending.join(", "));
+    const actor=controlActor(req),at=new Date().toISOString();
+    for(const record of db.awards){if(record.status==="confirmed"&&record.confirmedProjectId){record.status="published";record.publishedBy=actor;record.publishedAt=at;record.audit=Array.isArray(record.audit)?record.audit:[];record.audit.push({action:"publish",projectId:record.confirmedProjectId,actor,at});}}
+    await saveDb();return send(res,200,{awards:resolvedAwards()});
+  }
+  if(url.pathname==="/api/organizer/summary"&&method==="GET"){if(!controlSession(req))return fail(res,401,"admin required");return send(res,200,{config:{eventName:db.config.eventName,date:db.config.date,venue:db.config.venue,applicationOpen:db.config.applicationOpen,applicationDeadline:db.config.applicationDeadline,resultDate:db.config.resultDate},metrics:{applications:db.applications.length,accepted:db.applications.filter(x=>x.status==="已录取").length,pending:db.applications.filter(x=>x.status==="待审核").length,teams:db.teams.length,publishedProjects:db.projects.filter(x=>x.status==="published").length},teams:db.teams.map(t=>({id:t.id,project:t.project,theme:t.theme,status:t.status,memberCount:t.memberIds.length})),projects:db.projects.filter(x=>x.status==="published").map(p=>({id:p.id,projectName:p.projectName,theme:p.theme,tagline:p.tagline,demoUrl:p.demoUrl})),notices:db.notices.filter(x=>x.target==="ALL").slice(0,10).map(x=>({title:x.title,body:x.body,type:x.type,createdAt:x.createdAt}))});}
+  if(url.pathname==="/api/admin/summary"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{organizers:db.organizers||[],voteAttempts:db.voteAttempts||[],applications:db.applications.map(safe),applicationStatuses:[...applicationStatuses],teams:db.teams.map(team=>teamView(team,{includeCode:true})),ideas:db.ideas,projects:db.projects.map(project=>projectView(project,{includeCode:true})),notices:db.notices.map(adminNoticeView),votes:db.votes.map(vote=>({...vote,voterCode:voterCode(vote),isComplete:voteIsComplete(vote),voteStatus:vote.status==="voided"?"voided":(voteIsComplete(vote)?"valid":"incomplete")})),results:currentVoteResults(),voteStats:voteStats(),awards:resolvedAwards(),config:{...publicConfig()}});}
   if(url.pathname==="/api/admin/applications"&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const d=await body(req),a=db.applications.find(x=>x.id===d.id);if(!a)return fail(res,404,"application not found");if(!isContestant(a)&&d.status!==undefined&&d.status!==a.status)return fail(res,403,"roadshow applications are always 已通过");if(!applicationStatuses.has(d.status))return fail(res,400,"invalid application status");
     // 「状态修改（自动）」只在状态值真的变化时写一条，正文带上「旧状态 → 新状态」；
     // 重复点同一个状态、或只改队伍归属，都不会再刷屏。
@@ -988,7 +1304,22 @@ async function api(req,res,url){
     if(previousStatus!==String(a.status))addNotice("报名状态已更新","你的报名状态已更新："+previousStatus+" → "+a.status+"。","状态修改",a.id,{key:AUTO_NOTICE_KEY.status(a.id,Date.now())});
     if(previousStatus!==String(a.status)&&!isTeamEligible(a))closeApplicantRequests(a.id,"closed","入队申请已自动关闭","你的录取状态已变更为「"+a.status+"」，待处理的入队申请已自动关闭。");
     await saveDb();return send(res,200,{participant:safe(a)});}
-  if(url.pathname==="/api/admin/config"&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");Object.assign(db.config,await body(req));await saveDb();return send(res,200,{config:{...db.config,voteOpen:votingIsOpen()}});}
+  if(url.pathname==="/api/admin/config"&&method==="PATCH"){
+    if(!admin(req))return fail(res,401,"admin required");
+    const d=await body(req);
+    if(Object.hasOwn(d,"voteOpen")){
+      if(d.voteOpen===false && votingIsOpen())return fail(res,409,"use the end voting button");
+      if(d.voteOpen===true && !votingIsOpen()){
+        if(votingStatus()==="ended")return fail(res,409,"voting already ended");
+        const at=new Date().toISOString(),actor=adminSession(req)?.userId||"ADMIN";
+        db.voteAudienceSnapshot=captureVoteAudience();
+        db.config.voteOpen=true;db.config.voteStatus="open";db.config.voteOpenedAt=at;db.config.voteOpenedBy=actor;
+      }
+      delete d.voteOpen;
+    }
+    for(const key of ["voteStatus","voteOpenedBy","voteOpenedAt","voteEndedBy","voteEndedAt","voteEnded","voteFrozenAt","voteFrozenBy"]) delete d[key];
+    Object.assign(db.config,d);await saveDb();return send(res,200,{config:publicConfig()});
+  }
   if(url.pathname==="/api/admin/notices"&&method==="POST"){if(!admin(req))return fail(res,401,"admin required");const d=await body(req);
     // 录取结果可以按报名状态分别写标题/正文：statusContents 是 [{status,title,body}]，
     // 正文留空的状态直接丢掉 —— 那批人不会收到这条通知，也不会出现在应回复名单里。
@@ -1017,7 +1348,7 @@ async function api(req,res,url){
   if(url.pathname==="/api/admin/projects"&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const d=await body(req),p=db.projects.find(x=>x.id===d.id);if(!p)return fail(res,404,"project not found");p.status=d.status;await saveDb();return send(res,200,{project:projectView(p,{includeCode:true})});}
   const adminTeam=url.pathname.match(/^\/api\/admin\/teams\/([^/]+)$/);if(adminTeam&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const team=db.teams.find(item=>item.id===decodeURIComponent(adminTeam[1]));if(!team)return fail(res,404,"team not found");const d=await body(req);if(typeof d.locked!=="boolean")return fail(res,400,"locked flag required");if(d.locked&&!db.config.teamConfirmOpen)return fail(res,403,"team confirmation not open");team.locked=d.locked;team.status=d.locked?"locked":"draft";if(d.locked)closeTeamRequests(team.id,"closed","队伍已锁定","队伍「"+teamTitleOf(team)+"」已锁定，你的入队申请已自动关闭。");await saveDb();return send(res,200,{team:teamView(team,{includeCode:true})});}
   const adminIdea=url.pathname.match(/^\/api\/admin\/ideas\/([^/]+)$/);if(adminIdea&&method==="PATCH"){if(!admin(req))return fail(res,401,"admin required");const idea=db.ideas.find(item=>item.id===decodeURIComponent(adminIdea[1]));if(!idea)return fail(res,404,"idea not found");const d=await body(req);if(!["open","closed"].includes(d.status))return fail(res,400,"invalid idea status");idea.status=d.status;await saveDb();return send(res,200,{idea});}
-  if(url.pathname==="/api/admin/results"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{results:calcResults(),awards:resolvedAwards(),votes:db.votes});}
+  if(url.pathname==="/api/admin/results"&&method==="GET"){if(!admin(req))return fail(res,401,"admin required");return send(res,200,{results:currentVoteResults(),awards:resolvedAwards(),votes:db.votes});}
   return fail(res,404,"API not found");
 }
 async function serve(req,res){const url=new URL(req.url,"http://"+(req.headers.host||"localhost"));if(url.pathname.startsWith("/api/")){try{await api(req,res,url);}catch(e){console.error(e);fail(res,500,e.message||"server error");}return;}const requested=url.pathname==="/"?"/index.html":url.pathname;const vendor=vendorFiles.get(requested);const file=vendor?path.join(root,"node_modules",vendor):path.resolve(publicRoot,"."+path.posix.normalize(requested));if(!vendor&&file!==publicRoot&&!file.startsWith(publicRoot+path.sep)){res.writeHead(403);res.end("Forbidden");return;}try{const data=await fs.readFile(file);res.writeHead(200,{"Content-Type":mime[path.extname(file)]||"application/octet-stream","Cache-Control":"no-store"});res.end(data);}catch{if(vendor){console.error("缺少前端依赖 chart.js：请先在项目根目录执行 npm install（"+file+"）");}res.writeHead(404);res.end("Not found");}}

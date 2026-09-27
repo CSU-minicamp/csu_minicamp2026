@@ -333,3 +333,42 @@ body.drawer-open { overflow:hidden; }
 }
 
 .field-error-group { outline: 2px solid var(--error); outline-offset: 5px; border-radius: 4px; }
+
+/* Award reveal cards */
+.award-list > .award-card {
+  min-height: 220px;
+  padding: 0;
+  position: relative;
+  display: block;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  cursor: pointer;
+  perspective: 1100px;
+}
+.award-card-inner { min-height: 220px; position: relative; display: block; transform-style: preserve-3d; transition: transform .72s cubic-bezier(.2,.75,.2,1); }
+.award-card-face { position: absolute; inset: 0; padding: 24px; display: flex; flex-direction: column; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.award-card-front { background: var(--paper); }
+.award-card-back { justify-content: space-between; color: var(--ink); background: var(--yellow); transform: rotateY(180deg); }
+.award-card-front > span, .award-card-back > span { font: 700 11px Consolas, monospace; }
+.award-card-front strong, .award-card-back strong { margin: auto 0 12px; font-size: 23px; }
+.award-card-front small, .award-card-back small { color: var(--muted); font: 700 10px Consolas, monospace; }
+.award-card-front em { margin-top: 16px; color: var(--muted); font-size: 11px; font-style: normal; }
+.award-card-back b { margin: auto 0 12px; font-size: 24px; line-height: 1.05; overflow-wrap: anywhere; }
+.award-card.is-published .award-card-inner { transform: rotateY(180deg); }
+.award-card.is-replaying .award-card-inner { animation: award-flip .72s cubic-bezier(.2,.75,.2,1); }
+.award-card:focus-visible { outline: 3px solid var(--coral); outline-offset: -3px; }
+@keyframes award-flip { 0% { transform: rotateY(0); } 100% { transform: rotateY(180deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .award-card-inner { transition: none; }
+  .award-card.is-replaying .award-card-inner { animation: none; }
+}
+@supports not (transform-style: preserve-3d) {
+  .award-card-inner { transform: none !important; }
+  .award-card-back { display: none; transform: none; }
+  .award-card.is-published .award-card-front { display: none; }
+  .award-card.is-published .award-card-back { display: flex; }
+}

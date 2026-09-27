@@ -16,6 +16,7 @@
   let projects = [];
   let voter;
   let votingOpen = false;
+  let votingStatus = "not_started";
 
   const projectName = id => projects.find(project => project.id === id)?.projectName || "未选择";
   const choiceForProject = (projectId, award) => Object.entries(voteDraft[award]).find(([, id]) => id === projectId)?.[0] || "";
@@ -151,12 +152,12 @@
 
   api.request("/api/config").then(({config}) => {
     votingOpen = Boolean(config.voteOpen);
+    votingStatus = config.voteStatus || (config.voteEnded ? "ended" : (votingOpen ? "open" : "not_started"));
     if (!votingOpen && login) {
       const button = login.querySelector("button[type=submit]");
       if (button) button.disabled = true;
       const status = document.createElement("p");
-      status.className = "vote-closed-status";
-      status.textContent = "投票暂未开放，主办方设置开始时间后会自动开放。";
+      status.className = "vote-closed-status";       status.textContent = votingStatus === "ended" ? "\u6295\u7968\u5df2\u7ed3\u675f\uff0c\u7ed3\u679c\u516c\u5e03\u540e\u53ef\u5728\u5b98\u7f51\u67e5\u770b\u3002" : "\u6295\u7968\u6682\u672a\u5f00\u653e\uff0c\u4e3b\u529e\u65b9\u5f00\u653e\u540e\u4f1a\u81ea\u52a8\u663e\u793a\u5165\u53e3\u3002";
       login.insertBefore(status, login.querySelector("button"));
     }
   }).catch(() => {});
@@ -167,7 +168,7 @@
   login?.addEventListener("submit", async event => {
     event.preventDefault();
     if (!votingOpen) {
-      document.getElementById("voter-error").textContent = "投票暂未开放。";
+      document.getElementById("voter-error").textContent = votingStatus === "ended" ? "\u6295\u7968\u5df2\u7ed3\u675f\u3002" : "\u6295\u7968\u6682\u672a\u5f00\u653e\u3002";
       return;
     }
     const code = String(codeInput?.value || "").replace(/[\s-]/g, "").toUpperCase();

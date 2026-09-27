@@ -149,9 +149,14 @@
       </section>
 
       <section class="admin-panel" id="panel-voting">
+        <div class="admin-card voting-control-card" id="voting-controls">
+          <div class="admin-card-head"><div><h2>投票控制</h2><span id="voting-status-note">手动控制开放、截止、冻结和公布</span></div><div class="voting-control-actions"><button class="button button-primary" id="open-voting" type="button">开放投票</button><button class="button button-dark" id="end-voting" type="button">结束投票</button><button class="outline-button" id="freeze-voting" type="button">冻结结果</button><button class="outline-button" id="publish-all-awards" type="button">全部公布奖项</button></div></div>
+        </div>
         <div class="vote-summary" id="vote-summary"></div>
-        <div class="admin-card"><div class="admin-card-head"><h2>奖项结果</h2><span>参与者与 Jury 权重合并</span></div><div class="vote-list" id="vote-results"></div></div>
-        <div class="admin-card"><div class="admin-card-head"><h2>投票人名单</h2><span>按报名编号 · 姓名区分</span></div><div class="vote-voter-list" id="vote-voters"></div></div>
+        <div class="admin-card"><div class="admin-card-head"><h2>奖项结果与候选</h2><span>实时暂定排名 · 结束后确认</span></div><div class="vote-list" id="vote-results"></div></div>
+        <div class="admin-card"><div class="admin-card-head"><h2>投票人名单</h2><span>按时间倒序 · 按编号识别</span></div><div class="vote-voter-list" id="vote-voters"></div></div>
+        <div class="admin-card"><div class="admin-card-head"><h2>Jury 管理</h2><span>编号、启用状态和投票完成情况</span></div><form id="jury-create-form" class="jury-create-form"><label>姓名<input name="name" required maxlength="80" autocomplete="off"></label><label>Jury 编号<input name="code" required maxlength="40" autocomplete="off"></label><button class="outline-button" type="submit">添加 Jury</button></form><div id="organizer-list" class="vote-voter-list"></div></div>
+        <div class="admin-card"><div class="admin-card-head"><h2>异常投票</h2><span>不计入有效结果</span></div><div id="vote-anomalies" class="vote-voter-list"></div></div>
       </section>
 
       <section class="admin-panel" id="panel-config">

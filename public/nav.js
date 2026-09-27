@@ -96,9 +96,10 @@
     if (localSubmissionBypass || (type === "contestant" && String(participant.status || "") === "已录取" && hasTeam && window.MinicampAPI.isProfileComplete(participant))) showGallery();
   }).catch(signOut);
   window.MinicampAPI?.request("/api/config").then(({ config }) => {
-    if (config.voteOpen) return;
+    const status = config.voteStatus || (config.voteEnded ? "ended" : (config.voteOpen ? "open" : "not_started"));
+    if (status === "open") return;
     header.querySelectorAll("[data-voting-entry]").forEach(link => {
-      link.textContent = "投票未开放";
+      link.textContent = status === "ended" ? "\u6295\u7968\u5df2\u7ed3\u675f" : "\u6682\u672a\u5f00\u653e\u6295\u7968";
       link.classList.add("is-disabled");
       link.setAttribute("aria-disabled", "true");
       link.addEventListener("click", event => event.preventDefault());

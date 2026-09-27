@@ -68,11 +68,6 @@
   const modal = document.getElementById("applicant-modal");
   function toast(msg, tone = "info") { MinicampUI.toast(msg, {tone}); }
   function setHtml(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; return el;}
-
-  /**
-   * 正在编辑的表单（通知 / 活动配置 / 主持人提示）在轮询刷新时不丢草稿：
-   * 每次重绘前用 preserveForm 把已填的值原样放回，内容继续更新、正在写的东西也不会被清掉。
-   */
   const formDrafts = new Map();
   const draftOf = id => formDrafts.get(id)?.draft ?? null;
   /** 读取表单当前值（含未保存的草稿），供 preserveForm 使用。 */
@@ -638,49 +633,168 @@
   }
 
   function renderVoting() {
-    const results = state.results || [], awards = state.awards || [];
-    const activeVotes = (state.votes || []).filter(vote => vote.status !== "voided");
-    const participantVotes = new Set(activeVotes.filter(vote => vote.role === "participant").map(vote => vote.voterId)).size;
-    const organizerVotes = new Set(activeVotes.filter(vote => vote.role === "organizer" || vote.role === "jury").map(vote => vote.voterId)).size;
-    setHtml("vote-summary", "<div class='vote-leader'><span>投票状态</span><strong>" + (state.config?.voteOpen ? "开放中" : "未开放") + "</strong><p>大众 " + participantVotes + " 人 · 主办方 " + organizerVotes + " 人</p></div><div class='vote-list'><div class='vote-row'><strong>大众组权重</strong><span class='vote-meter'><i style='width:" + Number(state.config?.participantWeight || 60) + "%'></i></span><b>" + Number(state.config?.participantWeight || 60) + "%</b></div><div class='vote-row'><strong>主办方组权重</strong><span class='vote-meter'><i style='width:" + Number(state.config?.juryWeight || 40) + "%'></i></span><b>" + Number(state.config?.juryWeight || 40) + "%</b></div></div>");
-    const participantWeight = Number(state.config?.participantWeight ?? 60);
-    const juryWeight = Number(state.config?.juryWeight ?? 40);
-    document.querySelectorAll("#vote-summary .vote-row").forEach((row, index) => {
-      const weight = [participantWeight, juryWeight][index];
-      if (weight === undefined) return;
-      row.querySelector("i")?.style.setProperty("width", weight + "%");
-      const label = row.querySelector("b");
-      if (label) label.textContent = weight + "%";
-    });
-    const awardRows = awards.map(award => {
-      const score = award.status === "tie" ? "平票待裁决" : award.status === "pending" ? "暂无可确认结果" : award.projectName || "待定";
-      const raw = award.award === "People's Choice" ? Number(award.rawVotes || award.totalRaw || 0).toFixed(0) + " 票" : "大众 " + Number(award.participantRaw || 0).toFixed(0) + " · 主办方 " + Number(award.organizerRaw || 0).toFixed(0) + " · 加权 " + (award.weightedScore == null ? "—" : Number(award.weightedScore).toFixed(2) + "%");
-      const tieOptions = award.status === "tie" ? (award.candidates || []).map(row => "<option value='" + esc(row.projectId) + "'>" + esc(row.projectName || row.projectId) + "</option>").join("") : "";
-      const action = award.status === "tie" ? "<select data-award-decision='" + esc(award.award) + "'><option value=''>选择获奖项目</option>" + tieOptions + "</select><button type='button' class='outline-button award-decision' data-award='" + esc(award.award) + "'>确认</button>" : "";
-      return "<div class='vote-row'><strong>" + esc(award.awardLabel || award.award) + "</strong><span>" + esc(score) + "<small class='vote-detail'>" + esc(raw) + "</small>" + action + "</span><b>" + (award.status || "") + "</b></div>";
+    const votes = state.votes || [], awards = state.awards || [];
+    const stats = state.voteStats || {};
+    const config = state.config || {};
+    const status = config.voteStatus || (config.voteEnded ? "ended" : (config.voteOpen ? "open" : "not_started"));
+    const frozen = Boolean(config.resultsFrozen);
+    const published = awards.length > 0 && awards.every(item => (item.awardStatus || item.status) === "published");
+    const statusLabel = published ? "所有奖项已公布" : status === "open" ? "投票进行中 · 暂定排名" : status === "ended" ? (frozen ? "结果已冻结 · 待确认" : "投票已截止 · 待冻结") : "投票未开始";
+    const fmtNum = value => Number(value || 0).toLocaleString("zh-CN", {maximumFractionDigits: 2});
+    const groupCard = (label, row = {}) => "<div class='vote-stat-group'><div class='vote-stat-title'><strong>" + label + "</strong><b>" + Number(row.submitted || 0) + " / " + Number(row.expected || 0) + "</b><span>已投 / 应投</span></div><dl><div><dt>有效票</dt><dd>" + Number(row.valid || 0) + "</dd></div><div><dt>未完成</dt><dd>" + Number(row.incomplete || 0) + "</dd></div><div><dt>已撤回</dt><dd>" + Number(row.withdrawn || 0) + "</dd></div></dl></div>";
+    const participantWeight = Number(config.participantWeight ?? 60);
+    const juryWeight = Number(config.juryWeight ?? 40);
+    setHtml("vote-summary",
+      "<div class='vote-summary-head'><div><span>当前阶段</span><strong>" + statusLabel + "</strong><small>投票开始 " + esc(fmt(config.voteOpenedAt) || "—") + " · 截止 " + esc(fmt(config.voteEndedAt) || "—") + " · 冻结 " + esc(fmt(config.voteFrozenAt) || "—") + "</small></div><span class='vote-weight-note'>最终权重：大众 " + participantWeight + "% · Jury " + juryWeight + "%</span></div>" +
+      "<div class='vote-stat-grid'>" + groupCard("大众", stats.participant) + groupCard("Jury", stats.jury) +
+      "<div class='vote-stat-group vote-stat-total'><div class='vote-stat-title'><strong>合计</strong><b>" + Number(stats.valid || 0) + "</b><span>有效票</span></div><dl><div><dt>已提交</dt><dd>" + Number(stats.active || 0) + "</dd></div><div><dt>未完成</dt><dd>" + Number(stats.incomplete || 0) + "</dd></div><div><dt>已撤回</dt><dd>" + Number(stats.voided || 0) + "</dd></div></dl></div></div>");
+
+    const openButton = document.getElementById("open-voting");
+    const endButton = document.getElementById("end-voting");
+    const freezeButton = document.getElementById("freeze-voting");
+    const publishAll = document.getElementById("publish-all-awards");
+    const note = document.getElementById("voting-status-note");
+    const canConfirm = status === "ended" && frozen;
+    const allConfirmed = awards.length > 0 && awards.every(item => ["confirmed", "published"].includes(item.awardStatus || item.status));
+    if (openButton) openButton.disabled = status !== "not_started";
+    if (endButton) endButton.disabled = status !== "open";
+    if (freezeButton) freezeButton.disabled = status !== "ended" || frozen;
+    if (publishAll) publishAll.disabled = !canConfirm || !allConfirmed || published;
+    if (note) note.textContent = status === "open" ? "投票进行中，截止和结果冻结由主办方分别操作。" : status === "ended" ? (frozen ? "投票已截止且结果已冻结，可确认和公布奖项。" : "投票已截止，暂定排名保留；主办方确认后可单独冻结结果。") : "由主办方手动推进投票状态。";
+
+    const awardLabels = {"Best Overall":"全场最佳","Best Product":"最佳产品","Best Design":"最佳设计与体验","Best Technical":"最佳技术 Hack","Most Unexpected":"最出乎意料","People's Choice":"现场人气奖"};
+    const teamName = teamId => {
+      const team = (state.teams || []).find(item => String(item.id) === String(teamId));
+      return team?.project || team?.name || teamId || "—";
+    };
+    const candidateMetric = (row, peopleAward) => peopleAward
+      ? Number(row.participantBallots ?? row.participantRaw ?? row.rawVotes ?? 0)
+      : Number(row.weightedScore || 0);
+    const candidateRows = awards.map(award => {
+      const awardKey = award.award;
+      const peopleAward = awardKey === "People's Choice";
+      const awardStatus = award.awardStatus || award.status || "provisional";
+      const candidates = award.candidates || [];
+      const recommendedId = award.confirmedProjectId || award.recommendedProjectId || award.projectId || "";
+      const winnerRow = candidates.find(row => row.projectId === recommendedId) || null;
+      const winner = award.projectName || winnerRow?.projectName || (awardStatus === "tie" ? "并列候选待裁决" : "暂无候选");
+      const score = peopleAward ? (winnerRow?.participantBallots ?? winnerRow?.participantRaw ?? award.recommendedVotes ?? 0) : (award.rawVotes ?? award.recommendedVotes ?? winnerRow?.rawVotes ?? 0);
+      const confirmedTeams = new Set(awards
+        .filter(item => item.award !== "People's Choice" && item.award !== awardKey && item.confirmedProjectId)
+        .map(item => String(item.teamId || ""))
+        .filter(Boolean));
+      const selectableCandidates = candidates.filter(row => peopleAward || !confirmedTeams.has(String(row.teamId || "")));
+      const options = selectableCandidates.map(row => {
+        const metric = peopleAward ? Number(row.participantBallots ?? row.rawVotes ?? 0) + " 票" : fmtNum(row.weightedScore) + " 分";
+        return "<option value='" + esc(row.projectId) + "'" + (row.projectId === recommendedId ? " selected" : "") + ">" + esc(row.projectName || row.projectId) + " · " + esc(teamName(row.teamId)) + " · " + metric + "</option>";
+      }).join("");
+      let action = "";
+      if (canConfirm && ["pending", "tie"].includes(awardStatus) && selectableCandidates.length) {
+        action = "<div class='award-decision-controls'><select class='award-candidate-select' data-award-decision='" + esc(awardKey) + "' aria-label='选择" + esc(awardLabels[awardKey] || awardKey) + "获奖队伍'><option value=''>选择获奖队伍</option>" + options + "</select><button type='button' class='outline-button award-decision' data-award='" + esc(awardKey) + "'>确认获奖队伍</button></div>";
+      } else if (canConfirm && ["pending", "tie"].includes(awardStatus) && candidates.length) {
+        action = "<small class='vote-detail'>候选队伍已获得其他正式奖项，请选择其他队伍。</small>";
+      } else if (canConfirm && awardStatus === "confirmed") {
+        action = "<button type='button' class='button button-primary award-publish' data-award='" + esc(awardKey) + "'>公布该奖项</button>";
+      } else if (canConfirm && awardStatus === "published") {
+        action = "<button type='button' class='outline-button award-revoke' data-award='" + esc(awardKey) + "'>撤回公开</button>";
+      }
+      const topThree = candidates.slice(0, 3).map((row, index) => {
+        const publicVotes = Number(row.participantBallots || 0), publicPoints = Number(row.participantRaw || 0), publicShare = Number(row.participantRate || 0);
+        const publicBreakdown = "3分×" + Number(row.participantPoints3 || 0) + " · 2分×" + Number(row.participantPoints2 || 0) + " · 1分×" + Number(row.participantPoints1 || 0);
+        const juryVotes = Number(row.organizerBallots || 0), juryPoints = Number(row.organizerRaw || 0), juryShare = Number(row.organizerRate || 0);
+        const juryBreakdown = "3分×" + Number(row.organizerPoints3 || 0) + " · 2分×" + Number(row.organizerPoints2 || 0) + " · 1分×" + Number(row.organizerPoints1 || 0);
+        const finalScore = peopleAward ? "—" : fmtNum(row.weightedScore);
+        const popularity = peopleAward ? publicVotes : null;
+        return "<tr><td><b>" + (index + 1) + "</b><strong>" + esc(row.projectName || row.projectId) + "</strong><small>" + esc(row.projectId) + "</small></td><td>" + esc(teamName(row.teamId)) + "</td><td><strong>" + publicVotes + " 票</strong><small>" + publicPoints + " 积分 · " + esc(publicBreakdown) + " · 组内占比 " + fmtNum(publicShare) + "%</small></td><td><strong>" + juryVotes + " 项</strong><small>" + juryPoints + " 积分 · " + esc(juryBreakdown) + " · 组内占比 " + fmtNum(juryShare) + "%</small></td><td><strong>" + finalScore + (peopleAward ? "" : " 分") + "</strong>" + (peopleAward ? "<small>现场人气原始票数：" + popularity + "</small>" : "") + "</td></tr>";
+      }).join("");
+      const candidateDetails = candidates.length
+        ? "<details class='vote-candidate-details'><summary>展开 Top 3 候选明细</summary><div class='vote-candidate-table-wrap'><table><thead><tr><th>项目</th><th>队伍</th><th>大众有效票 · 3/2/1 积分 · 组内占比</th><th>Jury 有效选择 · 3/2/1 积分 · 组内占比</th><th>" + (peopleAward ? "现场人气票数" : "最终加权分") + "</th></tr></thead><tbody>" + topThree + "</tbody></table></div></details>"
+        : "<p class='vote-detail'>暂无有效候选项目</p>";
+      const statusText = {provisional:"暂定",pending:"待确认",tie:"并列待裁决",confirmed:"已确认待公布",published:"已公布",automatic:"系统推荐"}[awardStatus] || awardStatus;
+      const scoreLabel = peopleAward ? Number(score || 0) + " 票" : fmtNum(award.weightedScore ?? winnerRow?.weightedScore) + " 分";
+      return "<div class='vote-row award-result-row'><div class='award-result-main'><strong>" + esc(awardLabels[awardKey] || award.awardLabel || awardKey) + "</strong><span class='award-status award-status-" + esc(awardStatus) + "'>" + statusText + "</span><small class='vote-detail'>" + (awardStatus === "provisional" ? "暂定推荐：" : awardStatus === "tie" ? "并列候选：" : "获奖项目：") + esc(winner) + " · " + scoreLabel + (award.teamId || winnerRow?.teamId ? " · " + esc(teamName(award.teamId || winnerRow?.teamId)) : "") + "</small>" + action + candidateDetails + "</div></div>";
     }).join("");
-    setHtml("vote-results", awardRows || (results.length ? "<p class='empty-state'>已有投票，正在计算结果。</p>" : "<p class='empty-state'>暂无已提交投票</p>"));
-    document.querySelectorAll(".award-decision").forEach(button => button.onclick = async () => {
-      const select = document.querySelector("[data-award-decision='" + CSS.escape(button.dataset.award) + "']");
-      if (!select?.value) return toast("请选择获奖项目", "error");
-      try { await api.request("/api/admin/award-decisions", {method:"POST", body:JSON.stringify({award:button.dataset.award, projectId:select.value})}); toast("获奖项目已确认", "success"); await load(); } catch (error) { toast(error.message, "error"); }
+    setHtml("vote-results", candidateRows || "<p class='empty-state'>暂无候选项目或奖项结果</p>");
+
+    openButton && (openButton.onclick = async () => { try { await api.request("/api/admin/voting/open", {method:"POST"}); toast("投票已开放", "success"); await load(); } catch (error) { toast(error.message, "error"); } });
+    endButton && (endButton.onclick = async () => { const ok = await MinicampUI.confirm({title:"确定结束投票？", body:"结束后将停止接收新票，排名仍为暂定；冻结结果需由主办方单独操作。", tone:"danger", confirmText:"结束投票"}); if (!ok) return; try { await api.request("/api/admin/voting/end", {method:"POST"}); toast("投票已截止，结果仍为暂定", "success"); await load(); } catch (error) { toast(error.message, "error"); } });
+    freezeButton && (freezeButton.onclick = async () => {
+      const ok = await MinicampUI.confirm({title:"冻结投票结果？", body:"冻结后排名和候选将成为本次最终评审依据，之后可以逐项确认获奖队伍。", confirmText:"冻结结果"});
+      if (!ok) return;
+      try { await api.request("/api/admin/voting/freeze", {method:"POST"}); toast("结果已冻结，可开始确认获奖队伍", "success"); await load(); } catch (error) { toast(error.message, "error"); }
     });
-    const organizers = state.organizers || [];
-    setHtml("organizer-list", organizers.map(item => "<div class='vote-voter'><span class='vote-voter-role is-jury'>主办方</span><strong>" + esc(item.code) + " · " + esc(item.name) + "</strong><small>" + esc(item.status || "active") + "</small><button type='button' class='outline-button organizer-toggle' data-id='" + esc(item.id) + "' data-status='" + (item.status === "inactive" ? "active" : "inactive") + "'>" + (item.status === "inactive" ? "启用" : "停用") + "</button></div>").join("") || "<p class='empty-state'>暂无主办方编号</p>");
-    document.querySelectorAll(".organizer-toggle").forEach(button => button.onclick = async () => { try { await api.request("/api/admin/organizers/" + encodeURIComponent(button.dataset.id), {method:"PATCH", body:JSON.stringify({status:button.dataset.status})}); await load(); } catch (error) { toast(error.message, "error"); } });
-    const voteRows = [...(state.votes || [])].sort((a,b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).map(vote => {
-      const voided = vote.status === "voided"; const role = vote.role === "organizer" || vote.role === "jury" ? "主办方" : "大众";
-      const name = vote.voterName || ((state.applications || []).find(a => a.id === vote.voterId)?.name || "");
-      const label = [vote.voterCode || vote.voterId, name].filter(Boolean).join(" · ");
-      return "<div class='vote-voter" + (voided ? " is-voided" : "") + "'><span class='vote-voter-role" + (role === "主办方" ? " is-jury" : "") + "'>" + role + "</span><strong>" + esc(label || "未知投票人") + "</strong><small>" + (voided ? "已撤回：" + esc(vote.voidReason || "") : esc((vote.selections || []).length + " 项选择")) + "</small><time>" + esc(fmt(vote.createdAt)) + "</time>" + (!voided ? "<button type='button' class='outline-button vote-reset' data-id='" + esc(vote.id) + "'>撤回并允许重投</button>" : "") + "</div>";
+    publishAll && (publishAll.onclick = async () => { const ok = await MinicampUI.confirm({title:"公布全部奖项？", body:"所有奖项都必须先确认，公布后访客将看到最终获奖队伍。", confirmText:"全部公布奖项"}); if (!ok) return; try { await api.request("/api/admin/awards/publish-all", {method:"POST"}); toast("全部奖项已公布", "success"); await load(); } catch (error) { toast(error.message, "error"); } });
+    document.querySelectorAll(".award-decision").forEach(button => button.onclick = async () => { const select = document.querySelector(".award-candidate-select[data-award-decision='" + CSS.escape(button.dataset.award) + "']"); if (!select?.value) return toast("请选择确认项目", "error"); try { await api.request("/api/admin/award-decisions", {method:"POST", body:JSON.stringify({award:button.dataset.award, projectId:select.value})}); toast("获奖队伍已确认", "success"); await load(); } catch (error) { toast(error.message, "error"); } });
+    document.querySelectorAll(".award-publish").forEach(button => button.onclick = async () => { const ok = await MinicampUI.confirm({title:"公布这个奖项？", body:"公布后访客将看到获奖队伍和结果。", confirmText:"公布该奖项"}); if (!ok) return; try { await api.request("/api/admin/awards/" + encodeURIComponent(button.dataset.award) + "/publish", {method:"POST"}); toast("该奖项已公布", "success"); await load(); } catch (error) { toast(error.message, "error"); } });
+    document.querySelectorAll(".award-revoke").forEach(button => button.onclick = async () => { const ok = await MinicampUI.confirm({title:"撤回该奖项公开？", body:"访客将不再看到该奖项。", tone:"danger", confirmText:"撤回公开"}); if (!ok) return; try { await api.request("/api/admin/awards/" + encodeURIComponent(button.dataset.award) + "/revoke", {method:"POST", body:"{}"}); toast("奖项公开已撤回", "success"); await load(); } catch (error) { toast(error.message, "error"); } });
+
+    const projectName = projectId => (state.projects || []).find(item => item.id === projectId)?.projectName || "项目已删除";
+    const awardName = {"Best Overall":"全场最佳","Best Product":"最佳产品","Best Design":"最佳设计与体验","Best Technical":"最佳技术 Hack","Most Unexpected":"最出乎意料","People's Choice":"现场人气奖"};
+    const sortedVotes = [...votes].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")) || String(a.voterCode || a.voterId || "").localeCompare(String(b.voterCode || b.voterId || ""), "zh-CN"));
+    const voteRows = sortedVotes.map(vote => {
+      const voided = vote.status === "voided";
+      const complete = vote.isComplete ?? vote.voteStatus === "valid";
+      const role = vote.role === "organizer" || vote.role === "jury" ? "Jury" : "大众";
+      const name = vote.voterName || (state.applications || []).find(item => item.id === vote.voterId)?.name || "";
+      const voterCode = vote.voterCode || vote.voterId || "未知编号";
+      const voteState = voided ? "已撤回" : complete ? "有效" : "未完成";
+      const selections = [...(vote.selections || [])].sort((a, b) => {
+        const awardsInOrder = ["Best Overall", "Best Product", "Best Design", "Best Technical", "Most Unexpected", "People's Choice"];
+        return awardsInOrder.indexOf(a.award) - awardsInOrder.indexOf(b.award) || Number(b.points || 0) - Number(a.points || 0);
+      });
+      const selectionRows = selections.map(selection => {
+        const project = (state.projects || []).find(item => item.id === selection.projectId);
+        return "<div><span>" + esc(awardName[selection.award] || selection.award) + "</span><strong>" + esc(project?.projectName || selection.projectName || "项目已删除") + "</strong><small>" + esc(teamName(project?.teamId || "")) + " · " + Number(selection.points || 0) + " 分</small></div>";
+      }).join("");
+      const reset = !voided && status === "open" ? "<button type='button' class='outline-button vote-reset' data-id='" + esc(vote.id) + "'>撤回并允许重投</button>" : "";
+      return "<details class='vote-voter" + (voided ? " is-voided" : "") + "'><summary class='vote-voter-summary'><span class='vote-voter-role" + (role === "Jury" ? " is-jury" : "") + "'>" + role + "</span><strong>" + esc(voterCode) + (name ? " · " + esc(name) : "") + "</strong><small class='vote-state vote-state-" + (voided ? "voided" : complete ? "valid" : "incomplete") + "'>" + voteState + " · " + selections.length + " 项选择</small><time>" + esc(fmt(vote.createdAt)) + "</time></summary><div class='vote-voter-detail'><div class='vote-selection-grid'>" + (selectionRows || "<p class='empty-state'>没有可展示的选择</p>") + "</div>" + reset + "</div></details>";
     }).join("");
     setHtml("vote-voters", voteRows || "<p class='empty-state'>暂无投票记录</p>");
-    document.querySelectorAll(".vote-reset").forEach(button => button.onclick = async () => { const ok = await MinicampUI.confirm({title:"撤回这份投票？", body:"撤回后原投票不再计入结果，该投票人可以重新提交。", tone:"danger", confirmText:"撤回并允许重投"}); if (!ok) return; try { await api.request("/api/admin/votes/" + encodeURIComponent(button.dataset.id) + "/reset", {method:"POST", body:JSON.stringify({reason:"主办方撤回"})}); toast("投票已撤回，可重新提交", "success"); await load(); } catch (error) { toast(error.message, "error"); } });
-    setHtml("vote-anomalies", (state.voteAttempts || []).slice(0,100).map(item => "<div class='vote-voter'><span class='vote-voter-role is-jury'>异常</span><strong>" + esc(item.reason || "未知异常") + "</strong><small>" + esc(item.role || "") + " · " + esc(item.voterId || item.code || "") + "</small><time>" + esc(fmt(item.createdAt)) + "</time></div>").join("") || "<p class='empty-state'>暂无异常记录</p>");
-    const create = document.getElementById("organizer-create-form");
-    if (create && !create.dataset.bound) { create.dataset.bound = "1"; create.onsubmit = async event => { event.preventDefault(); const data = new FormData(create); try { await api.request("/api/admin/organizers", {method:"POST", body:JSON.stringify({code:data.get("code"),name:data.get("name")})}); create.reset(); toast("主办方编号已新增", "success"); await load(); } catch (error) { toast(error.message, "error"); } }; }
-  }
+    document.querySelectorAll(".vote-reset").forEach(button => button.onclick = async event => { event.preventDefault(); event.stopPropagation(); const ok = await MinicampUI.confirm({title:"撤回这份投票？", body:"撤回后该票不再计入结果，投票人可重新提交。", tone:"danger", confirmText:"撤回并允许重投"}); if (!ok) return; try { await api.request("/api/admin/votes/" + encodeURIComponent(button.dataset.id) + "/reset", {method:"POST", body:"{}"}); toast("投票已撤回，可重新提交", "success"); await load(); } catch (error) { toast(error.message, "error"); } });
 
+    const organizerVotes = new Map(votes.filter(vote => (vote.role === "organizer" || vote.role === "jury") && vote.status !== "voided").map(vote => [String(vote.voterId), vote]));
+    const juryRows = (state.organizers || []).map(jury => {
+      const vote = organizerVotes.get(String(jury.id));
+      const complete = vote?.isComplete ?? vote?.voteStatus === "valid";
+      const active = jury.status !== "inactive";
+      const current = vote ? (complete ? "已完成 16 项" : "未完成") : "未投票";
+      return "<div class='jury-row'><span class='vote-voter-role is-jury'>Jury</span><strong>" + esc(jury.code || jury.id) + " · " + esc(jury.name || "") + "</strong><span class='jury-vote-status'>" + current + "</span><span class='jury-active-status " + (active ? "is-active" : "") + "'>" + (active ? "启用" : "停用") + "</span><button type='button' class='outline-button jury-toggle' data-id='" + esc(jury.id) + "' data-status='" + (active ? "inactive" : "active") + "'>" + (active ? "停用" : "启用") + "</button></div>";
+    }).join("");
+    setHtml("organizer-list", juryRows || "<p class='empty-state'>暂无 Jury，请添加投票人。</p>");
+    const juryForm = document.getElementById("jury-create-form");
+    if (juryForm) {
+      preserveForm(juryForm, draftOf("jury-create"));
+      bindDraft("jury-create", juryForm, "jury-form-state");
+      juryForm.onsubmit = async event => {
+        event.preventDefault();
+        const data = Object.fromEntries(new FormData(juryForm).entries());
+        try {
+          await api.request("/api/admin/organizers", {method:"POST", body:JSON.stringify(data)});
+          const draft = formDrafts.get("jury-create");
+          if (draft) draft.draft = null;
+          juryForm.reset();
+          toast("Jury 已添加", "success");
+          await load();
+        } catch (error) { toast(error.message, "error"); }
+      };
+    }
+    document.querySelectorAll(".jury-toggle").forEach(button => button.onclick = async () => {
+      try { await api.request("/api/admin/organizers/" + encodeURIComponent(button.dataset.id), {method:"PATCH", body:JSON.stringify({status:button.dataset.status})}); toast(button.dataset.status === "active" ? "Jury 已启用" : "Jury 已停用", "success"); await load(); }
+      catch (error) { toast(error.message, "error"); }
+    });
+
+    const anomalies = [];
+    votes.filter(vote => vote.status !== "voided" && !(vote.isComplete ?? vote.voteStatus === "valid")).forEach(vote => {
+      anomalies.push({createdAt:vote.createdAt, identity:vote.voterCode || vote.voterId, role:vote.role === "organizer" || vote.role === "jury" ? "Jury" : "大众", label:"未完成投票", detail:(vote.selections || []).length + " 项选择"});
+    });
+    (state.voteAttempts || []).slice(0, 100).forEach(attempt => {
+      const application = (state.applications || []).find(item => item.id === attempt.voterId);
+      const jury = (state.organizers || []).find(item => item.id === attempt.voterId);
+      anomalies.push({createdAt:attempt.createdAt, identity:attempt.code || jury?.code || application?.id || attempt.voterId || "未知编号", role:attempt.role === "organizer" || attempt.role === "jury" ? "Jury" : "大众", label:attempt.kind === "login" ? "身份验证异常" : "提交异常", detail:attempt.reason || "请求未成功"});
+    });
+    anomalies.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    setHtml("vote-anomalies", anomalies.slice(0, 60).map(item => "<div class='vote-anomaly-row'><span class='vote-voter-role" + (item.role === "Jury" ? " is-jury" : "") + "'>" + item.role + "</span><strong>" + esc(item.identity) + "</strong><b>" + esc(item.label) + "</b><small>" + esc(item.detail) + "</small><time>" + esc(fmt(item.createdAt)) + "</time></div>").join("") || "<p class='empty-state'>暂无异常投票记录</p>");
+  }
   // 服务端已经下发 typeLabel（唯一权威）；这张表只在老数据缺 typeLabel 时兜底。
   const NOTICE_TYPE_LABEL = { "资料复核": "资料修改（自动）", "资料修改": "资料修改（自动）", "问答": "问答回复", "项目审核": "项目审核", event: "活动公告", application: "用户报名（自动）", "报名进度": "用户报名（自动）", "报名提交": "用户报名（自动）", roadshow: "用户报名（自动）", "路演报名": "用户报名（自动）", "用户报名": "用户报名（自动）", "状态修改": "状态修改（自动）", "组队消息": "组队消息（自动）" };
   const noticeType = value => NOTICE_TYPE_LABEL[String(value || "").trim()] || String(value || "").trim() || "通知";
@@ -877,10 +991,9 @@
     const box = document.getElementById("config-editor"); if (!box) return;
     const c = state.config || {};
     const pack = JSON.stringify(c.starterPack || {}, null, 2);
-    box.innerHTML = "<div class='admin-card-head'><h2>活动配置</h2><span id='config-form-state'>保存后官网实时生效</span></div><form class='field-grid'><label>活动名称<input name='eventName' value='" + esc(c.eventName) + "'></label><label>活动日期<input name='date' value='" + esc(c.date) + "'></label><label>活动地点<input name='venue' value='" + esc(c.venue) + "'></label><label>主题揭晓<input name='themeReveal' value='" + esc(c.themeReveal) + "'></label><label>报名截止" + timeInput("applicationDeadline", "报名截止", c.applicationDeadline) + "</label><label>录取公布" + timeInput("resultDate", "录取公布", c.resultDate) + "</label><label>投票开始时间" + timeInput("voteStartAt", "投票开始时间", c.voteStartAt) + "</label><label>报名状态<select name='applicationOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>正式组队确认<select name='teamConfirmOpen'><option value='true'>开启</option><option value='false'>关闭</option></select></label><label>投票状态<select name='voteOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>参与者投票权重（%）<input name='participantWeight' type='number' min='0' max='100' value='" + Number(c.participantWeight || 60) + "'></label><label>Jury 投票权重（%）<input name='juryWeight' type='number' min='0' max='100' value='" + Number(c.juryWeight || 40) + "'></label><label>结果公开<select name='resultsPublic'><option value='true'>公开</option><option value='false'>不公开</option></select></label><label class='config-pack'>Starter Pack（JSON）<textarea name='starterPack' rows='10'>" + esc(pack) + "</textarea></label><div class='config-actions'><button class='button button-dark'>保存配置</button></div></form>";
+    box.innerHTML = "<div class='admin-card-head'><h2>活动配置</h2><span id='config-form-state'>保存后官网实时生效</span></div><form class='field-grid'><label>活动名称<input name='eventName' value='" + esc(c.eventName) + "'></label><label>活动日期<input name='date' value='" + esc(c.date) + "'></label><label>活动地点<input name='venue' value='" + esc(c.venue) + "'></label><label>主题揭晓<input name='themeReveal' value='" + esc(c.themeReveal) + "'></label><label>报名截止" + timeInput("applicationDeadline", "报名截止", c.applicationDeadline) + "</label><label>录取公布" + timeInput("resultDate", "录取公布", c.resultDate) + "</label><label>投票开始时间" + timeInput("voteStartAt", "投票开始时间", c.voteStartAt) + "</label><label>报名状态<select name='applicationOpen'><option value='true'>开放</option><option value='false'>关闭</option></select></label><label>正式组队确认<select name='teamConfirmOpen'><option value='true'>开启</option><option value='false'>关闭</option></select></label><label class='config-vote-state'>\u6295\u7968\u72b6\u6001\uff08\u7531\u6295\u7968\u63a7\u5236\u6309\u94ae\u7ba1\u7406\uff09</label><label>参与者投票权重（%）<input name='participantWeight' type='number' min='0' max='100' value='" + Number(c.participantWeight || 60) + "'></label><label>Jury 投票权重（%）<input name='juryWeight' type='number' min='0' max='100' value='" + Number(c.juryWeight || 40) + "'></label><label>结果公开<select name='resultsPublic'><option value='true'>公开</option><option value='false'>不公开</option></select></label><label class='config-pack'>Starter Pack（JSON）<textarea name='starterPack' rows='10'>" + esc(pack) + "</textarea></label><div class='config-actions'><button class='button button-dark'>保存配置</button></div></form>";
     box.querySelector('[name="applicationOpen"]').value = String(c.applicationOpen);
     box.querySelector('[name="teamConfirmOpen"]').value = String(Boolean(c.teamConfirmOpen));
-    box.querySelector('[name="voteOpen"]').value = String(c.voteOpen);
     box.querySelector('[name="participantWeight"]').value = String(c.participantWeight ?? 60);
     box.querySelector('[name="juryWeight"]').value = String(c.juryWeight ?? 40);
      box.querySelector('[name="resultsPublic"]').value = String(Boolean(c.resultsPublic));
@@ -894,7 +1007,7 @@
     box.querySelector("form").onsubmit = async e => {
       e.preventDefault();
       const d = Object.fromEntries(new FormData(e.currentTarget));
-      d.applicationOpen = d.applicationOpen === "true"; d.teamConfirmOpen = d.teamConfirmOpen === "true"; d.voteOpen = d.voteOpen === "true"; d.resultsPublic = d.resultsPublic === "true";
+      d.applicationOpen = d.applicationOpen === "true"; d.teamConfirmOpen = d.teamConfirmOpen === "true"; d.resultsPublic = d.resultsPublic === "true";
       d.participantWeight = Number(d.participantWeight); d.juryWeight = Number(d.juryWeight);
       for (const key of ["applicationDeadline", "resultDate", "voteStartAt"]) {
         const parsed = joinTime(d[key + "Date"], d[key + "Hour"], d[key + "Minute"]);
