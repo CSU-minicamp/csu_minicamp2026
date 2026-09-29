@@ -8,10 +8,11 @@
 
   if (!hasStaticNav) {
     const items = [
-      { id: "about", label: "活动介绍", href: "index.html#about", current: ["home", "starter-pack"] },
+      // 活动介绍指向 2026 赛事信息页（原首页）；站点首页现在是 MiniCamp 欢迎页。
+      { id: "about", label: "活动介绍", href: "2026info.html#about", current: ["2026info", "starter-pack"] },
       { id: "qa", label: "Q&A", href: "qa.html", current: ["qa"] },
       { id: "team", label: "组队工作区", href: "team.html", current: ["team"] },
-      // Gallery 在完成准入条件后显示；上传项目从 Gallery 页面进入。现场投票入口由 app.js 单独控制。
+      // Gallery 在完成准入条件后显示；上传项目从 Gallery 页面进入。现场投票入口由 2026info.js 单独控制。
       { id: "gallery", label: "项目 Gallery", href: "gallery.html", current: ["gallery"] },
       // { id: "voting", label: "现场投票", href: "voting.html", current: ["voting", "vote"], voting: true },
       { id: "profile", label: "个人主页", href: "profile.html", current: ["profile", "profile-dashboard"] }
@@ -23,7 +24,7 @@
     }).join("");
     header.className = "site-header";
     header.innerHTML = `
-      <a class="brand" href="index.html" aria-label="返回 minicamp 2026 首页">
+      <a class="brand" href="index.html" aria-label="返回 MiniCamp 首页">
         <img class="brand-lockup" src="assets/brand/minicamp-logo-lockup-partners-horizontal.png" alt="minicamp 2026" width="2203" height="614">
       </a>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开导航">

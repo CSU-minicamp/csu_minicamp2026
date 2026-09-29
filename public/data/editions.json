@@ -1,0 +1,137 @@
+{
+  "meta": {
+    "title": "MiniCamp",
+    "subtitle": "中南大学校园黑客松",
+    "description": "MiniCamp 是一群有意思的人，用两天时间，从 0 到 1 构建真正属于你们的作品。",
+    "updatedAt": "2026-09-29"
+  },
+  "editions": [
+    {
+      "year": "2026",
+      "label": "2026 届",
+      "name": "MiniCamp 2026 校园黑客松",
+      "status": "finished",
+      "statusLabel": "已结束 · 可回顾",
+      "summary": "中南大学首个三社团联合发起的校园黑客松，面向全校同学开放。两天时间，现场公布主题、现场组队，借助 AI Coding 把想法做成能演示的作品。本届已于 2026 年 9 月 26–27 日结束。",
+      "facts": [
+        { "label": "时间", "value": "2026 年 9 月 26–27 日（已结束）" },
+        { "label": "地点", "value": "中南大学潇湘校区 外语楼 635" },
+        { "label": "规模", "value": "约 90 人，3–5 人一队" }
+      ],
+      "page": {
+        "href": "2026info.html",
+        "cta": "查看 2026 届回顾",
+        "note": "本届的赛程、规则、奖项与作品记录都在这一页。"
+      },
+      "externalUrl": "https://minicamp.flipperusc.work/",
+      "cover": "assets/微信图片_20260825104719_485_74.jpg"
+    },
+    {
+      "year": "2025",
+      "label": "2025 届",
+      "name": "InnoSeed Mini Camp 2025",
+      "status": "coming-soon",
+      "statusLabel": "资料整理中",
+      "summary": "InnoSeed 潇湘实验室（原苹果实验室）在 2025 年招新时举办的第一届 Mini Camp，是实验室招新流程（简历投递 → Mini Camp → 面试）中的一环。",
+      "facts": [
+        { "label": "主办", "value": "InnoSeed 潇湘实验室" },
+        { "label": "规模", "value": "约 20 人" }
+      ],
+      "page": {
+        "href": "2025minicamp.html",
+        "cta": "查看 2025 届回顾",
+        "note": "回顾页面正在整理中，上线后会在这里开放入口。",
+        "available": false
+      },
+      "externalUrl": "https://minicamp.innoseed.club/minicamp",
+      "cover": null
+    }
+  ],
+  "works": [
+    {
+      "id": "2026-placeholder-01",
+      "year": "2026",
+      "title": "作品名称待补充",
+      "tagline": "一句话介绍待补充（Problem → Solution）。",
+      "team": "队伍名待补充",
+      "tags": ["待补充"],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": "",
+      "placeholder": true
+    },
+    {
+      "id": "2026-placeholder-02",
+      "year": "2026",
+      "title": "作品名称待补充",
+      "tagline": "一句话介绍待补充；也可以暂时先留空，欢迎页会显示为占位卡片。",
+      "team": "队伍名待补充",
+      "tags": ["待补充"],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": "",
+      "placeholder": true
+    },
+    {
+      "id": "2026-placeholder-03",
+      "year": "2026",
+      "title": "作品名称待补充",
+      "tagline": "删除本条目、按 data/README.md 里的字段格式填入真实作品即可。",
+      "team": "队伍名待补充",
+      "tags": ["待补充"],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": "",
+      "placeholder": true
+    },
+    {
+      "id": "2025-placeholder-01",
+      "year": "2025",
+      "title": "作品名称待补充",
+      "tagline": "2025 届作品资料正在整理，补齐后按同样的字段填入即可。",
+      "team": "队伍名待补充",
+      "tags": ["待补充"],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": "",
+      "placeholder": true
+    },
+    {
+      "id": "2025-placeholder-02",
+      "year": "2025",
+      "title": "作品名称待补充",
+      "tagline": "2025 届作品资料正在整理。",
+      "team": "队伍名待补充",
+      "tags": ["待补充"],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": "",
+      "placeholder": true
+    }
+  ]
+}
