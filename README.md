@@ -1,6 +1,13 @@
-# minicamp 2026 校园黑客松官网
+# minicamp 校园黑客松官网
 
-面向中南大学学生的 minicamp 2026 校园黑客松官网，包含公开活动介绍、报名、参与者资料、组队与 Idea、项目提交、Project Gallery、投票和主办方工作台。
+面向中南大学学生的 minicamp 校园黑客松官网。站点分为两层：
+
+1. **欢迎页（站点首页 `/`，`public/index.html`）**——面向第一次听说 MiniCamp 的人，介绍 MiniCamp 是什么、有哪些内容、由谁举办，并提供**选择届次**（2025 / 2026）与**历届作品**展示。届次与作品数据由 `public/data/editions.json` 配置，格式见 [`public/data/README.md`](public/data/README.md)。
+2. **2026 赛事信息页（`/2026info.html`）**——2026 届的完整赛事页面，包含活动介绍、流程、赛程、奖项、报名（参赛 / 路演）、FAQ、主办方与合作伙伴，以及报名、组队、Idea、项目提交、Project Gallery、投票和主办方工作台的入口。
+
+> 第 2 条这个页面此前就是站点首页；欢迎页上线后它更名为 `2026info.html`，样式文件一并从
+> `index.css` 更名为 `2026info.css`，脚本 `app.js` 更名为 `2026info.js`，其余脚本（`nav.js` 等）保持原名，只是文件名和站内链接做了调整。
+> 注意：`public/2026info.css` / `public/2026info.js` 是 **2026info 页面的样式与脚本**，欢迎页用的是 `public/index.css` / `public/index.js`——两者不要混淆（详见下方「文件改名与待清理清单」）。
 
 ## 本地预览
 
@@ -107,21 +114,69 @@ Chart.js（jsDelivr，带 SRI 校验），两个源都不可用时后台图表�
 
 ## 页面入口
 
-- 官网首页：/
-- Q&A 问答：/qa.html
-- 个人主页：/profile.html
-- 组队与 Idea：/team.html
-- 项目提交：/submission.html
-- 项目 Gallery：/gallery.html
-- AI Coding Starter Pack：/starter-pack.html
-- 参与者投票：/voting.html
-- Jury 评审：/jury.html
-- 主办方后台：/admin.html
+- 欢迎页（站点首页，`/` 默认到这里）：`/`
+- 2026 赛事信息页：`/2026info.html`
+- Q&A 问答：`/qa.html`
+- 个人主页：`/profile.html`
+- 组队与 Idea：`/team.html`
+- 项目提交：`/submission.html`
+- 项目 Gallery：`/gallery.html`
+- AI Coding Starter Pack：`/starter-pack.html`
+- 参与者投票：`/voting.html`
+- Jury 评审：`/jury.html`
+- 主办方后台：`/admin.html`
+
+### 欢迎页与届次配置
+
+欢迎页（`index.html` + `index.css` + `index.js`）自身的结构是纯静态的，从上到下依次是：
+Hero → 事实条 → MiniCamp 是什么 → 两天怎么过（MEET/ BUILD/ SHIP 流程）→ 有哪些内容（六个板块）
+→ 由谁举办（三个社团）→ **选择届次** → **历届作品** → 站尾。
+
+其中最后两个区块由 `public/data/editions.json` 驱动（静态 JSON，改内容不需要改代码，也不需要重启服务）：
+
+- `editions[]` → 「选择届次」卡片。2026 届的 `page.href` 指向 `2026info.html`；
+  2025 届目前是 `status: "coming-soon"` + `page.available: false`，卡片弱化并显示「资料整理中」。
+  **2025 届回顾页做好后，把 `page.href` 指向新页面、并把 `page.available` 改成 `true` 即可**，
+  欢迎页会自动把按钮换成可点击状态，无需改动 `index.js` / `index.css`。
+- `works[]` → 「历届作品」卡片与届次筛选（按 `year` 筛选）。
+  真实作品按字段填入并去掉 `placeholder: true`；目前放的占位条目用于演示格式。
+
+字段说明、示例与常见坑见 [`public/data/README.md`](public/data/README.md)。JSON 解析失败时欢迎页只在对应区块提示失败，其余静态内容照常显示。
+
+### 文件改名与待清理清单
+
+站点分层调整后，文件名与页面的对应关系是：
+
+| 文件 | 属于哪个页面 |
+|---|---|
+| `index.html` / `index.css` / `index.js` | 欢迎页（站点首页） |
+| `2026info.html` / `2026info.css` / `2026info.js` | 2026 赛事信息页（原首页，脚本原名 `app.js`） |
+| `nav.js` / `api.js` / `participant-fab.js` / `base.css` | 多页共用（见各文件头部注释） |
+
+改动过程中做过三次改名，注意 `index.css` 这个**文件名被复用过**：
+
+1. 原来的 `index.css`（2026 届页面样式）改名为 `2026info.css`；
+2. 欢迎页的 `welcome.css` / `welcome.js` 改名为 `index.css` / `index.js`；
+3. 2026 届页面的 `app.js` 改名为 `2026info.js`。
+
+所以旧 `index.css` 的内容现在在 `2026info.css` 里，没有丢失。
+
+**待手工清理**：当前实现环境不允许删除文件，因此仓库里会残留下面这些已无任何引用的文件，
+它们都已被清空并写上了删除说明，保留不影响渲染，请手工删掉：
+
+    git rm public/welcome.css public/welcome.js public/app.js
+
+如果仓库里还有更早那次改名留下的旧 `index.css` 副本（内容与 `2026info.css` 相同），
+不要删——这个文件名现在由欢迎页在用，请确认它的内容以 `/* index.css — MiniCamp 欢迎页…` 开头。
+
+删除前可以自查引用：在 `public/` 里搜 `welcome.css`、`welcome.js`、`app.js`，
+只应剩这三个文件自己的注释文字（以及 `2026info.js` 头部说明它原名 `app.js` 的那句）。
 
 ## 当前实现
 
 - Node.js 原生 HTTP 服务与 MySQL/JSON 持久化数据层。
 - 静态页面、浏览器脚本、样式和图片资源统一位于 `public/`。
+- 站点分层：欢迎页（`index.html`，介绍 MiniCamp + 选择届次 + 历届作品）与 2026 赛事信息页（`2026info.html`）。欢迎页的届次与作品来自 `public/data/editions.json`，由 `index.js` 渲染，字段格式见 `public/data/README.md`；2025 届回顾页尚未创建，欢迎页上先以「资料整理中」呈现。
 - 参与者和主办方 token 登录。
 - 报名去重、Team Code、队伍加入与 3–5 人锁定。
 - 个人资料、Bonjour Profile 字段、通知中心。

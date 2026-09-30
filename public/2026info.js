@@ -1,3 +1,33 @@
+/*
+ * 2026info.js —— 2026 赛事信息页（2026info.html，改名前的站点首页）脚本。
+ *
+ * 命名说明：本文件原名 `app.js`，随页面更名为 `2026info.js`，与 `2026info.html` /
+ * `2026info.css` 对齐。站点首页现在是欢迎页，它的脚本是 `index.js`，两者互不依赖。
+ *
+ * 这个文件同时管三件事：
+ *
+ * 1) 报名相关（本页的核心功能，脚本主体）
+ *    - 读 `/api/config` 拿到报名开放状态与截止时间，据此决定报名通道能否填写、
+ *      截止后把报名区替换成「报名已截止 / 暂未开放」的说明块。
+ *    - 参赛报名弹窗（#application-modal）三步表单：校验（学号 10 位、手机号 11 位、
+ *      必填项高亮定位）、能力标签最多选 2 项、大一提示、提交 `POST /api/applications`、
+ *      成功后展示申请编号。
+ *    - 路演报名弹窗（#roadshow-modal）单页表单，提交后自动通过并生成 RO- 开头的报名码。
+ * 2) 本页的展示交互
+ *    - 赛程 DAY 1 / DAY 2 切换、时间线条目高亮（鼠标悬停与键盘聚焦）。
+ *    - FAQ 分页（每页 4 条）。
+ *    - QQ 群抽屉（#qq-drawer）开关与 Esc 关闭。
+ *    - 投票入口（[data-voting-entry]）按投票状态显示「立即投票 / 暂未开放 / 已结束」。
+ *    - `[data-config-date]`、`[data-config-venue]` 等占位文字用后台配置填充。
+ * 3) 进站通知弹窗（与报名无关，独立工作）
+ *    - 已登录报名者进页面时，若收件箱里有「需要回复且尚未回复」的通知（例如录取结果），
+ *      用 ui.js 弹一次；同一条通知同一版内容只弹一次（localStorage 记录），
+ *      回复写回 `POST /api/me/notices/reply`。
+ *    - 这段刻意放在报名表单逻辑之前：即使以后本页没有报名表单，弹窗也要照常工作。
+ *
+ * 提示：`if (!form) return;` 在第 3 段之前 —— 没有报名表单的页面加载本文件时，
+ * 仍然会执行进站通知弹窗，只是不做报名相关的事。
+ */
 (() => {
   const api = window.MinicampAPI;
   const form = document.getElementById("application-form");
@@ -178,12 +208,12 @@
   });
   document.getElementById("close-roadshow-success")?.addEventListener("click", () => roadshowModal?.close());
 
-  /* ---------- 首页通知弹窗 ----------
-   * 主办方发布「需要回复」的通知（例如录取结果）后，已登录的报名者进首页会看到一次弹窗：
+  /* ---------- 进站通知弹窗 ----------
+   * 主办方发布「需要回复」的通知（例如录取结果）后，已登录的报名者进本页会看到一次弹窗：
    *   - 标题与正文由服务端按本人报名状态解析（录取结果按状态分内容，正文留空的状态不发）；
    *   - canReply（已录取的参赛者）给「我会参与 / 我不会参与」，其余人只读确认；
    *   - 同一条通知 + 同一版内容只弹一次（localStorage），错过还能在个人主页通知中心补回复。
-   * 放在报名表单逻辑之前：即使以后首页没有报名表单，弹窗也要照常工作。
+   * 放在报名表单逻辑之前：即使以后本页没有报名表单，弹窗也要照常工作。
    */
   const NOTICE_PROMPT_SEEN_KEY = "minicamp2026_notice_prompt";
   const promptSeenStamp = notice => String(notice.id || "") + "@" + String(notice.updatedAt || notice.createdAt || "");
@@ -238,7 +268,7 @@
     markPromptSeen(notice);
     await markPromptRead(notice);
   }
-  showNoticePrompt().catch(() => { /* 首页弹窗失败就安静跳过，不影响页面 */ });
+  showNoticePrompt().catch(() => { /* 进站弹窗失败就安静跳过，不影响页面 */ });
 
   if (!form) return;
   const steps = [...form.querySelectorAll(".form-step")], progress = document.getElementById("form-progress"), error = document.getElementById("form-error");
@@ -277,4 +307,3 @@
   });
   document.getElementById("close-success")?.addEventListener("click", () => applicationModal?.close());
 })();
-
