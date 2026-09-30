@@ -3,7 +3,7 @@
     "title": "MiniCamp",
     "subtitle": "中南大学校园黑客松",
     "description": "MiniCamp 是一群有意思的人，用两天时间，从 0 到 1 构建真正属于你们的作品。",
-    "updatedAt": "2026-09-29"
+    "updatedAt": "2026-09-30"
   },
   "editions": [
     {
@@ -49,12 +49,14 @@
   ],
   "works": [
     {
-      "id": "2026-placeholder-01",
+      "id": "2026-team-06",
       "year": "2026",
-      "title": "作品名称待补充",
-      "tagline": "一句话介绍待补充（Problem → Solution）。",
-      "team": "队伍名待补充",
-      "tags": ["待补充"],
+      "title": "收藏夹不吃灰计划",
+      "tagline": "防止收藏夹里的链接和视频吃灰",
+      "team": "TEAM 06",
+      "tags": [
+        "Build for Humans"
+      ],
       "award": "",
       "cover": null,
       "links": {
@@ -62,16 +64,17 @@
         "repo": null,
         "detail": null
       },
-      "note": "",
-      "placeholder": true
+      "note": ""
     },
     {
-      "id": "2026-placeholder-02",
+      "id": "2026-team-01",
       "year": "2026",
-      "title": "作品名称待补充",
-      "tagline": "一句话介绍待补充；也可以暂时先留空，欢迎页会显示为占位卡片。",
-      "team": "队伍名待补充",
-      "tags": ["待补充"],
+      "title": "AIClassRep",
+      "tagline": "连接本机QQ群，自动提取课程通知、作业、考试和调课信息，整理成可搜索、可提醒的个人课代表",
+      "team": "TEAM 01",
+      "tags": [
+        "Build for Humans"
+      ],
       "award": "",
       "cover": null,
       "links": {
@@ -79,16 +82,17 @@
         "repo": null,
         "detail": null
       },
-      "note": "",
-      "placeholder": true
+      "note": ""
     },
     {
-      "id": "2026-placeholder-03",
+      "id": "2026-team-09",
       "year": "2026",
-      "title": "作品名称待补充",
-      "tagline": "删除本条目、按 data/README.md 里的字段格式填入真实作品即可。",
-      "team": "队伍名待补充",
-      "tags": ["待补充"],
+      "title": "电动车大学跑路app",
+      "tagline": "为中南大学学生解决上下学被堵在路上的问题",
+      "team": "TEAM 09",
+      "tags": [
+        "Reimagine Campus"
+      ],
       "award": "",
       "cover": null,
       "links": {
@@ -96,16 +100,17 @@
         "repo": null,
         "detail": null
       },
-      "note": "",
-      "placeholder": true
+      "note": ""
     },
     {
-      "id": "2025-placeholder-01",
-      "year": "2025",
-      "title": "作品名称待补充",
-      "tagline": "2025 届作品资料正在整理，补齐后按同样的字段填入即可。",
-      "team": "队伍名待补充",
-      "tags": ["待补充"],
+      "id": "2026-team-02",
+      "year": "2026",
+      "title": "校园雷达",
+      "tagline": "为学校决策者汇总各个平台的衣食住行问题，帮助推动解决",
+      "team": "TEAM 02",
+      "tags": [
+        "Build for Humans"
+      ],
       "award": "",
       "cover": null,
       "links": {
@@ -113,16 +118,17 @@
         "repo": null,
         "detail": null
       },
-      "note": "",
-      "placeholder": true
+      "note": ""
     },
     {
-      "id": "2025-placeholder-02",
-      "year": "2025",
-      "title": "作品名称待补充",
-      "tagline": "2025 届作品资料正在整理。",
-      "team": "队伍名待补充",
-      "tags": ["待补充"],
+      "id": "2026-team-07",
+      "year": "2026",
+      "title": "念图",
+      "tagline": "把混乱的想法梳理成清晰结构，提出一个可以立刻执行的解决方法",
+      "team": "TEAM 07",
+      "tags": [
+        "Build for Humans"
+      ],
       "award": "",
       "cover": null,
       "links": {
@@ -130,8 +136,275 @@
         "repo": null,
         "detail": null
       },
-      "note": "",
-      "placeholder": true
+      "note": ""
+    },
+    {
+      "id": "2026-team-22",
+      "year": "2026",
+      "title": "宝子，你想茶出怎样的滋味？",
+      "tagline": "为追求个性表达的年轻消费者，探索不止口味定制的茶饮体验",
+      "team": "TEAM 22",
+      "tags": [
+        "Create the Unexpected"
+      ],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
+    },
+    {
+      "id": "2026-team-13",
+      "year": "2026",
+      "title": "中南人的课表应用",
+      "tagline": "针对现有课表工具使用不便，为中南学生提供更方便的课表查看体验",
+      "team": "TEAM 13",
+      "tags": [
+        "Build for Humans"
+      ],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
+    },
+    {
+      "id": "2026-team-15",
+      "year": "2026",
+      "title": "中南大学像素校园",
+      "tagline": "面向中南大学学生的像素校园，支持查询并留下专属校园记忆",
+      "team": "TEAM 15",
+      "tags": [
+        "Reimagine Campus"
+      ],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
+    },
+    {
+      "id": "2026-team-03",
+      "year": "2026",
+      "title": "CSU Online game",
+      "tagline": "校园生存模拟游戏，用搞怪文案和真实校园梗把大学生的焦虑转化为可以笑着玩下去的体验",
+      "team": "TEAM 03",
+      "tags": [
+        "Reimagine Campus"
+      ],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
+    },
+    {
+      "id": "2026-team-04",
+      "year": "2026",
+      "title": "Build to Taste：报寝助手 × 麓光 · Light of Yuelu",
+      "tagline": "用自动化解决生活部每晚的报寝，用HD-2D像素游戏还原中南大学的来路",
+      "team": "TEAM 04",
+      "tags": [
+        "Build for Humans"
+      ],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": "https://zhigao.me/#projects",
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
+    },
+    {
+      "id": "2026-team-18",
+      "year": "2026",
+      "title": "MemoDot",
+      "tagline": "为想随时记录待办事项和灵感的人设计的随身记",
+      "team": "TEAM 18",
+      "tags": [
+        "Build for Humans"
+      ],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
+    },
+    {
+      "id": "2026-team-16",
+      "year": "2026",
+      "title": "小电驴的一天",
+      "tagline": "将骑小电驴上课的日常难题做成像素闯关游戏，帮助大一新生了解校园生活",
+      "team": "TEAM 16",
+      "tags": [
+        "Reimagine Campus"
+      ],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
+    },
+    {
+      "id": "2026-team-12",
+      "year": "2026",
+      "title": "智能衣柜与家庭物品管理助手",
+      "tagline": "用AI整理衣物、管理家庭物品，并快速获得穿搭建议",
+      "team": "TEAM 12",
+      "tags": [
+        "Create the Unexpected"
+      ],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
+    },
+    {
+      "id": "2026-team-10",
+      "year": "2026",
+      "title": "请勿喧哗",
+      "tagline": "用身体动作探索沟通的互动叙事游戏，有时停止动作，回应才会靠近",
+      "team": "TEAM 10",
+      "tags": [
+        "Create the Unexpected"
+      ],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
+    },
+    {
+      "id": "2026-team-11",
+      "year": "2026",
+      "title": "中国龙能飞",
+      "tagline": "让奶龙飞起来，探索更有沉浸感的游戏交互",
+      "team": "TEAM 11",
+      "tags": [
+        "Create the Unexpected"
+      ],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": "https://flylong666.netlify.app/",
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
+    },
+    {
+      "id": "2026-team-17",
+      "year": "2026",
+      "title": "多人格圆桌会谈",
+      "tagline": "让性格和立场不同的AI角色围坐一桌，陪你闲聊、辨清问题、分工完成项目设计",
+      "team": "TEAM 17",
+      "tags": [
+        "Build for Humans"
+      ],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
+    },
+    {
+      "id": "2026-team-05",
+      "year": "2026",
+      "title": "SuperNote",
+      "tagline": "支持笔记协同与多模态笔记输入输出",
+      "team": "TEAM 05",
+      "tags": [
+        "Build for Humans"
+      ],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
+    },
+    {
+      "id": "2026-team-14",
+      "year": "2026",
+      "title": "因花寺",
+      "tagline": "一段关于选择、愿望与现实行动的沉浸式数字寺庙体验",
+      "team": "TEAM 14",
+      "tags": [
+        "Create the Unexpected"
+      ],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": "https://yinhua-story.pocketbay.app/",
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
+    },
+    {
+      "id": "2026-team-19",
+      "year": "2026",
+      "title": "中南大学校园出行与充电",
+      "tagline": "围绕校园充电、交通安全与二手电动车审核交易展开",
+      "team": "TEAM 19",
+      "tags": [
+        "Build for Humans"
+      ],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
+    },
+    {
+      "id": "2026-team-20",
+      "year": "2026",
+      "title": "属于工程师的AI智能桌宠助手",
+      "tagline": "把AI和桌宠结合",
+      "team": "TEAM 20",
+      "tags": [],
+      "award": "",
+      "cover": null,
+      "links": {
+        "demo": null,
+        "repo": null,
+        "detail": null
+      },
+      "note": ""
     }
   ]
 }
